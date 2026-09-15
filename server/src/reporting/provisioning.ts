@@ -3,6 +3,12 @@ import { withTransaction } from '../db/pool';
 import { writeAuditAndOutbox } from '../domain/auditOutbox';
 import { editorPermissions } from '../domain/orgEditorProvisioning';
 
+/** PostgreSQL locale order can differ from JS (notably "_" vs letters).
+ * Compare the exact multiset in one locale-independent runtime, never relax it. */
+export function samePermissionSet(actual:string[],expected:readonly string[]) {
+  return JSON.stringify([...actual].sort())===JSON.stringify([...expected].sort());
+}
+
 /** Operator command only. No implicit grants on migration/startup. */
 export async function provisionReportStaging(login:string,approval:string) {
   if(!login || typeof approval!=='string' || approval.trim().length<16 || approval.length>500) throw new Error('Explicit bounded staging approval required');
@@ -18,7 +24,7 @@ export async function provisionReportStaging(login:string,approval:string) {
     const row=r.rows[0];
     const actual=(await c.query("SELECT permission_code FROM role_permissions WHERE role_code='SUPER_ADMIN' ORDER BY permission_code")).rows.map(x=>x.permission_code);
     const expected=['organization.directory.review',...editorPermissions].sort();
-    if(JSON.stringify(actual)!==JSON.stringify(expected)) throw new Error('Expected unchanged seven bounded editor permissions');
+    if(!samePermissionSet(actual,expected)) throw new Error('Expected unchanged seven bounded editor permissions');
     const prior=await c.query('SELECT * FROM report_staging_access WHERE grant_id=$1',[row.grant_id]);
     if(prior.rowCount) {
       if(prior.rows[0].revoked_at || prior.rows[0].valid_until) throw new Error('Never silently reactivate a revoked/temporary capability');

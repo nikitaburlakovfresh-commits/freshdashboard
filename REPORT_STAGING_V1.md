@@ -171,3 +171,14 @@ npm test --workspace=server -- --testMatch '**/test/reportBatches.staging.ts'
 All committed fixtures are synthetic. Browser QA and original-source tests must
 not add real workbooks, private screenshots, credentials or audit exports to Git.
 This page is not connected to the separate demo preview application.
+
+## Confirmed future delivery channel
+
+Owner clarification, 15 September 2026, 21:02 MSK: QLIK aggregates will be
+available from cloud storage on a schedule. Manual upload here is a temporary
+verification/reserve channel, not the target recurring operating process.
+Future scheduled delivery must reuse this private quarantine, original-byte
+validation, immutable manifests, period provenance and unresolved Org UUID
+mapping boundary. No cloud credentials, transport URL, scheduler, connector or
+Computer recurring task is configured by this release. Re-attaching the same
+workbooks does not establish a new business period or authorize more formats.

@@ -8,7 +8,7 @@ import { zipSync,unzipSync,strToU8,strFromU8 } from 'fflate';
 import { pool,closePool } from '../src/db/pool';
 import { bootstrapFirstAdministrator } from '../src/domain/firstAdministrator';
 import { provisionOrganizationEditor,editorPermissions } from '../src/domain/orgEditorProvisioning';
-import { provisionReportStaging } from '../src/reporting/provisioning';
+import { provisionReportStaging,samePermissionSet } from '../src/reporting/provisioning';
 import { validateXlsx } from '../src/reporting/zipSafety';
 import { parseMetadata } from '../src/reporting/service';
 import { storageRoot,readSource } from '../src/reporting/storage';
@@ -40,6 +40,16 @@ beforeAll(async()=>{
   await provisionOrganizationEditor('report_staging_test','SYNTHETIC_LOCAL_EDITOR_APPROVAL');
 });
 beforeEach(resetLimits);afterAll(closePool);
+
+test('STAGE-00 exact permission comparison is independent of PostgreSQL collation',()=>{
+  const expected=['organization.directory.review',...editorPermissions];
+  const productionOrder=['organization.change.apply','organization.change.draft','organization.change.preview','organization.directory.review','org_unit.create','org_unit.move','org_unit.rename'];
+  expect(samePermissionSet(productionOrder,expected)).toBe(true);
+  expect(samePermissionSet([...productionOrder].reverse(),expected)).toBe(true);
+  expect(samePermissionSet([...productionOrder,'financial.read'],expected)).toBe(false);
+  expect(samePermissionSet(productionOrder.slice(1),expected)).toBe(false);
+  expect(samePermissionSet([...productionOrder.slice(1),productionOrder[1]],expected)).toBe(false);
+});
 
 test('STAGE-01 migration grants no staging rights; CLI refuses wrong user or no approval',async()=>{
   expect((await authed(admin).get(base)).status).toBe(403);
