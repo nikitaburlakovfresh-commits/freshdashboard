@@ -6,20 +6,19 @@ import { orgUnitLabel } from '../constants/orgUnits';
 import type { WorkItem } from '../api/types';
 import StatusBadge from '../components/StatusBadge';
 import CreateTaskModal from './CreateTaskModal';
+import LocalBusinessData from '../components/LocalBusinessData';
 import '../styles/portal.css';
 
 export const METRICS = [
   {code:'sales_units',name:'Продажи автомобилей',unit:'шт.',source:'kso_margin_revenue',section:'sales'},
-  {code:'margin_fact',name:'Маржа',unit:'млн ₽',source:'kso_margin_revenue',section:'sales'},
+  {code:'margin_fact',name:'Маржа + КСО',unit:'₽',source:'kso_margin_revenue',section:'sales'},
   {code:'stock_units_end',name:'Автомобили на складе',unit:'шт.',source:'main_summary',section:'stock'},
-  {code:'hangers45_total',name:'Склад старше 45 дней',unit:'по методике источника',source:'main_summary',section:'stock'},
+  {code:'hangers45_total',name:'Склад 45+',unit:'шт.',source:'main_summary',section:'stock'},
 ];
-const monthValue=()=>new Date().toISOString().slice(0,7);
 export default function DashboardPage(){
   const {me}=useAuth();
   const orgs=[...new Set(me?.grants.map(g=>g.org_unit_id)??[])];
   const [org,setOrg]=useState(orgs[0]??'');
-  const [period,setPeriod]=useState(monthValue());
   const [items,setItems]=useState<WorkItem[]>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
@@ -51,24 +50,16 @@ export default function DashboardPage(){
     {title:'На проверке',count:items.filter(t=>t.status==='SUBMITTED').length,link:'/tasks?status=SUBMITTED'},
     {title:'Выполнены',count:items.filter(t=>t.status==='COMPLETED').length,link:'/tasks?status=COMPLETED'},
   ];
-  const detail=(section:string,metric?:string)=>`/analytics?section=${section}&period=${period}&org=${org}${metric?`&metric=${metric}`:''}`;
   return <div className="portal-dashboard">
     <header className="portal-heading">
       <div><div className="portal-eyebrow">ОБЗОР ДЕЯТЕЛЬНОСТИ</div><h1>Главный дашборд</h1><p>Показатели, отклонения и действия в одном рабочем пространстве.</p></div>
       {canCreate&&<button className="portal-primary" onClick={()=>setCreate(true)}>+ Создать задачу</button>}
     </header>
+    <LocalBusinessData key={me?.user.id}/>
     <div className="portal-context">
-      <label>Филиал<select aria-label="Филиал дашборда" value={org} onChange={e=>setOrg(e.target.value)}>{orgs.map(o=><option key={o} value={o}>{orgUnitLabel(o)}</option>)}</select></label>
-      <label>Период показателей<input aria-label="Период показателей" type="month" value={period} onChange={e=>{if(e.target.value)setPeriod(e.target.value);}}/></label>
-      <div className="portal-context-note">Только ваш доступный контур<br/><span>Сетевая сводка не подключена</span></div>
+      <label>Контур задач портала<select aria-label="Филиал задач" value={org} onChange={e=>setOrg(e.target.value)}>{orgs.map(o=><option key={o} value={o}>{orgUnitLabel(o)}</option>)}</select></label>
+      <div className="portal-context-note">Только доступные по роли задачи<br/><span>Не связан с филиалами локального Excel</span></div>
     </div>
-    <section aria-labelledby="metrics-title">
-      <div className="portal-section-head"><h2 id="metrics-title">Результаты бизнеса</h2><span className="portal-chip">Ожидаем источники данных</span></div>
-      <div className="portal-metrics">{METRICS.map(m=><Link className="portal-metric" key={m.code} to={detail(m.section,m.code)}>
-        <span className="portal-muted">{m.name}</span><strong>Нет данных</strong><span className="portal-metric-meta">План / факт не рассчитан</span><span className="portal-metric-bottom">Открыть показатель <span aria-hidden>↗</span></span>
-      </Link>)}</div>
-      <p className="portal-footnote">Отсутствующие значения не заменяются нулём. Период и филиал передаются в детализацию. Пороговые оценки появятся после подключения и проверки данных.</p>
-    </section>
     <div className="portal-grid">
       <section className="portal-panel">
         <div className="portal-section-head"><div><h2>Исполнение задач</h2><p className="portal-muted">Текущие состояния · все сроки</p></div><button className="portal-text-button" onClick={()=>setRefresh(x=>x+1)} disabled={loading}>{loading?'Обновление…':'Обновить'}</button></div>
@@ -82,14 +73,14 @@ export default function DashboardPage(){
       <section className="portal-panel">
         <div className="portal-section-head"><h2>БДР · план и факт</h2><span className="portal-chip">Не подключён</span></div>
         <div className="portal-empty"><div className="portal-empty-mark">₽</div><h3>Финансовая модель на своём месте</h3><p>Выручка, расходы и прибыль появятся после согласования расчётов и подключения БДР. Сейчас финансовые итоги не рассчитаны.</p></div>
-        <Link className="portal-module-link" to={`/bdr?period=${period}&org=${org}`}>Открыть структуру раздела →</Link>
+        <Link className="portal-module-link" to={`/bdr?org=${org}`}>Открыть структуру раздела →</Link>
       </section>
     </div>
     <section className="portal-panel">
       <div className="portal-section-head"><div><h2>Ближайшие действия</h2><p className="portal-muted">Открытые задачи по возрастанию срока · до 5 записей</p></div><Link to="/tasks">Все задачи →</Link></div>
       {error?<p className="portal-error">Список недоступен: повторите загрузку выше.</p>:loading?<p role="status">Загрузка…</p>:attention.length?attention.map(t=><Link className="portal-task-row" to={`/tasks/${t.id}`} key={t.id}><div><strong>{t.title}</strong><span>Срок: {new Date(t.due_at).toLocaleString('ru-RU',{timeZone:'UTC'})} UTC</span></div><StatusBadge status={t.status}/></Link>):<div className="portal-empty compact">Открытых задач нет. {canCreate?'Создайте первую задачу кнопкой вверху.':'Новые назначения появятся здесь.'}</div>}
     </section>
-    <footer className="portal-next"><span>Показатель → детализация → задача → контроль результата</span><span>Каркас портала · этап R1.1</span></footer>
+    <footer className="portal-next"><span>Показатель → детализация → задача → контроль результата</span><span>Первый источник · локальный Excel</span></footer>
     {create&&<CreateTaskModal grants={me?.grants??[]} onClose={()=>setCreate(false)} onCreated={()=>{setCreate(false);setRefresh(x=>x+1);}}/>}
   </div>;
 }
