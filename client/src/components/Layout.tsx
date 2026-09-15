@@ -32,9 +32,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <NavLink to="/" end style={({ isActive }) => linkStyle(isActive)} onClick={() => setMobileOpen(false)}>Главный дашборд</NavLink>
+        <NavLink to="/analytics" style={({ isActive }) => linkStyle(isActive)} onClick={() => setMobileOpen(false)}>Продажи и склад</NavLink>
+        <NavLink to="/bdr" style={({ isActive }) => linkStyle(isActive)} onClick={() => setMobileOpen(false)}>БДР</NavLink>
+        <NavLink to="/kpi" style={({ isActive }) => linkStyle(isActive)} onClick={() => setMobileOpen(false)}>KPI и MBO</NavLink>
+        <div style={{fontSize:10,letterSpacing:'.1em',color:'#667085',padding:'22px 14px 6px'}}>ОПЕРАЦИОННАЯ РАБОТА</div>
         <NavLink to="/tasks" style={({ isActive }) => linkStyle(isActive)} onClick={() => setMobileOpen(false)}>
           Задачи
         </NavLink>
+        <NavLink to="/diary" style={({ isActive }) => linkStyle(isActive)} onClick={() => setMobileOpen(false)}>Ежедневник</NavLink>
         <NavLink to="/notifications" style={({ isActive }) => linkStyle(isActive)} onClick={() => setMobileOpen(false)}>
           Уведомления
         </NavLink>
@@ -99,6 +105,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           position: 'sticky',
           top: 0,
           height: '100vh',
+          overflowY: 'auto',
         }}
       >
         {nav}
@@ -123,14 +130,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               padding: 20,
               display: 'flex',
               flexDirection: 'column',
+              overflowY: 'auto',
             }}
           >
+            <button aria-label="Закрыть меню" onClick={()=>setMobileOpen(false)} style={{minHeight:44,marginBottom:12,background:'#f5f6f8',border:'1px solid #e2e4e9',borderRadius:6}}>Закрыть меню</button>
             {nav}
           </aside>
         </div>
       )}
 
-      <main className="main-content" style={{ flex: 1, minWidth: 0, padding: '28px 32px', maxWidth: 1100 }}>{children}</main>
+      <main className="main-content" style={{ flex: 1, minWidth: 0, padding: '28px 32px' }}>{children}</main>
 
       <style>{`
         .sidebar { display: flex; }

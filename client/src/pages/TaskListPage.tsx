@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { listWorkItems } from '../api/endpoints';
 import type { WorkItem, WorkItemStatus } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
@@ -21,7 +21,10 @@ export default function TaskListPage() {
   const { me } = useAuth();
   const navigate = useNavigate();
   const [items, setItems] = useState<WorkItem[]>([]);
-  const [status, setStatus] = useState<WorkItemStatus | ''>('');
+  const [params,setParams]=useSearchParams();
+  const rawStatus=params.get('status')??'';
+  const status:WorkItemStatus|''=STATUS_OPTIONS.some(x=>x.value===rawStatus)?rawStatus as WorkItemStatus|'':'';
+  const setStatus=(value:WorkItemStatus|'')=>setParams(value?{status:value}:{});
   const [orgFilter, setOrgFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

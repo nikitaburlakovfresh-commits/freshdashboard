@@ -6,6 +6,8 @@ import Layout from './components/Layout';
 import TaskListPage from './pages/TaskListPage';
 import TaskDetailPage from './pages/TaskDetailPage';
 import NotificationsPage from './pages/NotificationsPage';
+import DashboardPage from './pages/DashboardPage';
+import PortalModulePage from './pages/PortalModulePage';
 
 export default function App() {
   const { me, loading } = useAuth();
@@ -29,11 +31,12 @@ export default function App() {
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<Navigate to="/tasks" replace />} />
+        <Route path="/" element={<DashboardPage />} />
+        {['/analytics','/bdr','/kpi','/diary'].map(path=><Route key={path} path={path} element={<PortalModulePage/>}/>)}
         <Route path="/tasks" element={<TaskListPage />} />
         <Route path="/tasks/:id" element={<TaskDetailPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
-        <Route path="*" element={<Navigate to="/tasks" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
   );
