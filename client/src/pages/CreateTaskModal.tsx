@@ -58,12 +58,12 @@ export default function CreateTaskModal({
         role="dialog"
         aria-label="Новая задача"
         aria-modal="true"
-        style={{ width: 420, maxWidth: '100%', maxHeight:'90vh', overflowY:'auto', background: '#fff', borderRadius: 16, padding: 28 }}
+        style={{ width: 420, maxWidth: '100%', maxHeight:'90vh', overflowY:'auto', background: 'var(--fresh-surface)', border: '1px solid var(--fresh-border)', borderRadius: 16, padding: 28 }}
       >
-        <h2 style={{ margin: 0, marginBottom: 20, fontSize: 18, color: '#292D34' }}>Новая задача</h2>
+        <h2 style={{ margin: 0, marginBottom: 20, fontSize: 24, color: 'var(--fresh-dark)' }}>Новая задача</h2>
 
-        <label style={labelStyle}>Филиал</label>
-        <select value={orgUnitId} onChange={(e) => setOrgUnitId(e.target.value)} style={inputStyle}>
+        <label htmlFor="task-org" style={labelStyle}>Филиал · контур задач</label>
+        <select id="task-org" value={orgUnitId} onChange={(e) => setOrgUnitId(e.target.value)} style={inputStyle}>
           {rmOrgs.map((g) => (
             <option key={g.org_unit_id} value={g.org_unit_id}>
               {orgUnitLabel(g.org_unit_id)}
@@ -71,13 +71,13 @@ export default function CreateTaskModal({
           ))}
         </select>
 
-        <label style={labelStyle}>Название</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} placeholder="Например: Проверить остатки на складе" />
+        <label htmlFor="task-title" style={labelStyle}>Название</label>
+        <input id="task-title" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} placeholder="Например: Проверить остатки на складе" />
 
-        <label style={labelStyle}>Срок выполнения (UTC)</label>
-        <input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} style={inputStyle} />
+        <label htmlFor="task-due" style={labelStyle}>Срок выполнения (UTC)</label>
+        <input id="task-due" type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} style={inputStyle} />
 
-        {error && <div style={{ color: '#D92D20', fontSize: 13, marginTop: 10 }}>{error}</div>}
+        {error && <div role="alert" style={{ color: 'var(--fresh-danger)', fontSize: 13, marginTop: 10 }}>{error}</div>}
 
         <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
           <button type="button" onClick={onClose} style={secondaryBtn}>
@@ -92,9 +92,9 @@ export default function CreateTaskModal({
   );
 }
 
-const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 600, marginTop: 14, marginBottom: 6, color: '#292D34' };
-const inputStyle: React.CSSProperties = { width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #E2E4E9', fontSize: 14 };
-const secondaryBtn: React.CSSProperties = { flex: 1, padding: '10px', borderRadius: 8, border: '1px solid #E2E4E9', background: '#fff', color: '#292D34', fontWeight: 600, cursor: 'pointer' };
+const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 500, marginTop: 14, marginBottom: 6, color: 'var(--fresh-dark)' };
+const inputStyle: React.CSSProperties = { width: '100%', minHeight: 44, padding: '9px 12px', borderRadius: 8, border: '1px solid var(--fresh-border)', fontSize: 14 };
+const secondaryBtn: React.CSSProperties = { flex: 1, minHeight: 44, padding: '10px', borderRadius: 16, border: '1px solid var(--fresh-border)', background: 'var(--fresh-surface)', color: 'var(--fresh-dark)', fontWeight: 500, cursor: 'pointer' };
 function primaryBtn(disabled: boolean): React.CSSProperties {
-  return { flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: disabled ? '#A9B8FF' : '#003DFF', color: '#fff', fontWeight: 600, cursor: disabled ? 'default' : 'pointer' };
+  return { flex: 1, minHeight: 44, padding: '10px', borderRadius: 16, border: 'none', background: '#003DFF', color: '#fff', fontWeight: 500, cursor: disabled ? 'default' : 'pointer' };
 }

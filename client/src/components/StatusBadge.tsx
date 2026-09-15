@@ -11,12 +11,12 @@ const LABELS: Record<WorkItemStatus, string> = {
 };
 
 const COLORS: Record<WorkItemStatus, { bg: string; fg: string }> = {
-  DRAFT: { bg: '#F3F4F6', fg: '#4B5563' },
-  ASSIGNED: { bg: '#E0EAFF', fg: '#003DFF' },
-  IN_PROGRESS: { bg: '#FEF0C7', fg: '#B54708' },
-  SUBMITTED: { bg: '#E0F2FE', fg: '#0C5D8F' },
-  COMPLETED: { bg: '#D1FADF', fg: '#067647' },
-  CANCELLED: { bg: '#FEE4E2', fg: '#B42318' },
+  DRAFT: { bg: 'var(--fresh-raised)', fg: 'var(--fresh-text-muted)' },
+  ASSIGNED: { bg: 'var(--fresh-info-bg)', fg: 'var(--fresh-link)' },
+  IN_PROGRESS: { bg: 'var(--fresh-warning-bg)', fg: 'var(--fresh-warning)' },
+  SUBMITTED: { bg: 'var(--fresh-info-bg)', fg: 'var(--fresh-link)' },
+  COMPLETED: { bg: 'var(--fresh-success-bg)', fg: 'var(--fresh-success)' },
+  CANCELLED: { bg: 'var(--fresh-danger-bg)', fg: 'var(--fresh-danger)' },
 };
 
 export default function StatusBadge({ status }: { status: WorkItemStatus }) {

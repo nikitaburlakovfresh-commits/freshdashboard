@@ -32,7 +32,7 @@ export default function App() {
     <Layout>
       <Routes>
         <Route path="/" element={<DashboardPage />} />
-        {['/analytics','/bdr','/kpi','/diary'].map(path=><Route key={path} path={path} element={<PortalModulePage/>}/>)}
+        {['/analytics','/bdr','/kpi','/diary','/modules'].map(path=><Route key={path} path={path} element={<PortalModulePage/>}/>)}
         <Route path="/tasks" element={<TaskListPage />} />
         <Route path="/tasks/:id" element={<TaskDetailPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />

@@ -42,29 +42,29 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div style={{ maxWidth: 700 }}>
+    <div className="notifications-page" style={{ maxWidth: 900 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h1 style={{ fontSize: 22, margin: 0, color: '#292D34' }}>Уведомления</h1>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#292D34' }}>
+        <h1 style={{ fontSize: 22, margin: 0, color: 'var(--fresh-dark)' }}>Уведомления</h1>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--fresh-dark)' }}>
           <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} />
           Только непрочитанные
         </label>
       </div>
 
-      {error && <div style={{ color: '#D92D20', marginBottom: 12 }}>{error}</div>}
+      {error && <div role="alert" style={{ color: 'var(--fresh-danger)', marginBottom: 12 }}>{error}</div>}
 
       {loading && items.length === 0 ? (
-        <div style={{ color: '#6b7280' }}>Загрузка…</div>
+        <div style={{ color: 'var(--fresh-text-muted)' }}>Загрузка…</div>
       ) : items.length === 0 ? (
-        <div style={{ color: '#6b7280', padding: '40px 0', textAlign: 'center' }}>Уведомлений нет.</div>
+        <div style={{ color: 'var(--fresh-text-muted)', padding: '40px 0', textAlign: 'center' }}>Уведомлений нет.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {items.map((n) => (
             <div
               key={n.id}
               style={{
-                background: n.read_at ? '#fff' : '#F5F8FF',
-                border: '1px solid #E2E4E9',
+                background: n.read_at ? 'var(--fresh-surface)' : 'var(--fresh-info-bg)',
+                border: '1px solid var(--fresh-border)',
                 borderRadius: 12,
                 padding: '14px 18px',
                 display: 'flex',
@@ -73,9 +73,9 @@ export default function NotificationsPage() {
                 gap: 12,
               }}
             >
-              <div style={{ minWidth: 0, cursor: 'pointer' }} onClick={() => navigate(`/tasks/${n.work_item_id}`)}>
-                <div style={{ fontWeight: n.read_at ? 500 : 700, fontSize: 14, color: '#292D34' }}>{n.message}</div>
-                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>{new Date(n.created_at).toLocaleString('ru-RU', {timeZone:'UTC'})} UTC</div>
+              <div role="link" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') navigate(`/tasks/${n.work_item_id}`); }} style={{ minWidth: 0, cursor: 'pointer' }} onClick={() => navigate(`/tasks/${n.work_item_id}`)}>
+                <div style={{ fontWeight: n.read_at ? 500 : 700, fontSize: 14, color: 'var(--fresh-dark)', overflowWrap: 'anywhere' }}>{n.message}</div>
+                <div style={{ fontSize: 12, color: 'var(--fresh-text-muted)', marginTop: 4 }}>{new Date(n.created_at).toLocaleString('ru-RU', {timeZone:'UTC'})} UTC</div>
               </div>
               {!n.read_at && (
                 <button onClick={() => markRead(n)} style={markBtn}>
@@ -99,9 +99,10 @@ export default function NotificationsPage() {
 const markBtn: React.CSSProperties = {
   padding: '7px 14px',
   borderRadius: 8,
-  border: '1px solid #E2E4E9',
-  background: '#fff',
-  color: '#003DFF',
+  minHeight: 44,
+  border: '1px solid var(--fresh-border)',
+  background: 'var(--fresh-surface)',
+  color: 'var(--fresh-link)',
   fontWeight: 600,
   fontSize: 12,
   cursor: 'pointer',

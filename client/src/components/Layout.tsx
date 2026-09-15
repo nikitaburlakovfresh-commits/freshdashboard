@@ -1,155 +1,90 @@
-import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import Logo from './Logo';
+import Icon, { type IconName } from './Icon';
 
-const linkStyle = (isActive: boolean): React.CSSProperties => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: '10px 14px',
-  borderRadius: 8,
-  color: isActive ? '#003DFF' : '#292D34',
-  background: isActive ? '#EBF0FF' : 'transparent',
-  fontWeight: isActive ? 600 : 500,
-  fontSize: 14,
-  textDecoration: 'none',
-});
+const groups: { label: string; links: { path: string; label: string; icon: IconName; future?: boolean }[] }[] = [
+  { label: 'Обзор', links: [
+    { path: '/', label: 'Вся сеть', icon: 'grid' },
+    { path: '/analytics', label: 'Продажи и склад', icon: 'chart', future: true },
+  ] },
+  { label: 'Управление результатом', links: [
+    { path: '/kpi', label: 'KPI и MBO', icon: 'target', future: true },
+    { path: '/bdr', label: 'БДР · план и факт', icon: 'wallet', future: true },
+  ] },
+  { label: 'Операционная работа', links: [
+    { path: '/tasks', label: 'Задачи', icon: 'check' },
+    { path: '/diary', label: 'Ежедневник', icon: 'calendar', future: true },
+    { path: '/notifications', label: 'Уведомления', icon: 'bell' },
+    { path: '/modules', label: 'Все модули ТЗ', icon: 'layers', future: true },
+  ] },
+];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { me, logout } = useAuth();
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  const primaryRole = me?.grants?.some((g) => g.role === 'REGIONAL_MANAGER') ? 'REGIONAL_MANAGER' : 'RF';
-
-  const nav = (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 20px' }}>
-        <Logo />
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 15, color: '#292D34' }}>FRESH Portal</div>
-          <span className="pilot-badge">Синтетика · Пилот</span>
-        </div>
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const mobile = useRef<HTMLDialogElement>(null);
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('fresh-theme') === 'light' ? 'light' : 'dark'; } catch { return 'dark'; }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem('fresh-theme', theme); } catch { /* Theme persistence is optional. */ }
+  }, [theme]);
+  const primaryRole = me?.grants?.some(g => g.role === 'REGIONAL_MANAGER') ? 'Постановщик' : 'Исполнитель';
+  const current = groups.flatMap(g => g.links).find(l => l.path === pathname)?.label ?? 'Карточка задачи';
+  const close = () => mobile.current?.close();
+  const upload = () => { close(); navigate('/?import=1'); };
+  const nav = <>
+    <NavLink className="shell-brand" to="/" onClick={close} aria-label="FRESH · Обзор сети">
+      <Logo /><span>ПОРТАЛ УПРАВЛЕНИЯ СЕТЬЮ</span>
+    </NavLink>
+    <nav className="shell-nav" aria-label="Основная навигация">
+      {groups.map(group => <div className="shell-nav-group" key={group.label}>
+        <div className="shell-nav-label">{group.label}</div>
+        {group.links.map(link => <NavLink key={link.path} to={link.path} end={link.path === '/'} onClick={close}
+          className={({ isActive }) => `shell-nav-link${isActive ? ' active' : ''}`}>
+          <Icon name={link.icon} /><span>{link.label}</span>
+          {link.future && <span className="shell-future" title="Навигационный каркас · следующий этап" aria-label="Следующий этап">○</span>}
+        </NavLink>)}
+      </div>)}
+      <div className="shell-nav-group shell-org">
+        <div className="shell-nav-label">Оргструктура сети</div>
+        <div className="shell-org-line"><Icon name="network" /><span>Дивизионы и РМ</span></div>
+        <p>Требуется сопоставление<br />филиалов и OrgUnit</p>
       </div>
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <NavLink to="/" end style={({ isActive }) => linkStyle(isActive)} onClick={() => setMobileOpen(false)}>Главный дашборд</NavLink>
-        <NavLink to="/analytics" style={({ isActive }) => linkStyle(isActive)} onClick={() => setMobileOpen(false)}>Продажи и склад</NavLink>
-        <NavLink to="/bdr" style={({ isActive }) => linkStyle(isActive)} onClick={() => setMobileOpen(false)}>БДР</NavLink>
-        <NavLink to="/kpi" style={({ isActive }) => linkStyle(isActive)} onClick={() => setMobileOpen(false)}>KPI и MBO</NavLink>
-        <div style={{fontSize:10,letterSpacing:'.1em',color:'#667085',padding:'22px 14px 6px'}}>ОПЕРАЦИОННАЯ РАБОТА</div>
-        <NavLink to="/tasks" style={({ isActive }) => linkStyle(isActive)} onClick={() => setMobileOpen(false)}>
-          Задачи
-        </NavLink>
-        <NavLink to="/diary" style={({ isActive }) => linkStyle(isActive)} onClick={() => setMobileOpen(false)}>Ежедневник</NavLink>
-        <NavLink to="/notifications" style={({ isActive }) => linkStyle(isActive)} onClick={() => setMobileOpen(false)}>
-          Уведомления
-        </NavLink>
-      </nav>
-      <div style={{ marginTop: 'auto', paddingTop: 20, borderTop: '1px solid #E2E4E9' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#292D34' }}>{me?.user.full_name}</div>
-        <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
-          {me?.user.login} · {primaryRole === 'REGIONAL_MANAGER' ? 'Постановщик' : 'Исполнитель'}
-        </div>
-        <button
-          onClick={() => logout()}
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            borderRadius: 8,
-            border: '1px solid #E2E4E9',
-            background: '#fff',
-            color: '#292D34',
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          Выйти
-        </button>
+    </nav>
+    <div className="shell-sidebar-bottom">
+      <button className="shell-upload" onClick={upload}><Icon name="upload" /><span>Загрузить QLIK-отчёты</span></button>
+      <span className="shell-local-note">Excel · только в памяти страницы</span>
+      <div className="shell-account"><span className="shell-avatar">{me?.user.full_name?.slice(0, 1) ?? 'F'}</span>
+        <div><strong>{me?.user.full_name}</strong><span>{primaryRole} · пилот R1</span></div>
+        <button className="shell-icon-button" onClick={() => logout()} aria-label="Выйти" title="Выйти"><Icon name="logout" /></button>
       </div>
-    </>
-  );
-
-  return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <span className="mobile-pilot-label" style={{display:'none',position:'fixed',top:22,left:64,zIndex:19,fontSize:12,color:'#52616b'}}>Пилот · тестовые данные</span>
-      <button
-        aria-label="Открыть меню"
-        onClick={() => setMobileOpen(true)}
-        style={{
-          display: 'none',
-          position: 'fixed',
-          top: 12,
-          left: 12,
-          zIndex: 20,
-          width: 40,
-          height: 40,
-          borderRadius: 8,
-          border: '1px solid #E2E4E9',
-          background: '#fff',
-        }}
-        className="mobile-menu-btn"
-      >
-        ☰
-      </button>
-
-      <aside
-        className="sidebar"
-        style={{
-          width: 240,
-          flexShrink: 0,
-          background: '#fff',
-          borderRight: '1px solid #E2E4E9',
-          padding: 20,
-          flexDirection: 'column',
-          position: 'sticky',
-          top: 0,
-          height: '100vh',
-          overflowY: 'auto',
-        }}
-      >
-        {nav}
-      </aside>
-
-      {mobileOpen && (
-        <div
-          onClick={() => setMobileOpen(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.4)',
-            zIndex: 30,
-          }}
-        >
-          <aside
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: 260,
-              height: '100vh',
-              background: '#fff',
-              padding: 20,
-              display: 'flex',
-              flexDirection: 'column',
-              overflowY: 'auto',
-            }}
-          >
-            <button aria-label="Закрыть меню" onClick={()=>setMobileOpen(false)} style={{minHeight:44,marginBottom:12,background:'#f5f6f8',border:'1px solid #e2e4e9',borderRadius:6}}>Закрыть меню</button>
-            {nav}
-          </aside>
-        </div>
-      )}
-
-      <main className="main-content" style={{ flex: 1, minWidth: 0, padding: '28px 32px' }}>{children}</main>
-
-      <style>{`
-        .sidebar { display: flex; }
-        @media (max-width: 860px) {
-          .sidebar { display: none !important; }
-          .mobile-menu-btn { display: flex !important; align-items: center; justify-content: center; }
-          .mobile-pilot-label { display: block !important; }
-          .main-content { padding: 72px 16px 24px !important; }
-        }
-      `}</style>
     </div>
-  );
+  </>;
+  return <div className="fresh-shell">
+    <a href="#portal-main" className="shell-skip">К содержимому</a>
+    <aside className="shell-sidebar">{nav}</aside>
+    <dialog ref={mobile} className="shell-mobile-dialog" aria-label="Меню портала"
+      onClick={e => { if (e.target === e.currentTarget) close(); }}>
+      <div className="shell-mobile-inner">
+        <button className="shell-menu-close" onClick={close}><Icon name="close" />Закрыть меню</button>{nav}
+      </div>
+    </dialog>
+    <div className="shell-body">
+      <header className="shell-topbar">
+        <button className="shell-icon-button shell-menu-toggle" aria-label="Открыть меню" onClick={() => mobile.current?.showModal()}><Icon name="menu" /></button>
+        <div className="shell-breadcrumb"><span>FRESH Portal</span><Icon name="chevron" /><strong>{current}</strong></div>
+        <div className="shell-top-actions"><span className="shell-stage">Визуальный этап · ТЗ v2.12</span>
+          <button className="shell-icon-button" aria-label={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
+            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Сменить тему"><Icon name={theme === 'dark' ? 'sun' : 'moon'} /></button>
+          <NavLink className="shell-icon-button" to="/notifications" aria-label="Открыть уведомления"><Icon name="bell" /></NavLink>
+        </div>
+      </header>
+      <main id="portal-main" className="main-content">{children}</main>
+    </div>
+  </div>;
 }

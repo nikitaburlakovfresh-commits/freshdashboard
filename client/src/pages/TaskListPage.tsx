@@ -62,9 +62,9 @@ export default function TaskListPage() {
   }, [load]);
 
   return (
-    <div>
+    <div className="task-list-page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-        <h1 style={{ fontSize: 22, margin: 0, color: '#292D34' }}>Задачи</h1>
+        <h1 style={{ fontSize: 22, margin: 0, color: 'var(--fresh-dark)' }}>Задачи</h1>
         {canCreate && (
           <button onClick={() => setShowCreate(true)} style={createBtn}>
             + Новая задача
@@ -73,7 +73,7 @@ export default function TaskListPage() {
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
-        <select value={status} onChange={(e) => setStatus(e.target.value as WorkItemStatus | '')} style={filterStyle}>
+        <select aria-label="Статус задачи" value={status} onChange={(e) => setStatus(e.target.value as WorkItemStatus | '')} style={filterStyle}>
           {STATUS_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -81,7 +81,7 @@ export default function TaskListPage() {
           ))}
         </select>
         {orgOptions.length > 1 && (
-          <select value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)} style={filterStyle}>
+          <select aria-label="Контур задач" value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)} style={filterStyle}>
             <option value="">Все доступные филиалы</option>
             {orgOptions.map((org) => (
               <option key={org} value={org}>
@@ -92,21 +92,23 @@ export default function TaskListPage() {
         )}
       </div>
 
-      {error && <div style={{ color: '#D92D20', marginBottom: 12 }}>{error}</div>}
+      {error && <div role="alert" style={{ color: 'var(--fresh-danger)', marginBottom: 12 }}>{error}</div>}
 
       {loading && items.length === 0 ? (
-        <div style={{ color: '#6b7280' }}>Загрузка…</div>
+        <div style={{ color: 'var(--fresh-text-muted)' }}>Загрузка…</div>
       ) : items.length === 0 ? (
-        <div style={{ color: '#6b7280', padding: '40px 0', textAlign: 'center' }}>Нет задач по выбранным фильтрам.</div>
+        <div style={{ color: 'var(--fresh-text-muted)', padding: '40px 0', textAlign: 'center' }}>Нет задач по выбранным фильтрам.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {items.map((item) => (
             <div
               key={item.id}
+              className="task-list-row" role="link" tabIndex={0}
+              onKeyDown={e => { if (e.key === 'Enter') navigate(`/tasks/${item.id}`); }}
               onClick={() => navigate(`/tasks/${item.id}`)}
               style={{
-                background: '#fff',
-                border: '1px solid #E2E4E9',
+                background: 'var(--fresh-surface)',
+                border: '1px solid var(--fresh-border)',
                 borderRadius: 12,
                 padding: '14px 18px',
                 cursor: 'pointer',
@@ -117,8 +119,8 @@ export default function TaskListPage() {
               }}
             >
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#292D34', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</div>
-                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                <div style={{ fontWeight: 500, fontSize: 14, color: 'var(--fresh-dark)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</div>
+                <div style={{ fontSize: 12, color: 'var(--fresh-text-muted)', marginTop: 4 }}>
                   Срок: {new Date(item.due_at).toLocaleString('ru-RU', {timeZone:'UTC'})} UTC
                   {item.rework_count > 0 && ` · доработок: ${item.rework_count}`}
                 </div>
@@ -144,7 +146,7 @@ export default function TaskListPage() {
 
 const createBtn: React.CSSProperties = {
   padding: '10px 16px',
-  borderRadius: 8,
+  borderRadius: 16,
   border: 'none',
   background: '#003DFF',
   color: '#fff',
@@ -156,8 +158,8 @@ const createBtn: React.CSSProperties = {
 const filterStyle: React.CSSProperties = {
   padding: '8px 12px',
   borderRadius: 8,
-  border: '1px solid #E2E4E9',
+  border: '1px solid var(--fresh-border)',
   fontSize: 13,
-  background: '#fff',
-  color: '#292D34',
+  background: 'var(--fresh-surface)',
+  color: 'var(--fresh-dark)',
 };

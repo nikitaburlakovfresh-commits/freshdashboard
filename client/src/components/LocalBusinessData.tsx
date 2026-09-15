@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import Icon from './Icon';
 import {
   REPORT_NAMES, METRIC_NAMES, comparisonIssues, reconcile, selectRow, sourceAddress, validatePeriod,
   type ImportPeriod, type MetricKey, type Report, type ReportBatch,
@@ -26,7 +28,16 @@ export default function LocalBusinessData() {
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const input = useRef<HTMLInputElement>(null);
   const details = useRef<HTMLDetailsElement>(null);
-  const form = useRef<HTMLDetailsElement>(null);
+  const drawer = useRef<HTMLDialogElement>(null);
+  const [params, setParams] = useSearchParams();
+  const openImport = () => drawer.current?.showModal();
+  useEffect(() => {
+    if (params.get('import') === '1') {
+      drawer.current?.showModal();
+      const next = new URLSearchParams(params); next.delete('import');
+      setParams(next, { replace: true });
+    }
+  }, [params, setParams]);
   const stop = () => { worker.current?.terminate(); worker.current = null; clearTimeout(timer.current); };
   useEffect(() => () => { worker.current?.terminate(); clearTimeout(timer.current); }, []);
   const clearFiles = () => { setFiles([]); if (input.current) input.current.value = ''; };
@@ -34,7 +45,7 @@ export default function LocalBusinessData() {
     stop(); setBusy(false); setBatch(null); setBranch(''); clearFiles();
     setPeriod({ ...EMPTY_PERIOD }); setConfirmed(false); setError('');
     setStatus('Локальные данные удалены из этой страницы.');
-    if (form.current) form.current.open = true;
+    openImport();
   };
   const cancel = () => {
     stop(); setBusy(false); clearFiles(); setStatus('Проверка отменена. Текущие данные не изменены.');
@@ -63,7 +74,7 @@ export default function LocalBusinessData() {
           const next: ReportBatch = e.data.batch;
           stop(); setBatch(next); setBranch(''); setBusy(false); clearFiles();
           setStatus(`Пакет применён: ${next.reports.length} отчёт(а), пропущено ${next.skipped.length}.`);
-          if (form.current) form.current.open = false;
+          drawer.current?.close();
         }
       };
       instance.onerror = () => fail('Не удалось обработать Excel. Проверьте формат и повторите выбор файлов.');
@@ -87,17 +98,21 @@ export default function LocalBusinessData() {
   };
   const planKnown = !!batch?.period.planStart && !!batch?.period.planEnd;
   return <section className="local-business" aria-labelledby="metrics-title" aria-busy={busy}>
-    <div className="portal-section-head">
-      <div><h2 id="metrics-title">Результаты бизнеса</h2><p className="portal-muted">Продажи и склад · первый источник Excel</p></div>
-      <span className="portal-chip">{batch ? 'Локальный импорт' : 'Источник не загружен'}</span>
+    <div className="local-data-bar">
+      <div><Icon name="calendar" /><span>{batch ? `Продажи: ${dateRange(batch.period.start, batch.period.end)}` : 'Период не выбран'}</span><span className="portal-chip">{batch ? 'Локальный Excel' : 'Нет источника'}</span></div>
+      <button className="local-secondary" onClick={openImport}><Icon name="upload" />{batch ? 'Заменить QLIK-отчёты' : 'Загрузить QLIK-отчёты'}</button>
     </div>
+    <dialog className="local-import-drawer" ref={drawer} aria-labelledby="import-title"
+      onClick={e => { if (e.target === e.currentTarget) drawer.current?.close(); }}>
+    <div className="local-drawer-content">
+    <div className="local-drawer-heading"><div><span className="portal-eyebrow">ИСТОЧНИК ДАННЫХ</span><h2 id="import-title">Загрузить QLIK-отчёты</h2></div>
+      <button type="button" className="shell-icon-button" aria-label="Закрыть загрузку" onClick={() => drawer.current?.close()}><Icon name="close" /></button></div>
     <div className="local-privacy">
       <strong>Только в памяти этой страницы.</strong> Файлы и значения не отправляются на сервер и не сохраняются.
       При уходе со страницы, смене роли или перезагрузке импорт сбрасывается.
       Это просмотр вашего файла, не разграничение доступа к филиалам (не RBAC).
     </div>
-    <details className="portal-panel local-import-form" ref={form} open={!batch || undefined}>
-      <summary>{batch ? 'Заменить пакет Excel' : 'Подключить отчёты Excel'}</summary>
+    <div className="local-import-form">
       <p>Поддерживаются сводка продаж/склада и отчёт продаж с КСО и маржой. Можно выбрать все 9 файлов: остальные форматы будут пропущены, без детальных строк, VIN и персональных данных.</p>
       <form onSubmit={importFiles}>
         <div className="local-fields">
@@ -129,7 +144,22 @@ export default function LocalBusinessData() {
           <span className="portal-muted">Выбрано файлов: {files.length}. Новый пакет полностью заменит предыдущий — только после успешной проверки.</span>
         </div>
       </form>
-    </details>
+    </div>
+    {busy && <p role="status" className="local-status">{status}</p>}
+    {error && <div role="alert" className="local-error">{error}</div>}
+    </div>
+    </dialog>
+    <div className="network-score-row" aria-label="Оценка сети · расчёт не подключён">
+      {[
+        ['Средний балл сети', 'chart'], ['Зелёных филиалов', 'shield'],
+        ['Жёлтых филиалов', 'info'], ['Красных филиалов', 'info'],
+      ].map(([label, icon], i) => <article className="network-score" key={label}>
+        <span className={`network-score-icon tone-${i}`}><Icon name={icon as 'chart' | 'shield' | 'info'} /></span>
+        <div><strong aria-label="Нет данных">—</strong><span>{label}</span></div>
+      </article>)}
+    </div>
+    <p className="network-score-note">Оценка сети не рассчитана: нужны сопоставление OrgUnit и утверждённые версии формул и порогов. Цвет обозначает категорию, не оценку филиала.</p>
+    <div className="portal-section-head local-metrics-head"><h2 id="metrics-title">Продажи и склад</h2><span className="portal-muted">Факт из отчётов · без прогноза</span></div>
     <div role="status" aria-live="polite" className="local-status">{status}</div>
     {error && <div role="alert" className="local-error">{error}</div>}
     {batch && <>
@@ -138,10 +168,8 @@ export default function LocalBusinessData() {
           <option value="">Вся сеть · итог отчёта</option>
           {branches.map(([key, name]) => <option key={key} value={key}>{name}</option>)}
         </select></label>
-        <div className="local-period"><strong>Продажи: {dateRange(batch.period.start, batch.period.end)}</strong>
-          <span>Период указан пользователем, не извлечён из файла</span>
-          <strong>Склад: {summary?.stockDate ? date(summary.stockDate) : 'нет источника'}</strong>
-          <span>Дата среза из заголовков Excel</span>
+        <div className="local-period"><strong>Склад: {summary?.stockDate ? date(summary.stockDate) : 'нет источника'} · срез из Excel</strong>
+          <span>Период продаж вверху указан пользователем</span>
         </div>
         <button className="local-secondary" onClick={reset}>Сбросить данные</button>
       </div>
@@ -152,7 +180,7 @@ export default function LocalBusinessData() {
         const report = sourceFor(key), row = selectRow(report, branch);
         const value = row?.values[key];
         return <article className="portal-metric local-metric" key={key} data-metric={key}>
-          <span className="portal-muted">{METRIC_NAMES[key]}</span>
+          <div className="local-metric-title"><Icon name={key === 'sales' ? 'chart' : key === 'margin' ? 'wallet' : key === 'stock' ? 'stock' : 'calendar'} /><span className="portal-muted">{METRIC_NAMES[key]}</span></div>
           <strong>{number(value, key === 'margin')}</strong>
           <span className="portal-metric-meta">{key === 'margin' ? '₽ · включая КСО' : key === 'aged' ? 'шт. · по методике 45+ источника' : 'шт.'}</span>
           <span className="portal-metric-meta">{batch
@@ -165,7 +193,21 @@ export default function LocalBusinessData() {
         </article>;
       })}
     </div>
-    <p className="portal-footnote">Пустые ячейки и «—» — это «Нет данных», не ноль. Отрицательная маржа сохраняется. Нет автоматического прогноза, выдуманной свежести или пороговых оценок.</p>
+    <p className="portal-footnote local-memory-note"><Icon name="shield" />Только в памяти страницы · уход с дашборда, смена роли и перезагрузка сбрасывают импорт. Нет данных ≠ 0.</p>
+    <section className="network-focus" aria-labelledby="focus-title">
+      <div className="portal-section-head"><h2 id="focus-title">Фокусы внимания</h2><span className="portal-muted">Не настроены · не оценка результатов</span></div>
+      <div className="network-focus-grid">
+        {[
+          ['Планы и RunRate', 'Нужны период, план и версия формулы'],
+          ['Оборачиваемость', 'Нужны база склада и методика расчёта'],
+          ['Ежедневник и дисциплина', 'Нужны шаблоны, факты и целевые значения'],
+        ].map(([title, note]) => <div className="network-focus-card" key={title}><Icon name="target" /><div><strong>{title}</strong><span>{note}</span></div><span className="focus-dash">—</span></div>)}
+      </div>
+    </section>
+    {!batch && <section className="network-empty" aria-labelledby="network-title">
+      <div className="portal-section-head"><h2 id="network-title">Филиалы сети</h2><span className="portal-chip">Требуется источник</span></div>
+      <div className="network-empty-body"><span className="network-empty-symbol"><Icon name="network" /></span><div><h3>Сеть начнётся с ваших данных</h3><p>Загрузите отчёты, чтобы увидеть филиалы и раскрыть их показатели.<br />Дивизионы и РМ появятся только после утверждённого сопоставления OrgUnit.</p></div><button className="local-secondary" onClick={openImport}>Подключить Excel</button></div>
+    </section>}
     {batch && <>
       {sales && <div className="local-plan-result">
         <strong>План продаж: {planKnown ? `${number(valueFor(sales, branch, 'plan'))}${valueFor(sales, branch, 'plan') != null ? ' шт.' : ''}` : 'период не подтверждён'}</strong>
@@ -203,10 +245,18 @@ export default function LocalBusinessData() {
         </div>}
         <p className="portal-footnote">Допуск сверки денежных сумм — менее 0,01 ₽. Если хотя бы одна ячейка отсутствует, сумма филиалов не подставляется. Загруженный отчёт не связан с доступами и задачами портала.</p>
       </details>
-      <section className="portal-panel local-branches" aria-labelledby="local-branches-title">
-        <div className="portal-section-head"><div><h2 id="local-branches-title">Детализация по филиалам</h2><p className="portal-muted">Нажмите на филиал, чтобы обновить карточки и адреса ячеек. Всего: {branches.length}.</p></div>
+      <section className="local-branches" aria-labelledby="local-branches-title">
+        <div className="portal-section-head"><div><h2 id="local-branches-title">Филиалы из отчётов <span className="network-count">{branches.length}</span></h2><p className="portal-muted">Список из Excel, не оргструктура. Дивизионы и РМ не сопоставлены.</p></div>
           {branch && <button className="portal-text-button" onClick={() => setBranch('')}>Вернуться к итогу сети</button>}
         </div>
+        <div className="network-branch-list">{branches.map(([key, name]) => <details key={key} className="network-branch">
+          <summary><Icon name="chevron" /><strong>{name}</strong><span className="network-branch-source">{batch.reports.filter(r => selectRow(r, key)).map(r => r.kind === 'summary' ? 'Сводка' : 'Продажи').join(' + ')}</span><span className="portal-chip">Без оценки</span></summary>
+          <div className="network-branch-content">
+            <div className="network-branch-values">{KEYS.map(metric => <div key={metric}><span>{METRIC_NAMES[metric]}</span><strong>{number(valueFor(sourceFor(metric), key, metric), metric === 'margin')}{metric === 'margin' && valueFor(sourceFor(metric), key, metric) != null ? ' ₽' : ''}</strong><small>{sourceAddress(sourceFor(metric), selectRow(sourceFor(metric), key), metric)}</small></div>)}</div>
+            <button className="portal-text-button" onClick={() => { setBranch(key); document.getElementById('metrics-title')?.scrollIntoView({ block: 'start' }); }}>Показать в карточках и сверке ↑</button>
+          </div>
+        </details>)}</div>
+        <details className="local-tabular-details"><summary>Таблица всех филиалов · сравнить показатели</summary>
         <div className="local-table-wrap local-branch-scroll" role="region" aria-label="Показатели филиалов" tabIndex={0}>
           <table className="local-table">
             <caption>Продажи / маржа: {primary && REPORT_NAMES[primary.kind]}. Склад: сводка. Филиалы обоих отчётов сохранены.</caption>
@@ -218,6 +268,7 @@ export default function LocalBusinessData() {
             </tr>)}</tbody>
           </table>
         </div>
+        </details>
       </section>
     </>}
   </section>;

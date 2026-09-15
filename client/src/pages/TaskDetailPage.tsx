@@ -93,20 +93,20 @@ export default function TaskDetailPage() {
     }
   }
 
-  if (loading) return <div style={{ color: '#6b7280' }}>Загрузка…</div>;
-  if (error && !item) return <div style={{ color: '#D92D20' }}>{error}</div>;
+  if (loading) return <div style={{ color: 'var(--fresh-text-muted)' }}>Загрузка…</div>;
+  if (error && !item) return <div role="alert" style={{ color: 'var(--fresh-danger)' }}>{error}</div>;
   if (!item) return null;
 
   return (
-    <div style={{ maxWidth: 760 }}>
+    <div className="task-detail-page" style={{ maxWidth: 900 }}>
       <button onClick={() => navigate('/tasks')} style={backBtn}>
         ← К списку задач
       </button>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginTop: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 20, margin: 0, color: '#292D34' }}>{item.title}</h1>
-          <div style={{ fontSize: 13, color: '#6b7280', marginTop: 6 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16, marginTop: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ fontSize: 20, margin: 0, color: 'var(--fresh-dark)' }}>{item.title}</h1>
+          <div style={{ fontSize: 13, color: 'var(--fresh-text-muted)', marginTop: 6 }}>
             Срок: {new Date(item.due_at).toLocaleString('ru-RU', {timeZone: 'UTC'})} UTC · Версия: {item.entity_version}
             {item.rework_count > 0 && ` · Доработок: ${item.rework_count}`}
           </div>
@@ -115,12 +115,12 @@ export default function TaskDetailPage() {
       </div>
 
       {item.is_blocked && item.blocked_reason && (
-        <div style={{ marginTop: 14, padding: '10px 14px', background: '#FEF0C7', color: '#B54708', borderRadius: 8, fontSize: 13 }}>
+        <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--fresh-warning-bg)', color: 'var(--fresh-warning)', borderRadius: 8, fontSize: 13 }}>
           Заблокировано: {item.blocked_reason}
         </div>
       )}
 
-      {error && <div style={{ color: '#D92D20', marginTop: 14, fontSize: 13 }}>{error}</div>}
+      {error && <div role="alert" style={{ color: 'var(--fresh-danger)', marginTop: 14, fontSize: 13 }}>{error}</div>}
 
       <section style={card}>
         <h2 style={cardTitle}>Результат выполнения</h2>
@@ -130,7 +130,8 @@ export default function TaskDetailPage() {
               value={summaryDraft}
               onChange={(e) => setSummaryDraft(e.target.value)}
               rows={5}
-              style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #E2E4E9', fontSize: 14, fontFamily: 'inherit', resize: 'vertical' }}
+              aria-label="Результат выполнения"
+              style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--fresh-border)', fontSize: 14, fontFamily: 'inherit', resize: 'vertical' }}
               placeholder="Опишите, что сделано…"
             />
             <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
@@ -148,13 +149,13 @@ export default function TaskDetailPage() {
                 Сохранить результат
               </button>
             </div>
-            <p style={{fontSize:12,color:dirty?'#964219':'#52616b'}} aria-live="polite">
+            <p style={{fontSize:12,color:dirty?'var(--fresh-warning)':'var(--fresh-text-muted)'}} aria-live="polite">
               {actionBusy ? 'Сохранение…' : dirty ? 'Есть несохранённые изменения' : item.fields[0]?.value ? 'Результат сохранён' : 'Заполните результат перед сдачей'}
               {' · '}{Array.from(summaryDraft).length}/4000
             </p>
           </>
         ) : (
-          <p style={{ fontSize: 14, color: item.fields[0]?.value ? '#292D34' : '#9CA3AF', whiteSpace: 'pre-wrap' }}>
+          <p style={{ fontSize: 14, color: item.fields[0]?.value ? 'var(--fresh-dark)' : 'var(--fresh-text-muted)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
             {item.fields[0]?.value ?? 'Результат ещё не заполнен.'}
           </p>
         )}
@@ -169,7 +170,7 @@ export default function TaskDetailPage() {
                 aria-label="Исполнитель"
                 value={assigneeId}
                 onChange={(e) => setAssigneeId(e.target.value)}
-                style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #E2E4E9', fontSize: 13, width: '100%', maxWidth: 360 }}
+                style={{ padding: '9px 12px', minHeight: 44, borderRadius: 8, border: '1px solid var(--fresh-border)', fontSize: 13, width: '100%', maxWidth: 360 }}
               >
                 <option value="">Выберите исполнителя</option>
                 {assignees.map(a => <option key={a.id} value={a.id}>{a.full_name} ({a.login})</option>)}
@@ -237,7 +238,7 @@ export default function TaskDetailPage() {
           )}
 
           {!isRm && !isOwnRf && (
-            <span style={{ color: '#6b7280', fontSize: 13 }}>Нет доступных действий для вашей роли по этой задаче.</span>
+            <span style={{ color: 'var(--fresh-text-muted)', fontSize: 13 }}>Нет доступных действий для вашей роли по этой задаче.</span>
           )}
         </div>
       </section>
@@ -280,12 +281,12 @@ export default function TaskDetailPage() {
       <section style={card}>
         <h2 style={cardTitle}>История</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {history.length === 0 && <span style={{ color: '#6b7280', fontSize: 13 }}>Событий пока нет.</span>}
+          {history.length === 0 && <span style={{ color: 'var(--fresh-text-muted)', fontSize: 13 }}>Событий пока нет.</span>}
           {history.map((h) => (
-            <div key={h.event_id} style={{ borderLeft: '2px solid #E2E4E9', paddingLeft: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#292D34' }}>{EVENT_LABELS[h.event_type] ?? h.event_type}</div>
-              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{new Date(h.occurred_at).toLocaleString('ru-RU', {timeZone:'UTC'})} UTC</div>
-              {h.reason && <div style={{ fontSize: 12, color: '#292D34', marginTop: 4 }}>Причина: {h.reason}</div>}
+            <div key={h.event_id} style={{ borderLeft: '2px solid var(--fresh-border)', paddingLeft: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fresh-dark)' }}>{EVENT_LABELS[h.event_type] ?? h.event_type}</div>
+              <div style={{ fontSize: 12, color: 'var(--fresh-text-muted)', marginTop: 2 }}>{new Date(h.occurred_at).toLocaleString('ru-RU', {timeZone:'UTC'})} UTC</div>
+              {h.reason && <div style={{ fontSize: 12, color: 'var(--fresh-dark)', marginTop: 4, overflowWrap: 'anywhere' }}>Причина: {h.reason}</div>}
             </div>
           ))}
         </div>
@@ -311,15 +312,16 @@ function ReasonModal({
 }) {
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 40, padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 420, background: '#fff', borderRadius: 16, padding: 26 }}>
-        <h3 style={{ marginTop: 0, fontSize: 16, color: '#292D34' }}>{title}</h3>
+      <div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} style={{ width: 420, maxWidth: '100%', background: 'var(--fresh-surface)', border: '1px solid var(--fresh-border)', borderRadius: 16, padding: 26 }}>
+        <h3 style={{ marginTop: 0, fontSize: 20, color: 'var(--fresh-dark)' }}>{title}</h3>
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           maxLength={500}
           rows={3}
           placeholder="Укажите причину…"
-          style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #E2E4E9', fontSize: 14, fontFamily: 'inherit', resize: 'vertical' }}
+          aria-label="Причина" autoFocus
+          style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--fresh-border)', fontSize: 14, fontFamily: 'inherit', resize: 'vertical' }}
         />
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
           <button onClick={onClose} style={secondaryBtn}>
@@ -334,11 +336,11 @@ function ReasonModal({
   );
 }
 
-const backBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#003DFF', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0 };
-const card: React.CSSProperties = { background: '#fff', border: '1px solid #E2E4E9', borderRadius: 12, padding: 20, marginTop: 18 };
-const cardTitle: React.CSSProperties = { fontSize: 14, margin: 0, marginBottom: 14, color: '#292D34' };
+const backBtn: React.CSSProperties = { background: 'none', border: 'none', color: 'var(--fresh-link)', fontSize: 13, fontWeight: 500, cursor: 'pointer', padding: 0, minHeight: 44 };
+const card: React.CSSProperties = { background: 'var(--fresh-surface)', border: '1px solid var(--fresh-border)', borderRadius: 12, padding: 20, marginTop: 18 };
+const cardTitle: React.CSSProperties = { fontSize: 20, margin: 0, marginBottom: 14, color: 'var(--fresh-dark)' };
 function primaryBtn(disabled: boolean): React.CSSProperties {
-  return { padding: '9px 16px', borderRadius: 8, border: 'none', background: disabled ? '#A9B8FF' : '#003DFF', color: '#fff', fontWeight: 600, fontSize: 13, cursor: disabled ? 'default' : 'pointer' };
+  return { minHeight: 44, padding: '9px 16px', borderRadius: 16, border: 'none', background: '#003DFF', color: '#fff', fontWeight: 500, fontSize: 13, cursor: disabled ? 'default' : 'pointer' };
 }
-const secondaryBtn: React.CSSProperties = { padding: '9px 16px', borderRadius: 8, border: '1px solid #E2E4E9', background: '#fff', color: '#292D34', fontWeight: 600, fontSize: 13, cursor: 'pointer' };
-const dangerBtn: React.CSSProperties = { padding: '9px 16px', borderRadius: 8, border: '1px solid #FEE4E2', background: '#fff', color: '#D92D20', fontWeight: 600, fontSize: 13, cursor: 'pointer' };
+const secondaryBtn: React.CSSProperties = { minHeight: 44, padding: '9px 16px', borderRadius: 16, border: '1px solid var(--fresh-border)', background: 'var(--fresh-surface)', color: 'var(--fresh-dark)', fontWeight: 500, fontSize: 13, cursor: 'pointer' };
+const dangerBtn: React.CSSProperties = { minHeight: 44, padding: '9px 16px', borderRadius: 16, border: '1px solid var(--fresh-border)', background: 'var(--fresh-surface)', color: 'var(--fresh-danger)', fontWeight: 500, fontSize: 13, cursor: 'pointer' };
