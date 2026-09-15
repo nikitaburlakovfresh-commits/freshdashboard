@@ -8,6 +8,7 @@ import TaskDetailPage from './pages/TaskDetailPage';
 import NotificationsPage from './pages/NotificationsPage';
 import DashboardPage from './pages/DashboardPage';
 import PortalModulePage from './pages/PortalModulePage';
+import OrganizationPage from './pages/OrganizationPage';
 
 export default function App() {
   const { me, loading } = useAuth();
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="/tasks" element={<TaskListPage />} />
         <Route path="/tasks/:id" element={<TaskDetailPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/organization" element={<OrganizationPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

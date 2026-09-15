@@ -2,6 +2,8 @@
 // dedicated fresh_pilot_test database (never fresh_pilot, the dev DB) and
 // supplies the documented test-only fixture secrets. Never used outside
 // NODE_ENV=test (see server/src/config.ts guard).
+import { assertLocalTestDatabase } from './testDatabaseGuard';
+assertLocalTestDatabase();
 process.env.NODE_ENV = 'test';
 process.env.PGDATABASE = process.env.PGDATABASE ?? 'fresh_pilot_test';
 process.env.PGHOST = process.env.PGHOST ?? 'localhost';

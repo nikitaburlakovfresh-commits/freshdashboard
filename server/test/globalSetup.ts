@@ -6,6 +6,8 @@
  * developer's own .env. */
 import { Client } from 'pg';
 import argon2 from 'argon2';
+import { assertLocalTestDatabase } from './testDatabaseGuard';
+import { applyVersionedMigrations } from '../src/db/migrations';
 
 const TEST_DB = 'fresh_pilot_test';
 const TEST_PASSWORD = process.env.SEED_FIXTURE_PASSWORD ?? 'Test#Fixture2026Pilot';
@@ -20,6 +22,7 @@ const FIXTURES = [
 ];
 
 module.exports = async function globalSetup() {
+  assertLocalTestDatabase();
   const host = process.env.PGHOST ?? 'localhost';
   const port = parseInt(process.env.PGPORT ?? '5432', 10);
   const user = process.env.PGUSER ?? 'fresh_app';
@@ -28,6 +31,13 @@ module.exports = async function globalSetup() {
   const client = new Client({ host, port, database: TEST_DB, user, password });
   await client.connect();
   try {
+    const target = await client.query('SELECT current_database() AS db, current_setting(\'server_version_num\')::int AS version');
+    if (target.rows[0].db !== TEST_DB || target.rows[0].version < 160000 || target.rows[0].version >= 170000) {
+      throw new Error('Expected the isolated fresh_pilot_test database on PostgreSQL 16');
+    }
+    await client.query("SELECT pg_advisory_lock(hashtext('fresh:versioned-migrations'))");
+    try { await applyVersionedMigrations(client); }
+    finally { await client.query("SELECT pg_advisory_unlock(hashtext('fresh:versioned-migrations'))"); }
     await client.query('SET search_path = pilot_r1, pg_catalog');
 
     // Reset mutable tables between full test runs (opt-in, this-process-only
@@ -40,6 +50,40 @@ module.exports = async function globalSetup() {
     );
     await client.query(`DELETE FROM role_grants`);
     await client.query(`DELETE FROM app_users`);
+    // Synthetic metadata only. No deployed database is reachable through the
+    // local/name/version guard above. Immutable history is never disabled.
+    await client.query('TRUNCATE org_directory_name_history, org_directory_affiliation_history, org_directory_units');
+    await client.query(`INSERT INTO org_directory_units
+      (id,code,kind,lifecycle_state,is_demo,demo_locked,effective_from,pilot_org_unit_id)
+      SELECT id,code,'ORG_UNIT','ACTIVE',true,true,'2020-01-01',id FROM org_units`);
+    await client.query(`INSERT INTO org_directory_units
+      (id,code,kind,lifecycle_state,is_demo,effective_from) VALUES
+      ('10000000-0000-4000-8000-000000000001','TEST_NETWORK','NETWORK','ACTIVE',true,'2020-01-01'),
+      ('10000000-0000-4000-8000-000000000002','TEST_DIVISION','DIVISION','ACTIVE',true,'2020-01-01'),
+      ('10000000-0000-4000-8000-000000000003','TEST_CLUSTER','CLUSTER','ACTIVE',true,'2020-01-01'),
+      ('10000000-0000-4000-8000-000000000004','TEST_NONDEMO','NETWORK','ACTIVE',false,'2020-01-01')`);
+    await client.query(`INSERT INTO org_directory_name_history
+      (org_unit_id,display_name,effective_from,effective_to,change_reason)
+      SELECT id,'Прежнее имя '||code||' (тест)','2020-01-01','2026-01-01','Synthetic test history' FROM org_units`);
+    await client.query(`INSERT INTO org_directory_name_history
+      (org_unit_id,display_name,effective_from,change_reason)
+      SELECT id,display_name,'2026-01-01','Synthetic current name' FROM org_units`);
+    await client.query(`INSERT INTO org_directory_name_history
+      (org_unit_id,display_name,effective_from,change_reason)
+      SELECT id,'Синтетическая скрытая единица '||code,'2020-01-01','Synthetic metadata, no grants'
+      FROM org_directory_units WHERE pilot_org_unit_id IS NULL`);
+    await client.query(`INSERT INTO org_directory_affiliation_history
+      (org_unit_id,parent_id,business_model,effective_from,effective_to,change_reason)
+      SELECT id,'10000000-0000-4000-8000-000000000001','FRANCHISE','2020-01-01','2026-01-01','Synthetic past affiliation' FROM org_units`);
+    await client.query(`INSERT INTO org_directory_affiliation_history
+      (org_unit_id,parent_id,business_model,effective_from,change_reason)
+      SELECT id,'10000000-0000-4000-8000-000000000002','OWN_OPERATION','2026-01-01','Synthetic current affiliation' FROM org_units`);
+    await client.query(`INSERT INTO org_directory_affiliation_history
+      (org_unit_id,parent_id,business_model,effective_from,change_reason) VALUES
+      ('10000000-0000-4000-8000-000000000001',NULL,'UC','2020-01-01','Synthetic root'),
+      ('10000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000001','UC','2020-01-01','Synthetic division'),
+      ('10000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000002','UC','2020-01-01','Synthetic cluster'),
+      ('10000000-0000-4000-8000-000000000004',NULL,'UC','2020-01-01','Synthetic isolation fixture')`);
 
     const passwordHash = await argon2.hash(TEST_PASSWORD);
     const orgRows = await client.query('SELECT id, code FROM org_units');

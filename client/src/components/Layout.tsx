@@ -7,6 +7,7 @@ import Icon, { type IconName } from './Icon';
 const groups: { label: string; links: { path: string; label: string; icon: IconName; future?: boolean }[] }[] = [
   { label: 'Обзор', links: [
     { path: '/', label: 'Вся сеть', icon: 'grid' },
+    { path: '/organization', label: 'Структура и доступ', icon: 'network' },
     { path: '/analytics', label: 'Продажи и склад', icon: 'chart', future: true },
   ] },
   { label: 'Управление результатом', links: [
@@ -52,8 +53,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </div>)}
       <div className="shell-nav-group shell-org">
         <div className="shell-nav-label">Оргструктура сети</div>
-        <div className="shell-org-line"><Icon name="network" /><span>Дивизионы и РМ</span></div>
-        <p>Требуется сопоставление<br />филиалов и OrgUnit</p>
+        <NavLink className="shell-org-line" to="/organization" onClick={close}><Icon name="network" /><span>Открыть справочник</span></NavLink>
+        <p>История и текущий доступ<br />Без автоматических назначений</p>
       </div>
     </nav>
     <div className="shell-sidebar-bottom">

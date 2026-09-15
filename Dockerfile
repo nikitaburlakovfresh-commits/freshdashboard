@@ -18,6 +18,7 @@ RUN npm ci --omit=dev --workspace=server --include-workspace-root && npm cache c
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/client/dist ./client/dist
 COPY contracts/schema.sql ./contracts/schema.sql
+COPY server/migrations ./server/migrations
 USER node
 EXPOSE 4000
 CMD ["node", "server/dist/src/index.js"]

@@ -5,6 +5,7 @@ import { requestContext } from './middleware/requestContext';
 import { authRouter, meRouter } from './routes/auth';
 import { workItemsRouter } from './routes/workItems';
 import { notificationsRouter } from './routes/notifications';
+import { organizationRouter } from './routes/organization';
 import { ApiError, errorBody } from './util/errors';
 
 export function createApp() {
@@ -28,6 +29,7 @@ export function createApp() {
   app.use('/api/v1/me', meRouter);
   app.use('/api/v1/work-items', workItemsRouter);
   app.use('/api/v1/notifications', notificationsRouter);
+  app.use('/api/v1/organization', organizationRouter);
 
   app.get('/api/v1/healthz', (_req, res) => {
     res.status(200).json({ status: 'ok' });

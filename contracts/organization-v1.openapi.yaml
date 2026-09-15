@@ -1,0 +1,154 @@
+openapi: 3.0.3
+info:
+  title: FRESH Org Directory V1 — bounded pilot read contract
+  version: 0.1.0
+  description: >
+    Addendum only; does not replace the R1 task/auth contract.
+    Current work_item.read grants resolve only their exact pilot OrgUnit UUIDs.
+    No ancestor or descendant scope expansion. No production administration.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /organization/tree:
+    get:
+      operationId: getOrganizationTree
+      description: >
+        Metadata as_of is independent of current grant validity.
+        Parent IDs outside the returned set are null, indistinguishable from
+        unconfirmed parents. Legal entities, contracts, aliases and people are omitted.
+        Empty items means no currently authorized units with metadata on that date.
+      parameters:
+        - name: as_of
+          in: query
+          schema: { type: string, format: date, example: '2026-09-15' }
+          description: UTC date; default UTC today; valid calendar date >= 1900-01-01.
+      responses:
+        '200':
+          description: Scoped tree projection. Cache-Control no-store and X-Request-ID.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [as_of, scope_mode, items, admin_review]
+                properties:
+                  as_of: { type: string, format: date }
+                  scope_mode: { type: string, enum: [CURRENT_EXACT_PILOT_GRANTS] }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/DirectoryUnit' }
+                  admin_review:
+                    type: object
+                    properties:
+                      authorized: { type: boolean, enum: [false] }
+                      reason: { type: string, enum: [ADMIN_ASSIGNMENT_NOT_CONFIGURED] }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { description: Invalid or duplicate date, or unknown query parameter, uses Error schema. }
+        '429': { description: Existing per-session read rate limit, uses Error schema and Retry-After. }
+        '503': { description: Database/service unavailable, uses Error schema. No fallback demo data. }
+  /organization/units/{id}/history:
+    get:
+      operationId: getOrganizationHistory
+      description: >
+        Historical metadata only for an exact currently granted unit.
+        No archived task/report access conferred. Parent IDs require current scope.
+        Free-text change_reason and legal_name are not exposed.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Half-open name and affiliation intervals ordered by effective_from.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, names, affiliations, scope_mode]
+                properties:
+                  id: { type: string, format: uuid }
+                  scope_mode: { type: string, enum: [CURRENT_EXACT_PILOT_GRANTS] }
+                  names:
+                    type: array
+                    items:
+                      allOf:
+                        - { $ref: '#/components/schemas/Interval' }
+                        - type: object
+                          required: [display_name]
+                          properties:
+                            display_name: { type: string }
+                  affiliations:
+                    type: array
+                    items:
+                      allOf:
+                        - { $ref: '#/components/schemas/Interval' }
+                        - type: object
+                          required: [parent_id, business_model]
+                          properties:
+                            parent_id: { type: string, format: uuid, nullable: true }
+                            business_model: { type: string, nullable: true, enum: [FRANCHISE, OWN_OPERATION, UC, null] }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { description: Invalid, absent and unauthorized UUID all return NOT_FOUND without existence disclosure. }
+        '429': { description: Existing read rate limit. }
+        '503': { description: Database/service unavailable. }
+  /organization/admin-review:
+    get:
+      operationId: checkOrganizationAdministration
+      description: >
+        Always denies authenticated pilot identities; no SUPER_ADMIN exists in
+        the implemented role model. No draft persistence/approval/apply in V1.
+      responses:
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { description: FORBIDDEN; ADMIN_ASSIGNMENT_NOT_CONFIGURED in details.issues. }
+        '429': { description: Existing read rate limit. }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-fresh_session
+  responses:
+    Unauthenticated:
+      description: UNAUTHENTICATED or SESSION_REVOKED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      required: [code, message, request_id, details]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        request_id: { type: string }
+        details: { type: object }
+    Interval:
+      type: object
+      required: [effective_from, effective_to]
+      properties:
+        effective_from: { type: string, format: date }
+        effective_to: { type: string, format: date, nullable: true }
+    DirectoryUnit:
+      type: object
+      required: [id, code, kind, type_code, lifecycle_state, is_demo, demo_locked, display_name, parent_id, business_model, name_effective_from, name_effective_to, affiliation_effective_from, affiliation_effective_to]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        kind: { type: string, enum: [NETWORK, DIVISION, CLUSTER, ORG_UNIT] }
+        type_code: { type: string, nullable: true, enum: [CITY_FLAG, EXPRESS, FULL_SERVICE, PICKUP_POINT, OUTLET, null] }
+        lifecycle_state: { type: string, enum: [PRE_LAUNCH, ACTIVE, PAUSED, CLOSED] }
+        is_demo: { type: boolean }
+        demo_locked: { type: boolean }
+        display_name: { type: string }
+        parent_id: { type: string, format: uuid, nullable: true }
+        business_model: { type: string, nullable: true, enum: [FRANCHISE, OWN_OPERATION, UC, null] }
+        name_effective_from: { type: string, format: date }
+        name_effective_to: { type: string, format: date, nullable: true }
+        affiliation_effective_from: { type: string, format: date }
+        affiliation_effective_to: { type: string, format: date, nullable: true }
+x-write-policy: >
+  All unsafe requests under /organization require Origin, session and CSRF,
+  then return 403 FORBIDDEN. Guessing /proposals, /grants or /import/commit
+  never writes data. No mutation operation is published in this contract.

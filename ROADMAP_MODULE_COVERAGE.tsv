@@ -1,0 +1,13 @@
+roadmap_stage	source_scope	module_group	current_status	next_acceptance
+0	TZ-v2.12 §45;FRESH_implementation_roadmap.md stage0	Baseline and traceability	Stage1 detailed matrix plus module plan;NOT full atomic requirement coverage	Enumerate remaining mandatory atomic requirements;record signed baseline and evidence
+1	§2;§3;§16D;§45.1	Organization and access	Partial read-only organization V1;real roles/grants/admin deferred	Approved structure/people;atomic scope changes;all-role direct-API isolation
+2	§6;§7;§18.11;§22.6;§45.5	Data/source registry and server import	Local Excel only;server import not implemented	Persist probe→validate→commit;mapping revision and duplicate/order checks
+3	§8–10;§18.11.8;§45.2;§45.7	Metrics/plans/network dashboard	Local network comparison;no common server metric engine	Versioned metrics/plans/snapshots;aggregation controls by approved scope
+4	Monthly Focus §11.2;§22.4;§45.9	Monthly attention focuses	Two local comparisons and draft threshold only	1–5 slots;compute preview;approval;history;monthly activation/archive
+5	§11;§13;§16A–C;§25;§45.3	WorkItems/Today/MBO/diaries/site audits	R1 task pilot implemented;full engine deferred	Focus→scoped assignee→submit→review plus templates/recurrence/bulk/attachments
+6	Vehicle Registry;§18.11.1–9;HR/marketing	Full operational data coverage	Two local report shapes only	All 13 QLIK sources with contracts, source evidence and fixtures
+7	§4;§15;§20–22;Report Builder;Owner Digest	Notifications/reports/delivery	In-app R1 notifications only	Scoped durable external delivery;report builder;reproducible digests and cache keys
+8	§32–33;financial additions;§45.6;BDR contract	Finance/BDR/BH workspace	Navigation and requirements only;policy pending	Approved BDR-D01…08;controlled close/revisions/royalty/period reconciliation
+9	§19;§34–39;branch restrictions	Franchise lifecycle	Not implemented	Approvals/audit/remediation for onboarding/restriction/pipeline/exit/NPS
+10	§17;AI task additions;§23.C1;§45.8	AI assistance	Not implemented	Scoped tool registry/evaluation/fallback;no autonomous policy approval
+11	§5;§22–26A;§27–31;§23.C2;§45	Migration/mobile/offline/operations	Partial online pilot only	End-to-end evidence;restore drill;safe cutover/rollback;load/security/offline QA
