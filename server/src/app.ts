@@ -6,6 +6,7 @@ import { authRouter, meRouter } from './routes/auth';
 import { workItemsRouter } from './routes/workItems';
 import { notificationsRouter } from './routes/notifications';
 import { organizationRouter } from './routes/organization';
+import { reportBatchesRouter } from './routes/reportBatches';
 import { ApiError, errorBody } from './util/errors';
 
 export function createApp() {
@@ -30,6 +31,7 @@ export function createApp() {
   app.use('/api/v1/work-items', workItemsRouter);
   app.use('/api/v1/notifications', notificationsRouter);
   app.use('/api/v1/organization', organizationRouter);
+  app.use('/api/v1/report-batches', reportBatchesRouter);
 
   app.get('/api/v1/healthz', (_req, res) => {
     res.status(200).json({ status: 'ok' });
@@ -81,7 +83,10 @@ export function createApp() {
       return;
     }
     // eslint-disable-next-line no-console
-    console.error('Unhandled error', err);
+    if(req.path.startsWith('/api/v1/report-batches')) {
+      // DB/parser failures can contain private workbook values in diagnostics.
+      console.error('Report staging request failed', requestId);
+    } else console.error('Unhandled error', err);
     const apiErr = new ApiError('TEMPORARILY_UNAVAILABLE', 'Сервис временно недоступен.', { retry_after_seconds: 5 });
     res.status(503).json(errorBody(apiErr, requestId));
   });

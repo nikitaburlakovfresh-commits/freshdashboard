@@ -58,6 +58,9 @@ services:
       SESSION_HMAC_SECRET: ${SESSION_HMAC_SECRET:?SESSION_HMAC_SECRET must be set in your .env}
       CSRF_HMAC_SECRET: ${CSRF_HMAC_SECRET:?CSRF_HMAC_SECRET must be set in your .env}
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:5173}
+      REPORT_STORAGE_DIR: /var/lib/fresh/report-quarantine
+    volumes:
+      - fresh_report_quarantine:/var/lib/fresh/report-quarantine
     ports:
       - "127.0.0.1:4000:4000"
 
@@ -65,3 +68,4 @@ volumes:
   fresh_pilot_pgdata:
   caddy_data:
   caddy_config:
+  fresh_report_quarantine:

@@ -9,6 +9,7 @@ import NotificationsPage from './pages/NotificationsPage';
 import DashboardPage from './pages/DashboardPage';
 import PortalModulePage from './pages/PortalModulePage';
 import OrganizationPage from './pages/OrganizationPage';
+import PreparedReportsPage from './pages/PreparedReportsPage';
 
 export default function App() {
   const { me, loading } = useAuth();
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/tasks/:id" element={<TaskDetailPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/organization" element={<OrganizationPage />} />
+        <Route path="/prepared-reports" element={<PreparedReportsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

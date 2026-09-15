@@ -8,6 +8,7 @@ const groups: { label: string; links: { path: string; label: string; icon: IconN
   { label: 'Обзор', links: [
     { path: '/', label: 'Вся сеть', icon: 'grid' },
     { path: '/organization', label: 'Структура и доступ', icon: 'network' },
+    { path: '/prepared-reports', label: 'Подготовленные отчёты', icon: 'upload' },
     { path: '/analytics', label: 'Продажи и склад', icon: 'chart', future: true },
   ] },
   { label: 'Управление результатом', links: [
@@ -45,7 +46,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <nav className="shell-nav" aria-label="Основная навигация">
       {groups.map(group => <div className="shell-nav-group" key={group.label}>
         <div className="shell-nav-label">{group.label}</div>
-        {group.links.map(link => <NavLink key={link.path} to={link.path} end={link.path === '/'} onClick={close}
+        {group.links.filter(link=>link.path!=='/prepared-reports' || me?.grants.some(g=>g.role==='SUPER_ADMIN')).map(link => <NavLink key={link.path} to={link.path} end={link.path === '/'} onClick={close}
           className={({ isActive }) => `shell-nav-link${isActive ? ' active' : ''}`}>
           <Icon name={link.icon} /><span>{link.label}</span>
           {link.future && <span className="shell-future" title="Навигационный каркас · следующий этап" aria-label="Следующий этап">○</span>}

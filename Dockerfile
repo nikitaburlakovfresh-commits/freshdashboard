@@ -19,6 +19,7 @@ COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/client/dist ./client/dist
 COPY contracts/schema.sql ./contracts/schema.sql
 COPY server/migrations ./server/migrations
+RUN mkdir -p /var/lib/fresh/report-quarantine && chown node:node /var/lib/fresh/report-quarantine && chmod 700 /var/lib/fresh/report-quarantine
 USER node
 EXPOSE 4000
 CMD ["node", "server/dist/src/index.js"]
