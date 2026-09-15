@@ -53,7 +53,7 @@ export default function DashboardPage(){
   return <div className="portal-dashboard">
     <header className="portal-heading">
       <div><h1>Обзор сети</h1><p>Фактические показатели, фокусы внимания и исполнение задач</p></div>
-      {canCreate&&<button className="portal-primary" onClick={()=>setCreate(true)}>+ Создать задачу</button>}
+      {canCreate&&<button className="portal-primary" onClick={()=>setCreate(true)}>+ Создать задачу пилота</button>}
     </header>
     <LocalBusinessData key={me?.user.id}/>
     <div className="portal-section-head task-section-heading"><div><div className="portal-eyebrow">ОТДЕЛЬНЫЙ КОНТУР · ПИЛОТ R1</div><h2>Операционная работа</h2></div><span className="portal-chip">Задачи ≠ бизнес-показатели</span></div>
@@ -81,7 +81,7 @@ export default function DashboardPage(){
       <div className="portal-section-head"><div><h2>Ближайшие действия</h2><p className="portal-muted">Открытые задачи по возрастанию срока · до 5 записей</p></div><Link to="/tasks">Все задачи →</Link></div>
       {error?<p className="portal-error">Список недоступен: повторите загрузку выше.</p>:loading?<p role="status">Загрузка…</p>:attention.length?attention.map(t=><Link className="portal-task-row" to={`/tasks/${t.id}`} key={t.id}><div><strong>{t.title}</strong><span>Срок: {new Date(t.due_at).toLocaleString('ru-RU',{timeZone:'UTC'})} UTC</span></div><StatusBadge status={t.status}/></Link>):<div className="portal-empty compact">Открытых задач нет. {canCreate?'Создайте первую задачу кнопкой вверху.':'Новые назначения появятся здесь.'}</div>}
     </section>
-    <footer className="portal-next"><span>FRESH Portal · визуальный этап по ТЗ v2.12</span><span>Не полная реализация ТЗ · R1 + локальный Excel</span></footer>
+    <footer className="portal-next"><span>FRESH Portal · сетевой срез по ТЗ v2.12</span><span>Не полная реализация ТЗ · R1 + локальный Excel</span></footer>
     {create&&<CreateTaskModal grants={me?.grants??[]} onClose={()=>setCreate(false)} onCreated={()=>{setCreate(false);setRefresh(x=>x+1);}}/>}
   </div>;
 }

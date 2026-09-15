@@ -78,7 +78,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <header className="shell-topbar">
         <button className="shell-icon-button shell-menu-toggle" aria-label="Открыть меню" onClick={() => mobile.current?.showModal()}><Icon name="menu" /></button>
         <div className="shell-breadcrumb"><span>FRESH Portal</span><Icon name="chevron" /><strong>{current}</strong></div>
-        <div className="shell-top-actions"><span className="shell-stage">Визуальный этап · ТЗ v2.12</span>
+        <div className="shell-top-actions"><span className="shell-stage">Сетевой срез · ТЗ v2.12</span>
           <button className="shell-icon-button" aria-label={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
             onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Сменить тему"><Icon name={theme === 'dark' ? 'sun' : 'moon'} /></button>
           <NavLink className="shell-icon-button" to="/notifications" aria-label="Открыть уведомления"><Icon name="bell" /></NavLink>

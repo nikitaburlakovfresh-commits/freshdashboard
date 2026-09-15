@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Icon from './Icon';
+import NetworkManagement from './NetworkManagement';
 import {
   REPORT_NAMES, METRIC_NAMES, comparisonIssues, reconcile, selectRow, sourceAddress, validatePeriod,
   type ImportPeriod, type MetricKey, type Report, type ReportBatch,
@@ -17,6 +18,7 @@ const valueFor = (report: Report | undefined, branch: string, key: MetricKey) =>
 
 export default function LocalBusinessData() {
   const [batch, setBatch] = useState<ReportBatch | null>(null);
+  const [revision, setRevision] = useState(0);
   const [branch, setBranch] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [period, setPeriod] = useState<ImportPeriod>({ ...EMPTY_PERIOD });
@@ -42,7 +44,7 @@ export default function LocalBusinessData() {
   useEffect(() => () => { worker.current?.terminate(); clearTimeout(timer.current); }, []);
   const clearFiles = () => { setFiles([]); if (input.current) input.current.value = ''; };
   const reset = () => {
-    stop(); setBusy(false); setBatch(null); setBranch(''); clearFiles();
+    stop(); setBusy(false); setBatch(null); setRevision(v => v + 1); setBranch(''); clearFiles();
     setPeriod({ ...EMPTY_PERIOD }); setConfirmed(false); setError('');
     setStatus('Локальные данные удалены из этой страницы.');
     openImport();
@@ -72,7 +74,7 @@ export default function LocalBusinessData() {
         if (e.data.type === 'error') fail(e.data.message);
         if (e.data.type === 'complete') {
           const next: ReportBatch = e.data.batch;
-          stop(); setBatch(next); setBranch(''); setBusy(false); clearFiles();
+          stop(); setBatch(next); setRevision(v => v + 1); setBranch(''); setBusy(false); clearFiles();
           setStatus(`Пакет применён: ${next.reports.length} отчёт(а), пропущено ${next.skipped.length}.`);
           drawer.current?.close();
         }
@@ -101,6 +103,7 @@ export default function LocalBusinessData() {
     <div className="local-data-bar">
       <div><Icon name="calendar" /><span>{batch ? `Продажи: ${dateRange(batch.period.start, batch.period.end)}` : 'Период не выбран'}</span><span className="portal-chip">{batch ? 'Локальный Excel' : 'Нет источника'}</span></div>
       <button className="local-secondary" onClick={openImport}><Icon name="upload" />{batch ? 'Заменить QLIK-отчёты' : 'Загрузить QLIK-отчёты'}</button>
+      {batch && <button className="portal-text-button" onClick={reset}>Сбросить данные</button>}
     </div>
     <dialog className="local-import-drawer" ref={drawer} aria-labelledby="import-title"
       onClick={e => { if (e.target === e.currentTarget) drawer.current?.close(); }}>
@@ -127,7 +130,7 @@ export default function LocalBusinessData() {
             <input type="date" required aria-label="Конец периода продаж" value={period.end} disabled={busy} onChange={e => changePeriod('end', e.target.value)} />
           </label>
         </div>
-        <p className="portal-footnote">В отчёте продаж нет даты периода. Она не определяется по имени файла или текущему месяцу. Дата складского среза читается отдельно из заголовков источника.</p>
+        <p className="portal-footnote">Обе даты периода включены. В отчёте продаж нет даты периода. Она не определяется по имени файла или текущему месяцу. Дата складского среза читается отдельно из заголовков источника.</p>
         <details className="local-plan-input">
           <summary>Период плана продаж · необязательно</summary>
           <p className="portal-muted">Заполните, только если знаете, на какой период утверждён план второго отчёта. Без этих дат план скрыт. При несовпадении периодов плана и факта процент выполнения не рассчитывается.</p>
@@ -149,35 +152,13 @@ export default function LocalBusinessData() {
     {error && <div role="alert" className="local-error">{error}</div>}
     </div>
     </dialog>
-    <div className="network-score-row" aria-label="Оценка сети · расчёт не подключён">
-      {[
-        ['Средний балл сети', 'chart'], ['Зелёных филиалов', 'shield'],
-        ['Жёлтых филиалов', 'info'], ['Красных филиалов', 'info'],
-      ].map(([label, icon], i) => <article className="network-score" key={label}>
-        <span className={`network-score-icon tone-${i}`}><Icon name={icon as 'chart' | 'shield' | 'info'} /></span>
-        <div><strong aria-label="Нет данных">—</strong><span>{label}</span></div>
-      </article>)}
-    </div>
-    <p className="network-score-note">Оценка сети не рассчитана: нужны сопоставление OrgUnit и утверждённые версии формул и порогов. Цвет обозначает категорию, не оценку филиала.</p>
-    <div className="portal-section-head local-metrics-head"><h2 id="metrics-title">Продажи и склад</h2><span className="portal-muted">Факт из отчётов · без прогноза</span></div>
-    <div role="status" aria-live="polite" className="local-status">{status}</div>
+    <p className="network-scope-note"><strong>Вся сеть · локальный файловый обзор.</strong> {batch ? `${branches.length} филиалов в ${batch.reports.length} источниках.` : 'Филиалы появятся после загрузки.'} Не расширяет права текущей роли. Распределение по РМ не настроено. Баллы и RAG не рассчитаны.</p>
+    <div className="portal-section-head local-metrics-head"><h2 id="metrics-title">Продажи и склад · вся сеть</h2><span className="portal-muted">Строка 2 отчёта · не сумма с филиалами</span></div>
+    <div role="status" aria-live="polite" className="local-status">{busy || !batch ? status : ''}</div>
     {error && <div role="alert" className="local-error">{error}</div>}
-    {batch && <>
-      <div className="portal-context local-context">
-        <label>Филиал из локального файла<select aria-label="Филиал импортированных данных" value={branch} onChange={e => setBranch(e.target.value)}>
-          <option value="">Вся сеть · итог отчёта</option>
-          {branches.map(([key, name]) => <option key={key} value={key}>{name}</option>)}
-        </select></label>
-        <div className="local-period"><strong>Склад: {summary?.stockDate ? date(summary.stockDate) : 'нет источника'} · срез из Excel</strong>
-          <span>Период продаж вверху указан пользователем</span>
-        </div>
-        <button className="local-secondary" onClick={reset}>Сбросить данные</button>
-      </div>
-      <p className="local-selection"><strong>{selectedName}</strong> · {branch ? 'Строка филиала, без добавления сетевого итога' : 'Официальная строка 2, не сумма итога и филиалов'}</p>
-    </>}
     <div className="portal-metrics">
       {KEYS.map(key => {
-        const report = sourceFor(key), row = selectRow(report, branch);
+        const report = sourceFor(key), row = selectRow(report, '');
         const value = row?.values[key];
         return <article className="portal-metric local-metric" key={key} data-metric={key}>
           <div className="local-metric-title"><Icon name={key === 'sales' ? 'chart' : key === 'margin' ? 'wallet' : key === 'stock' ? 'stock' : 'calendar'} /><span className="portal-muted">{METRIC_NAMES[key]}</span></div>
@@ -187,39 +168,21 @@ export default function LocalBusinessData() {
             ? key === 'stock' || key === 'aged' ? summary?.stockDate ? `Срез ${date(summary.stockDate)}` : 'Сводка склада не загружена'
               : dateRange(batch.period.start, batch.period.end)
             : 'Загрузите источник и укажите период'}</span>
-          {batch && <button className="portal-metric-bottom local-source-button" onClick={openDetails}>
+          {batch && <button className="portal-metric-bottom local-source-button" onClick={() => { setBranch(''); openDetails(); }}>
             {sourceAddress(report, row, key)} <span aria-hidden="true">↗</span>
           </button>}
         </article>;
       })}
     </div>
     <p className="portal-footnote local-memory-note"><Icon name="shield" />Только в памяти страницы · уход с дашборда, смена роли и перезагрузка сбрасывают импорт. Нет данных ≠ 0.</p>
-    <section className="network-focus" aria-labelledby="focus-title">
-      <div className="portal-section-head"><h2 id="focus-title">Фокусы внимания</h2><span className="portal-muted">Не настроены · не оценка результатов</span></div>
-      <div className="network-focus-grid">
-        {[
-          ['Планы и RunRate', 'Нужны период, план и версия формулы'],
-          ['Оборачиваемость', 'Нужны база склада и методика расчёта'],
-          ['Ежедневник и дисциплина', 'Нужны шаблоны, факты и целевые значения'],
-        ].map(([title, note]) => <div className="network-focus-card" key={title}><Icon name="target" /><div><strong>{title}</strong><span>{note}</span></div><span className="focus-dash">—</span></div>)}
-      </div>
-    </section>
-    {!batch && <section className="network-empty" aria-labelledby="network-title">
-      <div className="portal-section-head"><h2 id="network-title">Филиалы сети</h2><span className="portal-chip">Требуется источник</span></div>
-      <div className="network-empty-body"><span className="network-empty-symbol"><Icon name="network" /></span><div><h3>Сеть начнётся с ваших данных</h3><p>Загрузите отчёты, чтобы увидеть филиалы и раскрыть их показатели.<br />Дивизионы и РМ появятся только после утверждённого сопоставления OrgUnit.</p></div><button className="local-secondary" onClick={openImport}>Подключить Excel</button></div>
-    </section>}
+    {batch && (hasMismatch || issues.some(issue => /расхождений|Различается|неполна/.test(issue))) && <p className="network-quality">Есть расхождения или неполное покрытие источников. Факты показаны без исправлений. <button className="portal-text-button" onClick={openDetails}>Открыть сверку</button></p>}
+    <NetworkManagement key={revision} batch={batch} openImport={openImport} />
     {batch && <>
-      {sales && <div className="local-plan-result">
-        <strong>План продаж: {planKnown ? `${number(valueFor(sales, branch, 'plan'))}${valueFor(sales, branch, 'plan') != null ? ' шт.' : ''}` : 'период не подтверждён'}</strong>
-        <span>{planKnown ? `${dateRange(batch.period.planStart, batch.period.planEnd)} · даты указаны пользователем · ${sourceAddress(sales, selectRow(sales, branch), 'plan')}`
-          : 'Значение скрыто. Укажите период плана при повторном импорте.'}</span>
-        {planKnown && batch.period.start === batch.period.planStart && batch.period.end === batch.period.planEnd &&
-          valueFor(sales, branch, 'plan')! > 0 && valueFor(sales, branch, 'sales') != null
-          ? <span>Выполнение: {number(valueFor(sales, branch, 'sales')! / valueFor(sales, branch, 'plan')! * 100, true)}% · факт и план только из отчёта продаж</span>
-          : <span>Процент выполнения не рассчитан: нужен сопоставимый период и ненулевой план.</span>}
-      </div>}
       <details ref={details} className="portal-panel local-details">
         <summary>Источники, ячейки и сверка <span className={hasMismatch ? 'portal-warning' : 'portal-muted'}>· {hasMismatch ? 'есть расхождения или пропуски' : 'итоги сверены'}</span></summary>
+        <label className="network-source-select">Строка для сверки · не меняет сетевые KPI<select aria-label="Филиал импортированных данных" value={branch} onChange={e => setBranch(e.target.value)}>
+          <option value="">Вся сеть · итог отчёта</option>{branches.map(([key, name]) => <option key={key} value={key}>{name}</option>)}
+        </select></label>
         <p>При наличии двух отчётов карточки продаж и маржи берутся только из сводки. Маржа включает КСО: колонка W сводки или P отчёта продаж; N сводки и M продаж — маржа без КСО. Формулы не пересчитываются: используются сохранённые в Excel значения.</p>
         {issues.map(issue => <p className="local-notice" key={issue}>{issue}</p>)}
         {batch.reports.map(report => <div className="local-report-detail" key={report.kind}>
@@ -245,31 +208,6 @@ export default function LocalBusinessData() {
         </div>}
         <p className="portal-footnote">Допуск сверки денежных сумм — менее 0,01 ₽. Если хотя бы одна ячейка отсутствует, сумма филиалов не подставляется. Загруженный отчёт не связан с доступами и задачами портала.</p>
       </details>
-      <section className="local-branches" aria-labelledby="local-branches-title">
-        <div className="portal-section-head"><div><h2 id="local-branches-title">Филиалы из отчётов <span className="network-count">{branches.length}</span></h2><p className="portal-muted">Список из Excel, не оргструктура. Дивизионы и РМ не сопоставлены.</p></div>
-          {branch && <button className="portal-text-button" onClick={() => setBranch('')}>Вернуться к итогу сети</button>}
-        </div>
-        <div className="network-branch-list">{branches.map(([key, name]) => <details key={key} className="network-branch">
-          <summary><Icon name="chevron" /><strong>{name}</strong><span className="network-branch-source">{batch.reports.filter(r => selectRow(r, key)).map(r => r.kind === 'summary' ? 'Сводка' : 'Продажи').join(' + ')}</span><span className="portal-chip">Без оценки</span></summary>
-          <div className="network-branch-content">
-            <div className="network-branch-values">{KEYS.map(metric => <div key={metric}><span>{METRIC_NAMES[metric]}</span><strong>{number(valueFor(sourceFor(metric), key, metric), metric === 'margin')}{metric === 'margin' && valueFor(sourceFor(metric), key, metric) != null ? ' ₽' : ''}</strong><small>{sourceAddress(sourceFor(metric), selectRow(sourceFor(metric), key), metric)}</small></div>)}</div>
-            <button className="portal-text-button" onClick={() => { setBranch(key); document.getElementById('metrics-title')?.scrollIntoView({ block: 'start' }); }}>Показать в карточках и сверке ↑</button>
-          </div>
-        </details>)}</div>
-        <details className="local-tabular-details"><summary>Таблица всех филиалов · сравнить показатели</summary>
-        <div className="local-table-wrap local-branch-scroll" role="region" aria-label="Показатели филиалов" tabIndex={0}>
-          <table className="local-table">
-            <caption>Продажи / маржа: {primary && REPORT_NAMES[primary.kind]}. Склад: сводка. Филиалы обоих отчётов сохранены.</caption>
-            <thead><tr><th scope="col">Филиал</th><th scope="col">Продажи, шт.</th><th scope="col">Маржа + КСО, ₽</th><th scope="col">Склад, шт.</th><th scope="col">45+, шт.</th><th scope="col">Наличие в отчётах</th></tr></thead>
-            <tbody>{branches.map(([key, name]) => <tr key={key} className={branch === key ? 'local-selected-row' : ''}>
-              <th scope="row"><button className="local-branch-button" aria-pressed={branch === key} onClick={() => setBranch(key)}>{name}</button></th>
-              {KEYS.map(metric => <td key={metric}>{number(valueFor(sourceFor(metric), key, metric), metric === 'margin')}</td>)}
-              <td>{batch.reports.filter(r => selectRow(r, key)).map(r => r.kind === 'summary' ? 'Сводка' : 'Продажи').join(' + ')}</td>
-            </tr>)}</tbody>
-          </table>
-        </div>
-        </details>
-      </section>
     </>}
   </section>;
 }
