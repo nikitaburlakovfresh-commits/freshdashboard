@@ -34,7 +34,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     document.documentElement.dataset.theme = theme;
     try { localStorage.setItem('fresh-theme', theme); } catch { /* Theme persistence is optional. */ }
   }, [theme]);
-  const primaryRole = me?.grants?.some(g => g.role === 'REGIONAL_MANAGER') ? 'Постановщик' : 'Исполнитель';
+  const primaryRole = me?.grants?.some(g => g.role === 'SUPER_ADMIN') ? 'Администратор' : me?.grants?.some(g => g.role === 'REGIONAL_MANAGER') ? 'Постановщик' : 'Исполнитель';
   const current = groups.flatMap(g => g.links).find(l => l.path === pathname)?.label ?? 'Карточка задачи';
   const close = () => mobile.current?.close();
   const upload = () => { close(); navigate('/?import=1'); };

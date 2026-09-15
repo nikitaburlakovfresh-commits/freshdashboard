@@ -145,6 +145,7 @@ meRouter.get(
         grants: grants.map((g) => ({
           id: g.id,
           role: g.role,
+          scope_kind: g.scopeKind,
           org_unit_id: g.orgUnitId,
           valid_from: new Date(g.validFrom).toISOString().replace(/\.\d{3}Z$/, 'Z'),
           valid_until: g.validUntil ? new Date(g.validUntil).toISOString().replace(/\.\d{3}Z$/, 'Z') : null,

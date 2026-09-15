@@ -1,5 +1,9 @@
 # Org Directory V1 — release boundary
 
+**Administrator bootstrap addendum:** `FIRST_ADMINISTRATOR.md` supersedes the original
+no-administrator statements below. SUPER_ADMIN now has explicit NETWORK directory-review
+permission only; RM/RF boundaries and denial of every organization write are unchanged.
+
 Implemented against TZ v2.12 §2, §3, §16D, §45.1. This is a **read-only foundation**, not completion of roadmap stage 1, full RBAC or real-network onboarding.
 
 ## Model and migration

@@ -1,11 +1,13 @@
 openapi: 3.0.3
 info:
   title: FRESH Org Directory V1 — bounded pilot read contract
-  version: 0.1.0
+  version: 0.2.0
   description: >
     Addendum only; does not replace the R1 task/auth contract.
     Current work_item.read grants resolve only their exact pilot OrgUnit UUIDs.
-    No ancestor or descendant scope expansion. No production administration.
+    No ancestor or descendant scope expansion for pilot RM/RF.
+    A live NETWORK assignment with organization.directory.review permits only
+    directory metadata and history across the network, not business data or writes.
 servers:
   - url: /api/v1
 security:
@@ -34,15 +36,23 @@ paths:
                 required: [as_of, scope_mode, items, admin_review]
                 properties:
                   as_of: { type: string, format: date }
-                  scope_mode: { type: string, enum: [CURRENT_EXACT_PILOT_GRANTS] }
+                  scope_mode: { type: string, enum: [CURRENT_EXACT_PILOT_GRANTS, CURRENT_NETWORK_DIRECTORY_REVIEW] }
                   items:
                     type: array
                     items: { $ref: '#/components/schemas/DirectoryUnit' }
                   admin_review:
-                    type: object
-                    properties:
-                      authorized: { type: boolean, enum: [false] }
-                      reason: { type: string, enum: [ADMIN_ASSIGNMENT_NOT_CONFIGURED] }
+                    oneOf:
+                      - type: object
+                        required: [authorized, reason]
+                        properties:
+                          authorized: { type: boolean, enum: [false] }
+                          reason: { type: string, enum: [ADMIN_REVIEW_PERMISSION_REQUIRED] }
+                      - type: object
+                        required: [authorized, permission, writes_authorized]
+                        properties:
+                          authorized: { type: boolean, enum: [true] }
+                          permission: { type: string, enum: [organization.directory.review] }
+                          writes_authorized: { type: boolean, enum: [false] }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '422': { description: Invalid or duplicate date, or unknown query parameter, uses Error schema. }
         '429': { description: Existing per-session read rate limit, uses Error schema and Retry-After. }
@@ -51,7 +61,8 @@ paths:
     get:
       operationId: getOrganizationHistory
       description: >
-        Historical metadata only for an exact currently granted unit.
+        Historical metadata only for an exact currently granted unit or an
+        authorized NETWORK directory reviewer.
         No archived task/report access conferred. Parent IDs require current scope.
         Free-text change_reason and legal_name are not exposed.
       parameters:
@@ -69,7 +80,7 @@ paths:
                 required: [id, names, affiliations, scope_mode]
                 properties:
                   id: { type: string, format: uuid }
-                  scope_mode: { type: string, enum: [CURRENT_EXACT_PILOT_GRANTS] }
+                  scope_mode: { type: string, enum: [CURRENT_EXACT_PILOT_GRANTS, CURRENT_NETWORK_DIRECTORY_REVIEW] }
                   names:
                     type: array
                     items:
@@ -97,12 +108,23 @@ paths:
     get:
       operationId: checkOrganizationAdministration
       description: >
-        Always denies authenticated pilot identities; no SUPER_ADMIN exists in
-        the implemented role model. No draft persistence/approval/apply in V1.
+        Requires an effective NETWORK assignment and organization.directory.review.
+        Session/user/grant/permission fences are rechecked with the metadata in
+        one database snapshot. RM/RF still receive 403. No people, finance, task
+        data, draft persistence, approval, role editing or import apply.
+      parameters:
+        - name: as_of
+          in: query
+          schema: { type: string, format: date }
+          description: Same date and unknown-parameter rules as organization/tree.
       responses:
+        '200':
+          $ref: '#/paths/~1organization~1tree/get/responses/200'
         '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { description: FORBIDDEN; ADMIN_ASSIGNMENT_NOT_CONFIGURED in details.issues. }
+        '403': { description: FORBIDDEN; effective NETWORK directory-review permission absent. }
+        '422': { description: Invalid date or unknown/duplicate query parameter. }
         '429': { description: Existing read rate limit. }
+        '503': { description: Database/service unavailable, no demo fallback. }
 components:
   securitySchemes:
     sessionCookie:

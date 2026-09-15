@@ -3,7 +3,7 @@ import { requireSession, requireCsrf } from '../auth/session';
 import { requireOrigin } from '../middleware/origin';
 import { enforceSessionRateLimit } from '../auth/rateLimit';
 import { ApiError } from '../util/errors';
-import { getDirectoryHistory, getDirectoryTree, parseDirectoryDate } from '../domain/orgDirectory';
+import { getAdministrationReview, getDirectoryHistory, getDirectoryTree, parseDirectoryDate } from '../domain/orgDirectory';
 
 export const organizationRouter = Router();
 organizationRouter.use(requireSession);
@@ -24,11 +24,16 @@ organizationRouter.get('/units/:id/history', wrap(async (req, res) => {
 }));
 
 function denyAdministration(_req: Request, _res: Response, next: NextFunction) {
-  next(new ApiError('FORBIDDEN', 'Административное назначение не настроено. Пилотные RM/RF не могут изменять оргструктуру или утверждать импорт.', {
-    issues: [{ path: 'administration', issue: 'ADMIN_ASSIGNMENT_NOT_CONFIGURED' }],
+  next(new ApiError('FORBIDDEN', 'Изменения оргструктуры, назначений и импорта не реализованы в этом выпуске; административное чтение не разрешает запись.', {
+    issues: [{ path: 'administration', issue: 'ADMIN_WRITES_NOT_IMPLEMENTED' }],
   }));
 }
-organizationRouter.get('/admin-review', denyAdministration);
+organizationRouter.get('/admin-review', wrap(async (req,res) => {
+  if (Object.keys(req.query).some(key => key !== 'as_of')) {
+    throw new ApiError('VALIDATION_ERROR','Допустим только параметр as_of; scope определяется сервером.');
+  }
+  res.json(await getAdministrationReview(req.authUser!,parseDirectoryDate(req.query.as_of)));
+}));
 // Fail closed for every attempted write, including guessed import/apply/grant
 // routes. No request body or client-side role flag can confer administration.
 organizationRouter.use((req, res, next) => {

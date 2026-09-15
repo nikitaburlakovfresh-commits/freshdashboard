@@ -19,12 +19,12 @@ export interface ActorContext {
 
 async function currentRmOrgIds(client: PoolClient, userId: string): Promise<Set<string>> {
   const grants = await getEffectiveGrants(client, userId);
-  return new Set(grants.filter((g) => g.role === 'REGIONAL_MANAGER').map((g) => g.orgUnitId));
+  return new Set(grants.filter((g) => g.role === 'REGIONAL_MANAGER').map((g) => g.orgUnitId).filter((id):id is string=>id!==null));
 }
 
 async function currentRfOrgIds(client: PoolClient, userId: string): Promise<Set<string>> {
   const grants = await getEffectiveGrants(client, userId);
-  return new Set(grants.filter((g) => g.role === 'RF').map((g) => g.orgUnitId));
+  return new Set(grants.filter((g) => g.role === 'RF').map((g) => g.orgUnitId).filter((id):id is string=>id!==null));
 }
 
 async function loadCard(client: PoolClient, workItem: WorkItemRow) {

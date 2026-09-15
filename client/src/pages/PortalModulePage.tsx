@@ -13,7 +13,7 @@ const modules:Record<string,{title:string,description:string,rows:string[]}>={
 export default function PortalModulePage(){
   const {pathname}=useLocation();const [params]=useSearchParams();const {me}=useAuth();
   const m=modules[pathname]??modules['/analytics'];const metric=METRICS.find(x=>x.code===params.get('metric'));
-  const org=params.get('org');const allowed=me?.grants.some(g=>g.org_unit_id===org);
+  const org=params.get('org');const allowed=!!org && me?.grants.some(g=>g.org_unit_id===org);
   return <div className="portal-dashboard">
     <Link to="/">← Обзор сети</Link>
     <header className="portal-heading"><div><div className="portal-eyebrow">РАЗДЕЛ ПОРТАЛА · КАРКАС</div><h1>{metric?.name??m.title}</h1><p>{m.description}</p></div><span className="portal-chip">Данные не подключены</span></header>

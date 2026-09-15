@@ -12,7 +12,7 @@ export default function CreateTaskModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const rmOrgs = grants.filter((g) => g.role === 'REGIONAL_MANAGER');
+  const rmOrgs = grants.filter((g):g is Extract<Grant,{org_unit_id:string}> => g.role === 'REGIONAL_MANAGER' && g.org_unit_id !== null);
   const [orgUnitId, setOrgUnitId] = useState(rmOrgs[0]?.org_unit_id ?? '');
   const [title, setTitle] = useState('');
   const [dueAt, setDueAt] = useState('');

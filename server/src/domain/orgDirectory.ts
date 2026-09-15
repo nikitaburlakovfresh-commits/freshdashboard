@@ -3,6 +3,7 @@ import { AuthedUser } from '../auth/session';
 import { ApiError } from '../util/errors';
 
 export const DIRECTORY_SCOPE = 'CURRENT_EXACT_PILOT_GRANTS' as const;
+export const ADMIN_DIRECTORY_SCOPE = 'CURRENT_NETWORK_DIRECTORY_REVIEW' as const;
 
 export function parseDirectoryDate(raw: unknown): string {
   if (raw === undefined) return new Date().toISOString().slice(0, 10);
@@ -19,11 +20,11 @@ export function parseDirectoryDate(raw: unknown): string {
 // metadata only, NEVER grant validity. No descendant/ancestor scope expansion.
 // Recheck live session/user fences in the same snapshot as the directory read.
 const accessCte = `
-  WITH allowed AS MATERIALIZED (
-    SELECT DISTINCT d.id
-    FROM org_directory_units d
-    JOIN role_grants g ON g.org_unit_id = d.pilot_org_unit_id
-    JOIN role_permissions rp ON rp.role_code = g.role_code AND rp.permission_code = 'work_item.read'
+  WITH live_permissions AS MATERIALIZED (
+    SELECT g.org_unit_id,g.scope_kind,rp.permission_code
+    FROM role_grants g
+    JOIN roles r ON r.code=g.role_code AND r.scope_kind=g.scope_kind
+    JOIN role_permissions rp ON rp.role_code = g.role_code
     JOIN app_users u ON u.id = g.user_id
     JOIN sessions s ON s.user_id = u.id AND s.id = $2
     WHERE u.id = $1 AND u.is_active AND u.user_kind = 'INDIVIDUAL'
@@ -34,7 +35,17 @@ const accessCte = `
       AND s.last_seen_at > now() - interval '30 minutes'
       AND g.revoked_at IS NULL AND g.valid_from <= now()
       AND (g.valid_until IS NULL OR now() < g.valid_until)
-      AND d.is_demo AND d.pilot_org_unit_id = d.id
+  ), directory_admin AS MATERIALIZED (
+    SELECT 1 FROM live_permissions
+    WHERE scope_kind='NETWORK' AND org_unit_id IS NULL
+      AND permission_code='organization.directory.review'
+  ), allowed AS MATERIALIZED (
+    SELECT d.id FROM org_directory_units d
+    WHERE EXISTS(SELECT 1 FROM directory_admin)
+      OR (d.is_demo AND d.pilot_org_unit_id=d.id AND EXISTS (
+        SELECT 1 FROM live_permissions g WHERE g.scope_kind='ORG_UNIT'
+          AND g.org_unit_id=d.pilot_org_unit_id AND g.permission_code='work_item.read'
+      ))
   )`;
 
 export async function getDirectoryTree(auth: AuthedUser, asOf: string) {
@@ -60,14 +71,26 @@ export async function getDirectoryTree(auth: AuthedUser, asOf: string) {
       'name_effective_to',to_char(v.name_to,'YYYY-MM-DD'),
       'affiliation_effective_from',to_char(v.affiliation_from,'YYYY-MM-DD'),
       'affiliation_effective_to',to_char(v.affiliation_to,'YYYY-MM-DD')
-    ) ORDER BY v.code), '[]'::jsonb) AS items FROM visible v`,
+    ) ORDER BY v.code), '[]'::jsonb) AS items,
+    EXISTS(SELECT 1 FROM directory_admin) AS admin_authorized FROM visible v`,
   [auth.userId, auth.sessionId, asOf]);
   return {
     as_of: asOf,
-    scope_mode: DIRECTORY_SCOPE,
+    scope_mode: result.rows[0].admin_authorized ? ADMIN_DIRECTORY_SCOPE : DIRECTORY_SCOPE,
     items: result.rows[0].items,
-    admin_review: { authorized: false, reason: 'ADMIN_ASSIGNMENT_NOT_CONFIGURED' },
+    admin_review: result.rows[0].admin_authorized
+      ? { authorized:true, permission:'organization.directory.review', writes_authorized:false }
+      : { authorized:false, reason:'ADMIN_REVIEW_PERMISSION_REQUIRED' },
   };
+}
+
+export async function getAdministrationReview(auth: AuthedUser, asOf: string) {
+  // Same statement/snapshot as metadata: no separate role-name bypass.
+  const tree = await getDirectoryTree(auth, asOf);
+  if (!tree.admin_review.authorized) {
+    throw new ApiError('FORBIDDEN','Для проверки справочника требуется действующее административное назначение и permission.');
+  }
+  return tree;
 }
 
 export async function getDirectoryHistory(auth: AuthedUser, id: string) {
@@ -76,7 +99,7 @@ export async function getDirectoryHistory(auth: AuthedUser, id: string) {
     throw new ApiError('NOT_FOUND', 'Организационная единица не найдена.');
   }
   const result = await pool.query(`${accessCte}
-    SELECT d.id,
+    SELECT d.id, EXISTS(SELECT 1 FROM directory_admin) AS admin_authorized,
       (SELECT coalesce(jsonb_agg(jsonb_build_object(
         'display_name',n.display_name,'effective_from',to_char(n.effective_from,'YYYY-MM-DD'),
         'effective_to',to_char(n.effective_to,'YYYY-MM-DD')
@@ -89,5 +112,6 @@ export async function getDirectoryHistory(auth: AuthedUser, id: string) {
     FROM allowed x JOIN org_directory_units d ON d.id=x.id WHERE d.id=$3::uuid`,
   [auth.userId, auth.sessionId, id]);
   if (!result.rowCount) throw new ApiError('NOT_FOUND', 'Организационная единица не найдена.');
-  return { ...result.rows[0], scope_mode: DIRECTORY_SCOPE };
+  const { admin_authorized, ...history } = result.rows[0];
+  return { ...history, scope_mode: admin_authorized ? ADMIN_DIRECTORY_SCOPE : DIRECTORY_SCOPE };
 }

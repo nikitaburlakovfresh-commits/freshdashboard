@@ -7,14 +7,16 @@ export interface User {
   user_kind: 'INDIVIDUAL';
 }
 
-export interface Grant {
+interface GrantBase {
   id: string;
-  role: 'REGIONAL_MANAGER' | 'RF';
-  org_unit_id: string;
   valid_from: string;
   valid_until: string | null;
   permissions: string[];
 }
+export type Grant = GrantBase & (
+  { role:'REGIONAL_MANAGER' | 'RF'; scope_kind?:'ORG_UNIT'; org_unit_id:string } |
+  { role:'SUPER_ADMIN'; scope_kind:'NETWORK'; org_unit_id:null }
+);
 
 export interface SessionResponse {
   user: User;

@@ -18,9 +18,10 @@ export interface DirectoryUnit {
 }
 export interface DirectoryTree {
   as_of: string;
-  scope_mode: 'CURRENT_EXACT_PILOT_GRANTS' | 'SYNTHETIC_DEMO_ONLY';
+  scope_mode: 'CURRENT_EXACT_PILOT_GRANTS' | 'SYNTHETIC_DEMO_ONLY' | 'CURRENT_NETWORK_DIRECTORY_REVIEW';
   items: DirectoryUnit[];
-  admin_review: { authorized: false; reason: 'ADMIN_ASSIGNMENT_NOT_CONFIGURED' };
+  admin_review: { authorized:false; reason:string } |
+    { authorized:true; permission:'organization.directory.review'; writes_authorized:false };
 }
 export interface DirectoryHistory {
   id: string;
@@ -32,5 +33,5 @@ export const getOrganizationTree = (asOf: string) =>
   apiFetch<DirectoryTree>('/organization/tree', { query: { as_of: asOf } });
 export const getOrganizationHistory = (id: string) =>
   apiFetch<DirectoryHistory>(`/organization/units/${encodeURIComponent(id)}/history`);
-export const checkOrganizationAdministration = () =>
-  apiFetch<never>('/organization/admin-review');
+export const checkOrganizationAdministration = (asOf: string) =>
+  apiFetch<DirectoryTree>('/organization/admin-review', { query:{ as_of:asOf } });

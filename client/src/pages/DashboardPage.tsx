@@ -17,7 +17,7 @@ export const METRICS = [
 ];
 export default function DashboardPage(){
   const {me}=useAuth();
-  const orgs=[...new Set(me?.grants.map(g=>g.org_unit_id)??[])];
+  const orgs=[...new Set(me?.grants.map(g=>g.org_unit_id).filter((id):id is string=>id!==null)??[])];
   const [org,setOrg]=useState(orgs[0]??'');
   const [items,setItems]=useState<WorkItem[]>([]);
   const [loading,setLoading]=useState(true);

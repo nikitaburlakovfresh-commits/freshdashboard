@@ -63,8 +63,9 @@ export default function OrganizationPage() {
   async function checkAdmin() {
     setAdminBusy(true); setAdminResult('');
     try {
-      await checkOrganizationAdministration();
-      setAdminResult('Сервер не подтвердил доступ к операциям. Изменения заблокированы.');
+      const result = await checkOrganizationAdministration(asOf);
+      setTree(result);
+      setAdminResult(`Сервер подтвердил административное чтение справочника: ${result.items.length} ед. Изменения, выдача ролей и импорт заблокированы.`);
     } catch (err) {
       setAdminResult(err instanceof ApiError ? `${err.message} (${err.status} ${err.code})` : 'Проверка недоступна. Изменения заблокированы.');
     } finally { setAdminBusy(false); }
@@ -80,9 +81,9 @@ export default function OrganizationPage() {
       <span className="portal-chip"><Icon name="network" /> Только чтение</span>
     </header>
     <section className="org-scope" aria-label="Граница доступа">
-      <Icon name="network" /><div><strong>{tree?.scope_mode === 'SYNTHETIC_DEMO_ONLY' ? 'Учебная структура · не серверные данные' : 'Мой разрешённый контур'}</strong>
+      <Icon name="network" /><div><strong>{tree?.scope_mode === 'SYNTHETIC_DEMO_ONLY' ? 'Учебная структура · не серверные данные' : tree?.admin_review.authorized ? 'Административный обзор справочника · NETWORK' : 'Мой разрешённый контур'}</strong>
         <p>Дата меняет исторический срез, но не права. Видны только разрешённые сейчас единицы; чужие ветви и их названия скрыты.</p>
-        <p>Пилотные A/B не сопоставлены с реальными филиалами. Назначения РМ, владельцев и администраторов не импортированы.</p></div>
+        <p>Пилотные A/B не сопоставлены с реальными филиалами. Бизнес-назначения и архивные учётные записи не импортированы.</p></div>
     </section>
     <div className="org-toolbar">
       <label>Дата среза (UTC)<input type="date" min="1900-01-01" max="9999-12-31" value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
@@ -136,8 +137,9 @@ export default function OrganizationPage() {
       </section>
     </div>}
     <section className="portal-panel org-admin" aria-label="Административное согласование">
-      <div><div className="portal-eyebrow">АДМИНИСТРАТИВНОЕ СОГЛАСОВАНИЕ</div><h2>Изменения ждут уполномоченного администратора</h2>
-        <p>В этом выпуске нет подтверждённого административного назначения. RM/RF не могут сохранять предложения, менять структуру, выдавать роли или активировать архивные учётные записи.</p>
+      <div><div className="portal-eyebrow">АДМИНИСТРАТИВНЫЙ ОБЗОР</div><h2>{tree?.admin_review.authorized ? 'Доступ администратора: только проверка справочника' : 'Административное чтение требует отдельного назначения'}</h2>
+        <p>{tree?.admin_review.authorized ? 'SUPER_ADMIN · Владелец платформы. Действующее право: organization.directory.review — метаданные и история справочника сети. Оно не открывает задачи, финансы, кадровые данные или чужие уведомления.' : 'Пилотные RM/RF не получают сетевой доступ через название должности. Сервер проверяет действующее назначение, scope и permission при каждом запросе.'}</p>
+        <p>Запись, согласование изменений, выдача ролей, активация архивных учётных записей и импорт пока не реализованы — в том числе для администратора.</p>
         <p className="org-small portal-muted">По ТЗ COMDIR должен соответствовать COMMERCIAL_DIRECTOR, а не REGIONAL_MANAGER. Этот реестр ролей и нормализация ещё не включены; каталог и согласование назначений — следующий этап.</p>
       </div><button className="btn btn-secondary" onClick={checkAdmin} disabled={adminBusy}>{adminBusy ? 'Проверка…' : 'Проверить полномочия'}</button>
       {adminResult && <p className="org-admin-result" role="status">{adminResult}</p>}

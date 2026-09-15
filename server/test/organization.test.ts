@@ -137,7 +137,7 @@ describe('ORG-DB: PostgreSQL 16 effective history constraints', () => {
   }
   test('ORG-DB-01 existing pilot identities still have exact A/B IDs and restricted roles', async () => {
     expect((await pool.query('SELECT id FROM org_units ORDER BY code')).rows.map(r=>r.id)).toEqual([A,B]);
-    expect((await pool.query('SELECT code FROM roles ORDER BY code')).rows.map(r=>r.code)).toEqual(['REGIONAL_MANAGER','RF']);
+    expect((await pool.query('SELECT code FROM roles ORDER BY code')).rows.map(r=>r.code)).toEqual(['REGIONAL_MANAGER','RF','SUPER_ADMIN']);
   });
   test('ORG-DB-02 overlapping name/affiliation intervals are rejected by exclusion constraints', async () => {
     await rejected("INSERT INTO org_directory_name_history(org_unit_id,display_name,effective_from,change_reason) VALUES($1,'Overlap','2025-01-01','Test')",[A],'23P01');

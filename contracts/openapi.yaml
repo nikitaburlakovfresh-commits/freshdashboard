@@ -777,10 +777,10 @@ components:
       enum: [DRAFT, ASSIGNED, IN_PROGRESS, SUBMITTED, COMPLETED, CANCELLED]
     Role:
       type: string
-      enum: [REGIONAL_MANAGER, RF]
+      enum: [REGIONAL_MANAGER, RF, SUPER_ADMIN]
     Permission:
       type: string
-      enum: [work_item.read, work_item.create, work_item.assign, work_item.start, work_item.fields.write, work_item.submit, work_item.accept, work_item.rework, work_item.cancel, work_item.reopen, work_item.history.read, notification.read]
+      enum: [work_item.read, work_item.create, work_item.assign, work_item.start, work_item.fields.write, work_item.submit, work_item.accept, work_item.rework, work_item.cancel, work_item.reopen, work_item.history.read, notification.read, organization.directory.review]
     EmptyRequest:
       type: object
       additionalProperties: false
@@ -824,11 +824,16 @@ components:
     Grant:
       type: object
       additionalProperties: false
-      required: [id, role, org_unit_id, valid_from, valid_until, permissions]
+      required: [id, role, scope_kind, org_unit_id, valid_from, valid_until, permissions]
       properties:
         id: {$ref: '#/components/schemas/Uuid'}
         role: {$ref: '#/components/schemas/Role'}
-        org_unit_id: {$ref: '#/components/schemas/Uuid'}
+        scope_kind: {type: string, enum: [ORG_UNIT, NETWORK]}
+        org_unit_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null only for NETWORK directory-review assignment. Does not confer access to business tasks.
         valid_from: {$ref: '#/components/schemas/UtcTimestamp'}
         valid_until: {$ref: '#/components/schemas/NullableUtcTimestamp'}
         permissions:

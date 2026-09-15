@@ -33,7 +33,7 @@ export default function TaskListPage() {
 
   const grants = me?.grants ?? [];
   const canCreate = grants.some((g) => g.role === 'REGIONAL_MANAGER');
-  const orgOptions = Array.from(new Set(grants.map((g) => g.org_unit_id)));
+  const orgOptions = Array.from(new Set(grants.map((g) => g.org_unit_id).filter((id):id is string=>id!==null)));
 
   const load = useCallback(
     async (nextCursor?: string) => {

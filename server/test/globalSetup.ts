@@ -48,6 +48,7 @@ module.exports = async function globalSetup() {
               idempotency_records, submissions, work_item_fields, work_items,
               sessions RESTART IDENTITY CASCADE`,
     );
+    await client.query('TRUNCATE administrator_bootstrap');
     await client.query(`DELETE FROM role_grants`);
     await client.query(`DELETE FROM app_users`);
     // Synthetic metadata only. No deployed database is reachable through the
