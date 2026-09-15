@@ -4,6 +4,7 @@ import { requireOrigin } from '../middleware/origin';
 import { enforceSessionRateLimit } from '../auth/rateLimit';
 import { ApiError } from '../util/errors';
 import { getAdministrationReview, getDirectoryHistory, getDirectoryTree, parseDirectoryDate } from '../domain/orgDirectory';
+import { commandOrgChange, getOrgChange, listOrgChanges } from '../domain/orgChanges';
 
 export const organizationRouter = Router();
 organizationRouter.use(requireSession);
@@ -33,6 +34,21 @@ organizationRouter.get('/admin-review', wrap(async (req,res) => {
     throw new ApiError('VALIDATION_ERROR','Допустим только параметр as_of; scope определяется сервером.');
   }
   res.json(await getAdministrationReview(req.authUser!,parseDirectoryDate(req.query.as_of)));
+}));
+organizationRouter.get('/proposals',wrap(async(req,res)=>{
+  res.json(await listOrgChanges(req.authUser!));
+}));
+organizationRouter.get('/proposals/:id',wrap(async(req,res)=>{
+  res.json(await getOrgChange(req.authUser!,req.params.id));
+}));
+organizationRouter.post('/proposals',requireOrigin,requireCsrf,wrap(async(req,res)=>{
+  res.json(await commandOrgChange(req.authUser!,'create',null,req.body,req.header('Idempotency-Key'),req.ctx.requestId));
+}));
+organizationRouter.patch('/proposals/:id',requireOrigin,requireCsrf,wrap(async(req,res)=>{
+  res.json(await commandOrgChange(req.authUser!,'edit',req.params.id,req.body,req.header('Idempotency-Key'),req.ctx.requestId));
+}));
+for(const action of ['preview','apply'] as const) organizationRouter.post(`/proposals/:id/${action}`,requireOrigin,requireCsrf,wrap(async(req,res)=>{
+  res.json(await commandOrgChange(req.authUser!,action,req.params.id,req.body,req.header('Idempotency-Key'),req.ctx.requestId));
 }));
 // Fail closed for every attempted write, including guessed import/apply/grant
 // routes. No request body or client-side role flag can confer administration.

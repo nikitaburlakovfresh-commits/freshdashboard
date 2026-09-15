@@ -5,6 +5,7 @@ import { checkOrganizationAdministration, getOrganizationHistory, getOrganizatio
   type DirectoryHistory, type DirectoryTree, type DirectoryUnit } from '../api/organization';
 import { directoryRows } from '../components/orgDirectoryModel';
 import Icon from '../components/Icon';
+import OrganizationEditor from '../components/OrganizationEditor';
 import '../styles/organization.css';
 
 const kinds = { NETWORK: 'Сеть', DIVISION: 'Дивизион', CLUSTER: 'Кластер', ORG_UNIT: 'Филиал' };
@@ -15,6 +16,7 @@ const interval = (from: string, to: string | null) => `${from} → ${to ? `${to}
 
 export default function OrganizationPage() {
   const { me } = useAuth();
+  const canEdit=!!me?.grants.some(g=>g.scope_kind==='NETWORK' && g.org_unit_id===null && g.permissions.includes('organization.change.draft'));
   const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10));
   const [reload, setReload] = useState(0);
   const [tree, setTree] = useState<DirectoryTree | null>(null);
@@ -65,7 +67,7 @@ export default function OrganizationPage() {
     try {
       const result = await checkOrganizationAdministration(asOf);
       setTree(result);
-      setAdminResult(`Сервер подтвердил административное чтение справочника: ${result.items.length} ед. Изменения, выдача ролей и импорт заблокированы.`);
+      setAdminResult(`Сервер подтвердил административное чтение справочника: ${result.items.length} ед. ${canEdit?'Редактор ниже проверяет отдельные права на каждый шаг.':'Изменения заблокированы.'} Выдача ролей и импорт не включены.`);
     } catch (err) {
       setAdminResult(err instanceof ApiError ? `${err.message} (${err.status} ${err.code})` : 'Проверка недоступна. Изменения заблокированы.');
     } finally { setAdminBusy(false); }
@@ -78,13 +80,14 @@ export default function OrganizationPage() {
     <header className="portal-heading">
       <div><div className="portal-eyebrow">ОРГСТРУКТУРА · СПРАВОЧНИК V1</div><h1>Структура и доступ</h1>
         <p>Стабильные OrgUnit, названия и принадлежность на выбранную дату.</p></div>
-      <span className="portal-chip"><Icon name="network" /> Только чтение</span>
+      <span className="portal-chip"><Icon name="network" /> {canEdit?'Редактор справочника':'Только чтение'}</span>
     </header>
     <section className="org-scope" aria-label="Граница доступа">
       <Icon name="network" /><div><strong>{tree?.scope_mode === 'SYNTHETIC_DEMO_ONLY' ? 'Учебная структура · не серверные данные' : tree?.admin_review.authorized ? 'Административный обзор справочника · NETWORK' : 'Мой разрешённый контур'}</strong>
         <p>Дата меняет исторический срез, но не права. Видны только разрешённые сейчас единицы; чужие ветви и их названия скрыты.</p>
         <p>Пилотные A/B не сопоставлены с реальными филиалами. Бизнес-назначения и архивные учётные записи не импортированы.</p></div>
     </section>
+    {canEdit && <OrganizationEditor units={tree?.items ?? []} onApplied={()=>setReload(v=>v+1)}/>}
     <div className="org-toolbar">
       <label>Дата среза (UTC)<input type="date" min="1900-01-01" max="9999-12-31" value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
       <label className="org-search">Поиск в доступной структуре<input type="search" placeholder="Название или код" value={search} onChange={e => setSearch(e.target.value)} /></label>
@@ -137,9 +140,9 @@ export default function OrganizationPage() {
       </section>
     </div>}
     <section className="portal-panel org-admin" aria-label="Административное согласование">
-      <div><div className="portal-eyebrow">АДМИНИСТРАТИВНЫЙ ОБЗОР</div><h2>{tree?.admin_review.authorized ? 'Доступ администратора: только проверка справочника' : 'Административное чтение требует отдельного назначения'}</h2>
+      <div><div className="portal-eyebrow">АДМИНИСТРАТИВНЫЙ ОБЗОР</div><h2>{tree?.admin_review.authorized ? 'Доступ администратора: справочник' : 'Административное чтение требует отдельного назначения'}</h2>
         <p>{tree?.admin_review.authorized ? 'SUPER_ADMIN · Владелец платформы. Действующее право: organization.directory.review — метаданные и история справочника сети. Оно не открывает задачи, финансы, кадровые данные или чужие уведомления.' : 'Пилотные RM/RF не получают сетевой доступ через название должности. Сервер проверяет действующее назначение, scope и permission при каждом запросе.'}</p>
-        <p>Запись, согласование изменений, выдача ролей, активация архивных учётных записей и импорт пока не реализованы — в том числе для администратора.</p>
+        <p>{canEdit?'Редактор выше выполняет только явно проверенные изменения справочника.':'Без отдельного права редактора запись заблокирована.'} Выдача ролей, запуск филиалов, активация архивных учётных записей и импорт не включены.</p>
         <p className="org-small portal-muted">По ТЗ COMDIR должен соответствовать COMMERCIAL_DIRECTOR, а не REGIONAL_MANAGER. Этот реестр ролей и нормализация ещё не включены; каталог и согласование назначений — следующий этап.</p>
       </div><button className="btn btn-secondary" onClick={checkAdmin} disabled={adminBusy}>{adminBusy ? 'Проверка…' : 'Проверить полномочия'}</button>
       {adminResult && <p className="org-admin-result" role="status">{adminResult}</p>}

@@ -6,7 +6,7 @@ export interface AuditEventInput {
   orgUnitId: string | null;
   workItemId: string | null;
   action: string;
-  aggregateType: 'work_item' | 'session' | 'notification' | 'access';
+  aggregateType: 'work_item' | 'session' | 'notification' | 'access' | 'org_change';
   aggregateId: string;
   aggregateVersion: number;
   requestId: string;

@@ -1,0 +1,242 @@
+openapi: 3.0.3
+info:
+  title: FRESH bounded organization change sets
+  version: 1.0.0
+servers:
+  - url: /api/v1
+security:
+  - session: []
+x-boundary: One directory operation per proposal, no lifecycle/import/users/tasks/finance. NETWORK current grant only; role name is not authorization.
+paths:
+  /organization/proposals:
+    get:
+      operationId: listOrganizationChanges
+      x-permissions: [organization.directory.review, organization.change.draft]
+      x-scope: Current NETWORK grant with null scope reference; filter operation permissions; latest 100 proposals.
+      responses:
+        '200':
+          description: No-store list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/Proposal'}
+                  limit: {type: integer, enum: [100]}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: createOrganizationChange
+      x-permissions: [organization.directory.review, organization.change.draft, 'org_unit.create OR org_unit.rename OR org_unit.move']
+      x-scope: Current NETWORK grant with null scope reference.
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/Csrf'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [change]
+              properties:
+                change: {$ref: '#/components/schemas/Change'}
+      responses:
+        '200': {$ref: '#/components/responses/Proposal'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /organization/proposals/{id}:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+    get:
+      operationId: getOrganizationChange
+      x-permissions: [organization.directory.review, organization.change.draft, operation permission]
+      x-scope: Current NETWORK grant; includes immutable audit transition history.
+      responses:
+        '200': {$ref: '#/components/responses/Proposal'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+    patch:
+      operationId: editOrganizationChange
+      x-permissions: [organization.directory.review, organization.change.draft, operation permission]
+      x-scope: Current NETWORK grant. Target UUID/operation immutable; edits clear preview.
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/Csrf'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_version, change]
+              properties:
+                expected_version: {type: integer, format: int64, minimum: 1}
+                change: {$ref: '#/components/schemas/Change'}
+      responses:
+        '200': {$ref: '#/components/responses/Proposal'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /organization/proposals/{id}/preview:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+    post:
+      operationId: previewOrganizationChange
+      x-permissions: [organization.directory.review, organization.change.preview, operation permission]
+      x-scope: Current NETWORK grant. Explicit validation; no directory writes. Invalid business inputs persist issues and DRAFT status in a 200 response.
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/Csrf'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VersionCommand'}
+      responses:
+        '200': {$ref: '#/components/responses/Proposal'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /organization/proposals/{id}/apply:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+    post:
+      operationId: applyOrganizationChange
+      x-permissions: [organization.directory.review, organization.change.apply, operation permission]
+      x-scope: Current NETWORK grant plus same preview actor. Exact version/hash/directory revision/token and 15-minute expiry checked again inside transaction.
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/Csrf'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_version, preview_token]
+              properties:
+                expected_version: {type: integer, format: int64, minimum: 1}
+                preview_token: {type: string, format: uuid}
+      responses:
+        '200': {$ref: '#/components/responses/Proposal'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    session: {type: apiKey, in: cookie, name: __Host-fresh_session}
+  parameters:
+    Id: {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    Csrf: {name: X-CSRF-Token, in: header, required: true, schema: {type: string}}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, pattern: '^[A-Za-z0-9._:-]{16,128}$'}
+  responses:
+    Proposal:
+      description: Persisted state; commands increment version; successful key replay returns original result after current authorization.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Proposal'}
+    Error:
+      description: '401 session; 403 permission/scope/Origin/CSRF; 404 unknown; 409 stale version/key/token; 422 schema/business rule; 429 quota; 503 transient rollback.'
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [code, message, request_id, details]
+            properties:
+              code: {type: string}
+              message: {type: string}
+              request_id: {type: string, format: uuid}
+              details: {type: object}
+  schemas:
+    VersionCommand:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      properties:
+        expected_version: {type: integer, format: int64, minimum: 1}
+    Change:
+      type: object
+      additionalProperties: false
+      required: [operation]
+      description: Draft may be incomplete. Preview requires valid name/date/reason/parent. CREATE assigns UUID on server. RENAME allows only target/name/date/reason; MOVE only target/parent/date/reason. Operation and target cannot change after creation.
+      properties:
+        operation: {type: string, enum: [ORG_UNIT_CREATE, ORG_UNIT_RENAME, ORG_UNIT_MOVE_TO_CLUSTER]}
+        target_id: {type: string, format: uuid}
+        code: {type: string, maxLength: 100}
+        kind: {type: string, enum: [NETWORK, DIVISION, CLUSTER, ORG_UNIT]}
+        display_name: {type: string, maxLength: 200}
+        parent_id: {type: string, format: uuid, nullable: true}
+        type_code: {type: string, nullable: true, enum: [CITY_FLAG, EXPRESS, FULL_SERVICE, PICKUP_POINT, OUTLET]}
+        business_model: {type: string, nullable: true, enum: [FRANCHISE, OWN_OPERATION, UC]}
+        effective_from: {type: string, format: date}
+        reason: {type: string, maxLength: 500}
+    Proposal:
+      type: object
+      required: [id, target_id, version, status, change, created_by, updated_by, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        target_id: {type: string, format: uuid}
+        version: {type: integer, format: int64, minimum: 1}
+        status: {type: string, enum: [DRAFT, PREVIEW, APPLIED]}
+        change: {$ref: '#/components/schemas/Change'}
+        created_by: {type: string, format: uuid}
+        updated_by: {type: string, format: uuid}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        preview_token: {type: string, format: uuid, nullable: true}
+        preview_actor: {type: string, format: uuid, nullable: true}
+        preview_base_version: {type: integer, format: int64, nullable: true}
+        preview_expires_at: {type: string, format: date-time, nullable: true}
+        preview_summary:
+          type: object
+          nullable: true
+          properties:
+            valid: {type: boolean}
+            issues:
+              type: array
+              items:
+                type: object
+                properties:
+                  path: {type: string}
+                  issue: {type: string}
+            before: {type: object, nullable: true}
+            proposed: {type: object}
+            after: {type: object}
+            affected:
+              type: object
+              description: Directory identities/name/affiliation history and descendant count; task/grant/historical-grant/finance counts are zero.
+              additionalProperties: {type: integer}
+            warning: {type: string}
+        applied_by: {type: string, format: uuid, nullable: true}
+        applied_at: {type: string, format: date-time, nullable: true}
+        history:
+          type: array
+          description: GET detail only. Ordered append-only audit rows with actor, timestamp, version and before/after proposal states.
+          items: {type: object}

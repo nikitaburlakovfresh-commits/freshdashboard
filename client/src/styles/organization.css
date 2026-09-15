@@ -23,7 +23,7 @@
 .org-tree-node.selected { border-color: var(--fresh-blue); background: var(--fresh-info-bg); }
 .org-tree-node > span:last-child { min-width: 0; }
 .org-tree-node strong { display: block; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
-.org-tree-node small { display: block; color: var(--fresh-text-muted); font-size: 11px; margin-top: 4px; }
+.org-tree-node small { display: block; color: var(--fresh-text-muted); font-size: 12px; margin-top: 4px; overflow-wrap: anywhere; }
 .org-node-icon { color: var(--fresh-link); }
 .org-expand { background: transparent; border: 0; padding: 8px; min-width: 32px; min-height: 44px; }
 .org-status-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
@@ -45,6 +45,31 @@
 .org-admin h2 { font-size: 18px; line-height: 1.5; margin: 10px 0; }
 .org-admin p { line-height: 1.6; color: var(--fresh-text-muted); }
 .org-admin-result { grid-column: 1/-1; border-top: 1px solid var(--fresh-border); padding-top: 14px; margin: 0; }
+.org-editor { margin-top: 24px; }
+.org-editor .org-section-heading { flex-wrap: wrap; }
+.org-editor-grid { display: grid; grid-template-columns: minmax(180px,.45fr) minmax(0,1fr); gap: 24px; margin-top: 24px; }
+.org-editor-content { min-width: 0; }
+.org-editor h2 { font-size: 20px; margin: 8px 0; }
+.org-editor h3 { font-size: 15px; line-height: 1.5; }
+.org-editor p { font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.org-editor-fields { border: 0; padding: 0; margin: 16px 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+.org-editor-fields label { display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: var(--fresh-text-muted); }
+.org-editor-fields input, .org-editor-fields select, .org-editor-fields textarea { width: 100%; min-height: 44px; min-width: 0; padding: 10px 12px; border: 1px solid var(--fresh-border); border-radius: 8px; background: var(--fresh-raised); color: var(--fresh-text); }
+.org-editor-wide { grid-column: 1/-1; }
+.org-editor-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.org-editor .org-apply:not(:disabled) { background: var(--fresh-blue); color: white; }
+.org-editor button:disabled { opacity: .5; cursor: not-allowed; }
+.org-proposal-list { list-style: none; padding: 0; display: grid; gap: 8px; max-height: 400px; overflow: auto; }
+.org-proposal-list button { display: grid; gap: 6px; text-align: left; width: 100%; padding: 12px; border: 1px solid var(--fresh-border); border-radius: 8px; background: var(--fresh-subtle); overflow-wrap: anywhere; }
+.org-proposal-list button[aria-pressed=true] { border-color: var(--fresh-blue); background: var(--fresh-info-bg); }
+.org-proposal-list strong { font-size: 13px; }
+.org-proposal-list span { font-size: 12px; color: var(--fresh-text-muted); }
+.org-preview-summary, .org-change-history { border-top: 1px solid var(--fresh-border); margin-top: 20px; padding-top: 16px; }
+.org-change-history li { font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.org-apply-dialog { color: var(--fresh-text); background: var(--fresh-raised); border: 1px solid var(--fresh-border); border-radius: 12px; padding: 24px; max-width: 540px; width: calc(100% - 32px); margin: auto; }
+.org-apply-dialog::backdrop { background: rgba(0,0,0,.65); }
+@media(max-width:950px) { .org-editor-grid { grid-template-columns: 1fr; } .org-proposal-list { max-height: 190px; } }
+@media(max-width:520px) { .org-editor-fields { grid-template-columns: 1fr; } .org-editor-actions .btn { width: 100%; } }
 @media (max-width: 950px) { .org-workspace { grid-template-columns: 1fr; } .org-admin { grid-template-columns: 1fr; } .org-admin > button { justify-self: start; } }
 @media (max-width: 520px) {
   .org-page .portal-heading h1 { font-size: 22px; }

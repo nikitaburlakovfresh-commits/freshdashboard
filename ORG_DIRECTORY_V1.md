@@ -1,5 +1,9 @@
 # Org Directory V1 — release boundary
 
+**Editor addendum:** `ORG_EDITOR_V1.md` supersedes earlier blanket write-denial
+statements for explicitly provisioned editors only. The directory identity,
+history and A/B task bridge remain the same model. Read-only RM/RF unchanged.
+
 **Administrator bootstrap addendum:** `FIRST_ADMINISTRATOR.md` supersedes the original
 no-administrator statements below. SUPER_ADMIN now has explicit NETWORK directory-review
 permission only; RM/RF boundaries and denial of every organization write are unchanged.

@@ -49,6 +49,8 @@ module.exports = async function globalSetup() {
               sessions RESTART IDENTITY CASCADE`,
     );
     await client.query('TRUNCATE administrator_bootstrap');
+    await client.query('TRUNCATE org_change_proposals, organization_editor_provisioning');
+    await client.query("DELETE FROM role_permissions WHERE role_code='SUPER_ADMIN' AND permission_code<>'organization.directory.review'");
     await client.query(`DELETE FROM role_grants`);
     await client.query(`DELETE FROM app_users`);
     // Synthetic metadata only. No deployed database is reachable through the
