@@ -1,0 +1,12 @@
+.git
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+**/*.env
+pilot-users*
+.dev_db_password.local
+**/*.log
+**/coverage
+**/*.png
+**/*.jpg

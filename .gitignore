@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+*.log
+.env
+.env.local
+*.env
+pilot-users*
+.dev_db_password.local
+coverage/
+.DS_Store
+*.tsbuildinfo

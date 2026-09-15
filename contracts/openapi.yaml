@@ -1,0 +1,1267 @@
+openapi: 3.0.3
+info:
+  title: Fresh Portal — контракт инженерного пилота R1
+  version: 0.1.0-proposed
+  description: |
+    НА СОГЛАСОВАНИЕ. Contract only, not a deployed API or production readiness claim.
+    Narrow R1 slice of TZ v2.10 §§13.1A,45 and security rules. Existing personal
+    login/password + server sessions; no new OIDC. Synthetic A/B only.
+    17 operations; business mutations require Idempotency-Key for at least 30 days.
+    login/logout are the only mutating exceptions. Every action POST explicitly
+    carries expected_entity_version; field PATCH uses field CAS instead.
+    Check current authorization before schema/CAS and before idempotent replay.
+    Hidden object is 404; forbidden explicit branch filter/action is 403.
+    Commit mutation + audit + outbox + successful idempotency result atomically.
+    All responses include X-Request-ID and Cache-Control:no-store.
+    Error envelope code,message,request_id,details also applies to malformed JSON
+    (422), gateway errors and quota errors. All timestamps returned in UTC with Z.
+    423 is reserved for the general restriction contract; sanctions disabled in R1.
+servers:
+  - url: /api/v1
+tags:
+  - name: Auth
+  - name: WorkItems
+  - name: Notifications
+security:
+  - sessionCookie: []
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Персональный вход в существующий portal auth
+      description: |
+        INDIVIDUAL only. Validate active user and known-sharing flag, use approved
+        existing password verification. Uniform 401 for wrong/unknown/disabled user.
+        New opaque session token, not caller-supplied ID. Exact Origin and JSON
+        required against login CSRF. No session CSRF header at this bootstrap.
+        Idempotency-Key exception: each successful call creates a new session.
+      x-requirement-ids: [R1-01, R1-12]
+      x-permission: personal_credentials
+      x-events: [auth.logged_in]
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+            example: {login: rm_a_personal, password: '<individual-test-secret>'}
+      responses:
+        '200':
+          description: Session committed; token only in HttpOnly cookie; no-store.
+          headers:
+            Set-Cookie:
+              schema: {type: string}
+              description: __Host-fresh_session opaque token; Secure; HttpOnly; SameSite=Lax; Path=/; no Domain.
+              example: '__Host-fresh_session=<opaque>; Path=/; Secure; HttpOnly; SameSite=Lax'
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+            Cache-Control: {$ref: '#/components/headers/NoStore'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionResponse'}
+              example:
+                user: {id: '10000000-0000-4000-8000-000000000001', login: rm_a_personal, full_name: 'Тестовый постановщик A', user_kind: INDIVIDUAL}
+                csrf_token: 'example-only-csrf-token-32-characters'
+                expires_at: '2026-09-15T15:41:00Z'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Отозвать текущую server session
+      description: |
+        Revoke current session + audit/outbox in one transaction and expire cookie.
+        No global logout public endpoint. Idempotency-Key exception. A second call
+        with the already revoked session returns 401, never restores the session.
+      x-requirement-ids: [R1-01, R1-12]
+      x-permission: own_session
+      x-events: [auth.logged_out]
+      security: [{sessionCookie: [], csrfToken: []}]
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EmptyRequest'}
+            example: {}
+      responses:
+        '200':
+          description: Current session revoked, client clears local business data.
+          headers:
+            Set-Cookie:
+              schema: {type: string}
+              example: '__Host-fresh_session=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax'
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+            Cache-Control: {$ref: '#/components/headers/NoStore'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LogoutResponse'}
+              example: {revoked: true, revoked_at: '2026-09-15T08:00:00Z'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /me:
+    get:
+      tags: [Auth]
+      operationId: getMe
+      summary: Профиль, текущие grants/permissions и CSRF bootstrap
+      description: |
+        Resolve active branch grants on every call, never return password/session
+        digest. Include only effective, not expired/revoked grants. CSRF token is
+        same-origin/no-store only. Access resolution audit is redacted (90d).
+      x-requirement-ids: [R1-01, R1-02]
+      x-permission: own_profile
+      x-events: []
+      responses:
+        '200':
+          description: Current personal profile and effective grants.
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+            Cache-Control: {$ref: '#/components/headers/NoStore'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MeResponse'}
+              example:
+                user: {id: '10000000-0000-4000-8000-000000000001', login: rm_a_personal, full_name: 'Тестовый постановщик A', user_kind: INDIVIDUAL}
+                csrf_token: 'example-only-csrf-token-32-characters'
+                expires_at: '2026-09-15T15:41:00Z'
+                grants:
+                  - id: '20000000-0000-4000-8000-000000000001'
+                    role: REGIONAL_MANAGER
+                    org_unit_id: '00000000-0000-4000-8000-00000000000a'
+                    valid_from: '2026-09-01T00:00:00Z'
+                    valid_until: null
+                    permissions: [work_item.read, work_item.create, work_item.assign, work_item.accept, work_item.rework, work_item.cancel, work_item.reopen, work_item.history.read, notification.read]
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /work-items:
+    get:
+      tags: [WorkItems]
+      operationId: listWorkItems
+      summary: Список только доступных задач
+      description: |
+        RM sees granted branch items; RF sees only own assigned items in granted
+        branch. No implicit DIVISION/NETWORK expansion. Forbidden explicit org
+        filter returns 403, not rows/count from another branch. No total count.
+        Keyset ascending (created_at,id); cursor bound to actor/filter/permissions.
+      x-requirement-ids: [R1-02]
+      x-permission: work_item.read
+      x-events: []
+      parameters:
+        - $ref: '#/components/parameters/OrgFilter'
+        - name: status
+          in: query
+          schema: {$ref: '#/components/schemas/WorkItemStatus'}
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Scope-filtered page (empty page is valid).
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+            Cache-Control: {$ref: '#/components/headers/NoStore'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkItemPage'}
+              example: {items: [], next_cursor: null}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    post:
+      tags: [WorkItems]
+      operationId: createWorkItem
+      summary: Создать DRAFT из pilot_task_v1
+      description: |
+        RM grant in requested org. Pin sole template version. Title/due_at/org
+        immutable in R1. Initial field null, field_version=1, entity_version=1.
+        due_at is required UTC Z; past deadline allowed. Server assigns actor/IDs.
+      x-requirement-ids: [R1-02, R1-03, R1-11, R1-12]
+      x-permission: work_item.create
+      x-events: [work_item.created]
+      security: [{sessionCookie: [], csrfToken: []}]
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateWorkItemRequest'}
+            example:
+              org_unit_id: '00000000-0000-4000-8000-00000000000a'
+              template_code: pilot_task_v1
+              title: 'Проверить тестовый сценарий'
+              due_at: '2026-09-16T12:00:00Z'
+      responses:
+        '201':
+          description: Created and committed. Same key+payload replays same 201 body.
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+            Cache-Control: {$ref: '#/components/headers/NoStore'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkItem'}
+              examples:
+                draft: {$ref: '#/components/examples/DraftWorkItem'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /work-items/{work_item_id}:
+    parameters:
+      - $ref: '#/components/parameters/WorkItemId'
+    get:
+      tags: [WorkItems]
+      operationId: getWorkItem
+      summary: Карточка с текущими entity/field/submission versions
+      description: RM scope or RF-own; unknown or hidden object returns indistinguishable 404.
+      x-requirement-ids: [R1-02, R1-05]
+      x-permission: work_item.read
+      x-events: []
+      responses:
+        '200': {$ref: '#/components/responses/WorkItemOk'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /work-items/{work_item_id}/assign:
+    parameters:
+      - $ref: '#/components/parameters/WorkItemId'
+    post:
+      tags: [WorkItems]
+      operationId: assignWorkItem
+      summary: DRAFT → ASSIGNED
+      description: |
+        RM same org; target active RF with current grant in the same org.
+        No reassignment. Invalid/hidden/inactive target uniformly returns 422
+        ASSIGNEE_INELIGIBLE without identifying another branch's user.
+      x-requirement-ids: [R1-02, R1-04, R1-11, R1-12]
+      x-permission: work_item.assign
+      x-events: [work_item.assigned]
+      security: [{sessionCookie: [], csrfToken: []}]
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AssignRequest'}
+            example: {expected_entity_version: 1, assignee_user_id: '10000000-0000-4000-8000-000000000002'}
+      responses:
+        '200': {$ref: '#/components/responses/WorkItemOk'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /work-items/{work_item_id}/start:
+    parameters:
+      - $ref: '#/components/parameters/WorkItemId'
+    post:
+      tags: [WorkItems]
+      operationId: startWorkItem
+      summary: ASSIGNED → IN_PROGRESS
+      description: Only assigned active RF with current grant in this branch; no acting users in R1.
+      x-requirement-ids: [R1-04, R1-11, R1-12]
+      x-permission: work_item.start
+      x-events: [work_item.started]
+      security: [{sessionCookie: [], csrfToken: []}]
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VersionRequest'}
+            example: {expected_entity_version: 2}
+      responses:
+        '200': {$ref: '#/components/responses/WorkItemOk'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /work-items/{work_item_id}/fields:
+    parameters:
+      - $ref: '#/components/parameters/WorkItemId'
+    patch:
+      tags: [WorkItems]
+      operationId: patchWorkItemFields
+      summary: CAS сохранённого completion_summary
+      description: |
+        RF-own, ASSIGNED/IN_PROGRESS only. Exactly one change, expected field
+        version, not entity CAS. Serialize with transitions; success increments
+        field_version and entity_version once, even if same text with a new key.
+        Whitespace-only/null forbidden, max4000 Unicode code points proposed.
+        Return full committed card; 409 rolls back whole patch. Cannot change org,
+        title, due_at, blocked flag, actor, status, template or other field.
+      x-requirement-ids: [R1-05, R1-11, R1-12]
+      x-permission: work_item.fields.write
+      x-events: [work_item.fields_patched]
+      security: [{sessionCookie: [], csrfToken: []}]
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PatchFieldsRequest'}
+            example:
+              changes:
+                - {field_path: completion_summary, expected_version: 1, new_value: 'Тестовый сценарий проверен.'}
+      responses:
+        '200': {$ref: '#/components/responses/WorkItemOk'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /work-items/{work_item_id}/submit:
+    parameters:
+      - $ref: '#/components/parameters/WorkItemId'
+    post:
+      tags: [WorkItems]
+      operationId: submitWorkItem
+      summary: ASSIGNED/IN_PROGRESS → SUBMITTED с immutable snapshot
+      description: |
+        RF-own; !is_blocked; persisted completion_summary nonblank. Server clock
+        submitted_at; next revision and fresh submission_id generated atomically.
+        Requires acceptance always true for pilot_task_v1. Past due allowed with
+        LATE marker; no client timestamp or unsaved field accepted in this body.
+        UI must first await PATCH commit and use returned entity_version.
+      x-requirement-ids: [R1-06, R1-11, R1-12]
+      x-permission: work_item.submit
+      x-events: [work_item.submitted]
+      security: [{sessionCookie: [], csrfToken: []}]
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VersionRequest'}
+            example: {expected_entity_version: 4}
+      responses:
+        '200': {$ref: '#/components/responses/WorkItemOk'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /work-items/{work_item_id}/accept:
+    parameters:
+      - $ref: '#/components/parameters/WorkItemId'
+    post:
+      tags: [WorkItems]
+      operationId: acceptWorkItem
+      summary: SUBMITTED → COMPLETED
+      description: |
+        RM current branch grant; reviewer must differ from both assignee and
+        snapshot submitted_by, including dual-role users. Exact current submission
+        id/revision AND entity version required. Preserve snapshot unchanged.
+      x-requirement-ids: [R1-02, R1-07, R1-11, R1-12]
+      x-permission: work_item.accept
+      x-events: [work_item.accepted]
+      security: [{sessionCookie: [], csrfToken: []}]
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReviewRequest'}
+            example: {expected_entity_version: 5, submission_id: '40000000-0000-4000-8000-000000000001', submission_revision: 1}
+      responses:
+        '200': {$ref: '#/components/responses/WorkItemOk'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /work-items/{work_item_id}/rework:
+    parameters:
+      - $ref: '#/components/parameters/WorkItemId'
+    post:
+      tags: [WorkItems]
+      operationId: reworkWorkItem
+      summary: SUBMITTED → IN_PROGRESS с причиной
+      description: |
+        Same independent reviewer guards as accept. Exact submission id/revision
+        and entity version. Reason nonblank max500 proposed; rework_count+1.
+        Preserve original due_at and immutable submission, next submit is revision+1.
+      x-requirement-ids: [R1-07, R1-11, R1-12]
+      x-permission: work_item.rework
+      x-events: [work_item.rework_requested]
+      security: [{sessionCookie: [], csrfToken: []}]
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReworkRequest'}
+            example: {expected_entity_version: 5, submission_id: '40000000-0000-4000-8000-000000000001', submission_revision: 1, reason: 'Уточнить результат проверки.'}
+      responses:
+        '200': {$ref: '#/components/responses/WorkItemOk'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /work-items/{work_item_id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/WorkItemId'
+    post:
+      tags: [WorkItems]
+      operationId: cancelWorkItem
+      summary: DRAFT/ASSIGNED/IN_PROGRESS/SUBMITTED → CANCELLED
+      description: |
+        RM branch grant, reason mandatory. No parent/children in pilot, thus no
+        cascade preview needed only in R1. Clear blocked flag/reason, audit before
+        preserves obstacle. Keep submissions/assignee/deadline; CANCELLED terminal.
+      x-requirement-ids: [R1-08, R1-11, R1-12]
+      x-permission: work_item.cancel
+      x-events: [work_item.cancelled]
+      security: [{sessionCookie: [], csrfToken: []}]
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReasonRequest'}
+            example: {expected_entity_version: 3, reason: 'Тестовый сценарий отменён.'}
+      responses:
+        '200': {$ref: '#/components/responses/WorkItemOk'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /work-items/{work_item_id}/reopen:
+    parameters:
+      - $ref: '#/components/parameters/WorkItemId'
+    post:
+      tags: [WorkItems]
+      operationId: reopenWorkItem
+      summary: COMPLETED → IN_PROGRESS с причиной
+      description: |
+        RM branch grant; previous assignee still an active RF with current branch
+        grant, else 422 ASSIGNEE_INELIGIBLE. No reassignment. Keep accepted snapshot,
+        original deadline and rework_count; subsequent submit creates new revision.
+      x-requirement-ids: [R1-08, R1-11, R1-12]
+      x-permission: work_item.reopen
+      x-events: [work_item.reopened]
+      security: [{sessionCookie: [], csrfToken: []}]
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReasonRequest'}
+            example: {expected_entity_version: 6, reason: 'Повторная проверка.'}
+      responses:
+        '200': {$ref: '#/components/responses/WorkItemOk'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /work-items/{work_item_id}/history:
+    parameters:
+      - $ref: '#/components/parameters/WorkItemId'
+    get:
+      tags: [WorkItems]
+      operationId: getWorkItemHistory
+      summary: Версионированная история и snapshot каждой сдачи
+      description: |
+        RM scope or RF-own at read time. Ordered ascending (aggregate_version,event_id).
+        Only APPLIED business events for this work item, not rejected attempts,
+        auth/security audit, IP, user-agent or hidden fields. Submission snapshot
+        appears on SUBMIT entry; accept/rework reference reviewed id/revision.
+      x-requirement-ids: [R1-02, R1-09]
+      x-permission: work_item.history.read
+      x-events: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Authorized append-only history page.
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+            Cache-Control: {$ref: '#/components/headers/NoStore'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/HistoryPage'}
+              example:
+                items:
+                  - event_id: '50000000-0000-4000-8000-000000000001'
+                    event_type: work_item.created
+                    aggregate_version: 1
+                    occurred_at: '2026-09-15T07:41:00Z'
+                    actor_id: '10000000-0000-4000-8000-000000000001'
+                    from_status: null
+                    to_status: DRAFT
+                    reason: null
+                    field_change: null
+                    submission: null
+                    reviewed_submission_id: null
+                    reviewed_submission_revision: null
+                next_cursor: null
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /notifications:
+    get:
+      tags: [Notifications]
+      operationId: listNotifications
+      summary: Только личные доступные IN_APP уведомления
+      description: |
+        Current recipient identity AND branch grant AND item-read permission.
+        Revoked content excluded, no total count. Ascending (created_at,id).
+        Clicking a work_item_id uses getWorkItem with fresh authorization.
+      x-requirement-ids: [R1-02, R1-10]
+      x-permission: notification.read
+      x-events: []
+      parameters:
+        - name: unread_only
+          in: query
+          schema: {type: boolean, default: false}
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Current authorized inbox page.
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+            Cache-Control: {$ref: '#/components/headers/NoStore'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationPage'}
+              example: {items: [], next_cursor: null}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /notifications/{notification_id}/read:
+    parameters:
+      - name: notification_id
+        in: path
+        required: true
+        schema: {$ref: '#/components/schemas/Uuid'}
+    post:
+      tags: [Notifications]
+      operationId: readNotification
+      summary: CAS отметки о прочтении своего уведомления
+      description: |
+        Check recipient and current item scope again, including idempotent replay.
+        Unknown/other recipient/hidden item is 404. Version CAS applies even when
+        already read. First read sets server read_at and version+1 + audit/outbox.
+        Already read with current version is 200 no-op; no repeated business event.
+      x-requirement-ids: [R1-10, R1-11, R1-12]
+      x-permission: notification.read
+      x-events: [notification.read]
+      security: [{sessionCookie: [], csrfToken: []}]
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VersionRequest'}
+            example: {expected_entity_version: 1}
+      responses:
+        '200':
+          description: Committed read marker or version-checked no-op.
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+            Cache-Control: {$ref: '#/components/headers/NoStore'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Notification'}
+              example:
+                id: '60000000-0000-4000-8000-000000000001'
+                event_id: '50000000-0000-4000-8000-000000000002'
+                recipient_user_id: '10000000-0000-4000-8000-000000000002'
+                org_unit_id: '00000000-0000-4000-8000-00000000000a'
+                work_item_id: '30000000-0000-4000-8000-000000000001'
+                channel: IN_APP
+                message: 'Вам назначена задача.'
+                created_at: '2026-09-15T07:42:01Z'
+                read_at: '2026-09-15T07:43:00Z'
+                entity_version: 2
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unprocessable'}
+        '423': {$ref: '#/components/responses/Locked'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-fresh_session
+      description: Existing portal server session, opaque Secure HttpOnly cookie; never a role-bearing JWT.
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Session-bound token from login/getMe; required together with cookie on all non-login unsafe operations.
+  headers:
+    RequestId:
+      schema: {type: string, format: uuid}
+      description: Server trace UUID; equals error body's request_id if error.
+    NoStore:
+      schema: {type: string, enum: [no-store]}
+      description: Do not cache personal content, tokens or errors.
+    RetryAfter:
+      schema: {type: integer, minimum: 1}
+      description: Seconds before retry, then exponential backoff with jitter.
+      example: 30
+  parameters:
+    Origin:
+      name: Origin
+      in: header
+      required: true
+      description: Exact approved HTTPS origin; allowlist hostname TBD before R1 starts. Missing/null/other origin gives 403.
+      schema: {type: string, format: uri}
+      example: https://pilot.example.invalid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Unique(actor,operation,key); ≥30d. Fingerprint includes target/path and
+        canonical JSON payload. Same payload returns saved status/body only after
+        fresh read authorization. Changed payload/target ->409. Missing key ->422.
+        All business mutations, not login/logout. Do not retry expired create blindly.
+      schema: {type: string, minLength: 16, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$'}
+      example: 'pilot-r1-20260915-000001'
+    WorkItemId:
+      name: work_item_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/Uuid'}
+    OrgFilter:
+      name: org_unit_id
+      in: query
+      required: false
+      description: Optional explicit authorized branch. Omitted means only effective scope, never network access.
+      schema: {$ref: '#/components/schemas/Uuid'}
+    Limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque actor/filter/permission-bound keyset cursor, proposed TTL15min; not an access capability.
+      schema: {type: string, minLength: 1, maxLength: 512}
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+    NullableUuid:
+      type: string
+      format: uuid
+      nullable: true
+    Version:
+      type: integer
+      format: int64
+      minimum: 1
+    UtcTimestamp:
+      type: string
+      format: date-time
+      pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$'
+      description: UTC RFC3339 instant, Z required; semantic calendar validation server-side.
+    NullableUtcTimestamp:
+      type: string
+      format: date-time
+      nullable: true
+      pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$'
+    NonblankSummary:
+      type: string
+      minLength: 1
+      maxLength: 4000
+      pattern: '\S'
+      description: Plain text, not whitespace-only; max4000 Unicode code points is a proposed technical limit.
+    Reason:
+      type: string
+      minLength: 1
+      maxLength: 500
+      pattern: '\S'
+      description: Nonblank plain text, proposed max500 Unicode code points.
+    WorkItemStatus:
+      type: string
+      enum: [DRAFT, ASSIGNED, IN_PROGRESS, SUBMITTED, COMPLETED, CANCELLED]
+    Role:
+      type: string
+      enum: [REGIONAL_MANAGER, RF]
+    Permission:
+      type: string
+      enum: [work_item.read, work_item.create, work_item.assign, work_item.start, work_item.fields.write, work_item.submit, work_item.accept, work_item.rework, work_item.cancel, work_item.reopen, work_item.history.read, notification.read]
+    EmptyRequest:
+      type: object
+      additionalProperties: false
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [login, password]
+      properties:
+        login: {type: string, minLength: 1, maxLength: 200}
+        password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 1024
+          writeOnly: true
+          description: Input cap proposed; no truncation or logging, existing password policy remains authoritative.
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, login, full_name, user_kind]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        login: {type: string, minLength: 1, maxLength: 200}
+        full_name: {type: string}
+        user_kind: {type: string, enum: [INDIVIDUAL]}
+    SessionResponse:
+      type: object
+      additionalProperties: false
+      required: [user, csrf_token, expires_at]
+      properties:
+        user: {$ref: '#/components/schemas/User'}
+        csrf_token: {type: string, minLength: 32, maxLength: 256}
+        expires_at: {$ref: '#/components/schemas/UtcTimestamp'}
+    LogoutResponse:
+      type: object
+      additionalProperties: false
+      required: [revoked, revoked_at]
+      properties:
+        revoked: {type: boolean, enum: [true]}
+        revoked_at: {$ref: '#/components/schemas/UtcTimestamp'}
+    Grant:
+      type: object
+      additionalProperties: false
+      required: [id, role, org_unit_id, valid_from, valid_until, permissions]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        role: {$ref: '#/components/schemas/Role'}
+        org_unit_id: {$ref: '#/components/schemas/Uuid'}
+        valid_from: {$ref: '#/components/schemas/UtcTimestamp'}
+        valid_until: {$ref: '#/components/schemas/NullableUtcTimestamp'}
+        permissions:
+          type: array
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/Permission'}
+    MeResponse:
+      type: object
+      additionalProperties: false
+      required: [user, csrf_token, expires_at, grants]
+      properties:
+        user: {$ref: '#/components/schemas/User'}
+        csrf_token: {type: string, minLength: 32, maxLength: 256}
+        expires_at: {$ref: '#/components/schemas/UtcTimestamp'}
+        grants:
+          type: array
+          items: {$ref: '#/components/schemas/Grant'}
+    CreateWorkItemRequest:
+      type: object
+      additionalProperties: false
+      required: [org_unit_id, template_code, title, due_at]
+      properties:
+        org_unit_id: {$ref: '#/components/schemas/Uuid'}
+        template_code: {type: string, enum: [pilot_task_v1]}
+        title: {type: string, minLength: 1, maxLength: 200, pattern: '\S'}
+        due_at: {$ref: '#/components/schemas/UtcTimestamp'}
+    VersionRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_entity_version]
+      properties:
+        expected_entity_version: {$ref: '#/components/schemas/Version'}
+    AssignRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_entity_version, assignee_user_id]
+      properties:
+        expected_entity_version: {$ref: '#/components/schemas/Version'}
+        assignee_user_id: {$ref: '#/components/schemas/Uuid'}
+    FieldChangeRequest:
+      type: object
+      additionalProperties: false
+      required: [field_path, expected_version, new_value]
+      properties:
+        field_path: {type: string, enum: [completion_summary]}
+        expected_version: {$ref: '#/components/schemas/Version'}
+        new_value: {$ref: '#/components/schemas/NonblankSummary'}
+    PatchFieldsRequest:
+      type: object
+      additionalProperties: false
+      required: [changes]
+      properties:
+        changes:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items: {$ref: '#/components/schemas/FieldChangeRequest'}
+    ReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_entity_version, submission_id, submission_revision]
+      properties:
+        expected_entity_version: {$ref: '#/components/schemas/Version'}
+        submission_id: {$ref: '#/components/schemas/Uuid'}
+        submission_revision: {type: integer, minimum: 1}
+    ReworkRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_entity_version, submission_id, submission_revision, reason]
+      properties:
+        expected_entity_version: {$ref: '#/components/schemas/Version'}
+        submission_id: {$ref: '#/components/schemas/Uuid'}
+        submission_revision: {type: integer, minimum: 1}
+        reason: {$ref: '#/components/schemas/Reason'}
+    ReasonRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_entity_version, reason]
+      properties:
+        expected_entity_version: {$ref: '#/components/schemas/Version'}
+        reason: {$ref: '#/components/schemas/Reason'}
+    SavedField:
+      type: object
+      additionalProperties: false
+      required: [field_path, value, field_version, updated_at, updated_by]
+      properties:
+        field_path: {type: string, enum: [completion_summary]}
+        value:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 4000
+          pattern: '\S'
+          description: Null until first PATCH; blank string never persisted.
+        field_version: {$ref: '#/components/schemas/Version'}
+        updated_at: {$ref: '#/components/schemas/UtcTimestamp'}
+        updated_by: {$ref: '#/components/schemas/Uuid'}
+    Submission:
+      type: object
+      nullable: true
+      additionalProperties: false
+      description: Immutable saved submission; null before first submit. Review never overwrites it.
+      required: [id, revision, completion_summary, field_version, entity_version, template_version_id, due_at, submitted_at, submitted_by, submission_marker]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        revision: {type: integer, minimum: 1}
+        completion_summary: {$ref: '#/components/schemas/NonblankSummary'}
+        field_version: {$ref: '#/components/schemas/Version'}
+        entity_version:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Version after the SUBMIT commit that created this snapshot.
+        template_version_id: {$ref: '#/components/schemas/Uuid'}
+        due_at: {$ref: '#/components/schemas/UtcTimestamp'}
+        submitted_at: {$ref: '#/components/schemas/UtcTimestamp'}
+        submitted_by: {$ref: '#/components/schemas/Uuid'}
+        submission_marker: {type: string, enum: [ON_TIME, LATE]}
+    WorkItem:
+      type: object
+      additionalProperties: false
+      required: [id, org_unit_id, template_code, template_version_id, requires_acceptance, title, due_at, status, assignee_user_id, created_by, entity_version, is_blocked, blocked_reason, fields, submission_revision, current_submission, rework_count, created_at, updated_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        org_unit_id: {$ref: '#/components/schemas/Uuid'}
+        template_code: {type: string, enum: [pilot_task_v1]}
+        template_version_id: {$ref: '#/components/schemas/Uuid'}
+        requires_acceptance: {type: boolean, enum: [true]}
+        title: {type: string, minLength: 1, maxLength: 200, pattern: '\S'}
+        due_at: {$ref: '#/components/schemas/UtcTimestamp'}
+        status: {$ref: '#/components/schemas/WorkItemStatus'}
+        assignee_user_id: {$ref: '#/components/schemas/NullableUuid'}
+        created_by: {$ref: '#/components/schemas/Uuid'}
+        entity_version: {$ref: '#/components/schemas/Version'}
+        is_blocked: {type: boolean}
+        blocked_reason: {type: string, nullable: true, minLength: 1, maxLength: 500, pattern: '\S'}
+        fields:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items: {$ref: '#/components/schemas/SavedField'}
+        submission_revision: {type: integer, minimum: 0}
+        current_submission: {$ref: '#/components/schemas/Submission'}
+        rework_count: {type: integer, minimum: 0}
+        created_at: {$ref: '#/components/schemas/UtcTimestamp'}
+        updated_at: {$ref: '#/components/schemas/UtcTimestamp'}
+    NextCursor:
+      type: string
+      nullable: true
+      minLength: 1
+      maxLength: 512
+    WorkItemPage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items: {type: array, maxItems: 100, items: {$ref: '#/components/schemas/WorkItem'}}
+        next_cursor: {$ref: '#/components/schemas/NextCursor'}
+    HistoryFieldChange:
+      type: object
+      nullable: true
+      additionalProperties: false
+      required: [field_path, previous_value, new_value, field_version]
+      properties:
+        field_path: {type: string, enum: [completion_summary]}
+        previous_value: {type: string, nullable: true, minLength: 1, maxLength: 4000}
+        new_value: {$ref: '#/components/schemas/NonblankSummary'}
+        field_version: {$ref: '#/components/schemas/Version'}
+    HistoryEntry:
+      type: object
+      additionalProperties: false
+      required: [event_id, event_type, aggregate_version, occurred_at, actor_id, from_status, to_status, reason, field_change, submission, reviewed_submission_id, reviewed_submission_revision]
+      properties:
+        event_id: {$ref: '#/components/schemas/Uuid'}
+        event_type:
+          type: string
+          enum: [work_item.created, work_item.assigned, work_item.started, work_item.fields_patched, work_item.submitted, work_item.accepted, work_item.rework_requested, work_item.cancelled, work_item.reopened]
+        aggregate_version: {$ref: '#/components/schemas/Version'}
+        occurred_at: {$ref: '#/components/schemas/UtcTimestamp'}
+        actor_id: {$ref: '#/components/schemas/Uuid'}
+        from_status:
+          type: string
+          nullable: true
+          enum: [null, DRAFT, ASSIGNED, IN_PROGRESS, SUBMITTED, COMPLETED, CANCELLED]
+        to_status: {$ref: '#/components/schemas/WorkItemStatus'}
+        reason: {type: string, nullable: true, minLength: 1, maxLength: 500}
+        field_change: {$ref: '#/components/schemas/HistoryFieldChange'}
+        submission: {$ref: '#/components/schemas/Submission'}
+        reviewed_submission_id: {$ref: '#/components/schemas/NullableUuid'}
+        reviewed_submission_revision: {type: integer, minimum: 1, nullable: true}
+    HistoryPage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items: {type: array, maxItems: 100, items: {$ref: '#/components/schemas/HistoryEntry'}}
+        next_cursor: {$ref: '#/components/schemas/NextCursor'}
+    Notification:
+      type: object
+      additionalProperties: false
+      required: [id, event_id, recipient_user_id, org_unit_id, work_item_id, channel, message, entity_version, created_at, read_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        event_id: {$ref: '#/components/schemas/Uuid'}
+        recipient_user_id: {$ref: '#/components/schemas/Uuid'}
+        org_unit_id: {$ref: '#/components/schemas/Uuid'}
+        work_item_id: {$ref: '#/components/schemas/Uuid'}
+        channel: {type: string, enum: [IN_APP]}
+        message: {type: string, minLength: 1, maxLength: 300, description: 'Safe fixed event text, not user summary or secret data.'}
+        entity_version: {$ref: '#/components/schemas/Version'}
+        created_at: {$ref: '#/components/schemas/UtcTimestamp'}
+        read_at: {$ref: '#/components/schemas/NullableUtcTimestamp'}
+    NotificationPage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items: {type: array, maxItems: 100, items: {$ref: '#/components/schemas/Notification'}}
+        next_cursor: {$ref: '#/components/schemas/NextCursor'}
+    FieldConflict:
+      type: object
+      additionalProperties: false
+      required: [field_path, expected_version, current_version, current_value]
+      properties:
+        field_path: {type: string, enum: [completion_summary]}
+        expected_version: {$ref: '#/components/schemas/Version'}
+        current_version: {$ref: '#/components/schemas/Version'}
+        current_value: {type: string, nullable: true, minLength: 1, maxLength: 4000}
+    ValidationIssue:
+      type: object
+      additionalProperties: false
+      required: [path, issue]
+      properties:
+        path: {type: string, maxLength: 200}
+        issue: {type: string, maxLength: 300}
+    ErrorDetails:
+      type: object
+      additionalProperties: false
+      description: No hidden org/field values or secrets. Empty object for generic/hidden-object errors.
+      properties:
+        current_entity_version: {$ref: '#/components/schemas/Version'}
+        current_submission_id: {$ref: '#/components/schemas/NullableUuid'}
+        current_submission_revision: {type: integer, minimum: 0}
+        current_status: {$ref: '#/components/schemas/WorkItemStatus'}
+        conflicts:
+          type: array
+          maxItems: 1
+          items: {$ref: '#/components/schemas/FieldConflict'}
+        issues:
+          type: array
+          items: {$ref: '#/components/schemas/ValidationIssue'}
+        retry_after_seconds: {type: integer, minimum: 1}
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id, details]
+      properties:
+        code:
+          type: string
+          enum: [UNAUTHENTICATED, INVALID_CREDENTIALS, SESSION_REVOKED, FORBIDDEN, CSRF_INVALID, ORIGIN_DENIED, SELF_REVIEW_FORBIDDEN, FORBIDDEN_FIELD, NOT_FOUND, ENTITY_VERSION_CONFLICT, FIELD_VERSION_CONFLICT, SUBMISSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_IN_PROGRESS, SCHEMA_MISMATCH, VALIDATION_ERROR, INVALID_TRANSITION, COMPLETION_REQUIRED, WORK_ITEM_BLOCKED, ASSIGNEE_INELIGIBLE, INVALID_CURSOR, RESTRICTION_ACTIVE, RATE_LIMITED, TEMPORARILY_UNAVAILABLE]
+        message: {type: string, minLength: 1, maxLength: 1000}
+        request_id: {$ref: '#/components/schemas/Uuid'}
+        details: {$ref: '#/components/schemas/ErrorDetails'}
+  responses:
+    WorkItemOk:
+      description: |
+        Authorized current card for GET, or full card after committed mutation.
+        Replay is the saved historical result, not a new current-state read.
+        Examples show lifecycle illustrations; each action returns its declared
+        resulting state and increments entity_version, never all example states.
+      headers:
+        X-Request-ID: {$ref: '#/components/headers/RequestId'}
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/WorkItem'}
+          examples:
+            draft: {$ref: '#/components/examples/DraftWorkItem'}
+            submitted: {$ref: '#/components/examples/SubmittedWorkItem'}
+    Unauthorized:
+      description: 401 absent/expired/revoked session; login uses uniform INVALID_CREDENTIALS.
+      headers:
+        X-Request-ID: {$ref: '#/components/headers/RequestId'}
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {code: UNAUTHENTICATED, message: 'Требуется персональный вход.', request_id: '70000000-0000-4000-8000-000000000001', details: {}}
+    Forbidden:
+      description: 403 permission/field/CSRF/Origin/self-review denied; no forbidden data in details.
+      headers:
+        X-Request-ID: {$ref: '#/components/headers/RequestId'}
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {code: FORBIDDEN, message: 'Действие не разрешено.', request_id: '70000000-0000-4000-8000-000000000002', details: {}}
+    NotFound:
+      description: 404 missing or hidden object/notification, indistinguishable response.
+      headers:
+        X-Request-ID: {$ref: '#/components/headers/RequestId'}
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {code: NOT_FOUND, message: 'Объект не найден.', request_id: '70000000-0000-4000-8000-000000000003', details: {}}
+    Conflict:
+      description: 409 CAS/entity/submission/key/schema conflict; whole request rolled back. Values only after field authorization.
+      headers:
+        X-Request-ID: {$ref: '#/components/headers/RequestId'}
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          examples:
+            field:
+              value:
+                code: FIELD_VERSION_CONFLICT
+                message: 'Поле изменилось, требуется явное разрешение конфликта.'
+                request_id: '70000000-0000-4000-8000-000000000004'
+                details:
+                  current_entity_version: 4
+                  conflicts: [{field_path: completion_summary, expected_version: 1, current_version: 2, current_value: 'Сохранённый результат.'}]
+            submission:
+              value:
+                code: SUBMISSION_CONFLICT
+                message: 'Версия сдачи устарела.'
+                request_id: '70000000-0000-4000-8000-000000000005'
+                details: {current_submission_id: '40000000-0000-4000-8000-000000000002', current_submission_revision: 2}
+    Unprocessable:
+      description: 422 malformed JSON/schema/business guard/invalid cursor; no partial effects.
+      headers:
+        X-Request-ID: {$ref: '#/components/headers/RequestId'}
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          examples:
+            transition:
+              value: {code: INVALID_TRANSITION, message: 'Переход из текущего состояния запрещён.', request_id: '70000000-0000-4000-8000-000000000006', details: {current_status: CANCELLED}}
+            blocked:
+              value: {code: WORK_ITEM_BLOCKED, message: 'Нельзя сдать заблокированную задачу.', request_id: '70000000-0000-4000-8000-000000000007', details: {}}
+    Locked:
+      description: 423 reserved restriction contract; no sanction activation or legal restriction workflow in R1.
+      headers:
+        X-Request-ID: {$ref: '#/components/headers/RequestId'}
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {code: RESTRICTION_ACTIVE, message: 'Действует ограничение доступа.', request_id: '70000000-0000-4000-8000-000000000008', details: {}}
+    TooManyRequests:
+      description: 429 server quota exceeded; Retry-After required, retry with same idempotency key.
+      headers:
+        X-Request-ID: {$ref: '#/components/headers/RequestId'}
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        Retry-After: {$ref: '#/components/headers/RetryAfter'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {code: RATE_LIMITED, message: 'Повторите позже.', request_id: '70000000-0000-4000-8000-000000000009', details: {retry_after_seconds: 30}}
+    Unavailable:
+      description: 503 transient/unconfirmed outcome; Retry-After required, repeat same key to resolve committed result.
+      headers:
+        X-Request-ID: {$ref: '#/components/headers/RequestId'}
+        Cache-Control: {$ref: '#/components/headers/NoStore'}
+        Retry-After: {$ref: '#/components/headers/RetryAfter'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {code: TEMPORARILY_UNAVAILABLE, message: 'Сервис временно недоступен.', request_id: '70000000-0000-4000-8000-000000000010', details: {retry_after_seconds: 30}}
+  examples:
+    DraftWorkItem:
+      summary: Initial DRAFT after create, not a response state for every action.
+      value:
+        id: '30000000-0000-4000-8000-000000000001'
+        org_unit_id: '00000000-0000-4000-8000-00000000000a'
+        template_code: pilot_task_v1
+        template_version_id: '00000000-0000-4000-8000-000000000101'
+        requires_acceptance: true
+        title: 'Проверить тестовый сценарий'
+        due_at: '2026-09-16T12:00:00Z'
+        status: DRAFT
+        assignee_user_id: null
+        created_by: '10000000-0000-4000-8000-000000000001'
+        entity_version: 1
+        is_blocked: false
+        blocked_reason: null
+        fields:
+          - field_path: completion_summary
+            value: null
+            field_version: 1
+            updated_at: '2026-09-15T07:41:00Z'
+            updated_by: '10000000-0000-4000-8000-000000000001'
+        submission_revision: 0
+        current_submission: null
+        rework_count: 0
+        created_at: '2026-09-15T07:41:00Z'
+        updated_at: '2026-09-15T07:41:00Z'
+    SubmittedWorkItem:
+      summary: After create, assign, start, field PATCH and submit.
+      value:
+        id: '30000000-0000-4000-8000-000000000001'
+        org_unit_id: '00000000-0000-4000-8000-00000000000a'
+        template_code: pilot_task_v1
+        template_version_id: '00000000-0000-4000-8000-000000000101'
+        requires_acceptance: true
+        title: 'Проверить тестовый сценарий'
+        due_at: '2026-09-16T12:00:00Z'
+        status: SUBMITTED
+        assignee_user_id: '10000000-0000-4000-8000-000000000002'
+        created_by: '10000000-0000-4000-8000-000000000001'
+        entity_version: 5
+        is_blocked: false
+        blocked_reason: null
+        fields:
+          - field_path: completion_summary
+            value: 'Тестовый сценарий проверен.'
+            field_version: 2
+            updated_at: '2026-09-15T07:44:00Z'
+            updated_by: '10000000-0000-4000-8000-000000000002'
+        submission_revision: 1
+        current_submission:
+          id: '40000000-0000-4000-8000-000000000001'
+          revision: 1
+          completion_summary: 'Тестовый сценарий проверен.'
+          field_version: 2
+          entity_version: 5
+          template_version_id: '00000000-0000-4000-8000-000000000101'
+          due_at: '2026-09-16T12:00:00Z'
+          submitted_at: '2026-09-15T07:45:00Z'
+          submitted_by: '10000000-0000-4000-8000-000000000002'
+          submission_marker: ON_TIME
+        rework_count: 0
+        created_at: '2026-09-15T07:41:00Z'
+        updated_at: '2026-09-15T07:45:00Z'

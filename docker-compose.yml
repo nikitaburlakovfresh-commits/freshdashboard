@@ -1,0 +1,67 @@
+# FRESH Portal R1 pilot — local/dev composition. Synthetic data only.
+#
+# The Postgres port is deliberately NOT published to the host (no "ports:"
+# on the db service) — only the app container reaches it over the internal
+# compose network, per the pilot's "no external DB port published" rule.
+#
+# No secrets are baked into this file. PGPASSWORD / SESSION_HMAC_SECRET /
+# CSRF_HMAC_SECRET / SEED_FIXTURE_PASSWORD must come from a local .env file
+# (copy server/.env.example) that is never committed — see .gitignore.
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      POSTGRES_DB: ${PGDATABASE:-fresh_pilot}
+      POSTGRES_USER: ${PGUSER:-fresh_app}
+      POSTGRES_PASSWORD: ${PGPASSWORD:?PGPASSWORD must be set in your .env, no default password}
+    volumes:
+      - fresh_pilot_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-fresh_app} -d ${PGDATABASE:-fresh_pilot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # No "ports:" mapping -- intentionally not reachable from the host.
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    mem_limit: 768m
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${PGDATABASE:-fresh_pilot}
+      PGUSER: ${PGUSER:-fresh_app}
+      PGPASSWORD: ${PGPASSWORD:?PGPASSWORD must be set in your .env, no default password}
+      SESSION_HMAC_SECRET: ${SESSION_HMAC_SECRET:?SESSION_HMAC_SECRET must be set in your .env}
+      CSRF_HMAC_SECRET: ${CSRF_HMAC_SECRET:?CSRF_HMAC_SECRET must be set in your .env}
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:5173}
+    ports:
+      - "127.0.0.1:4000:4000"
+
+volumes:
+  fresh_pilot_pgdata:
+  caddy_data:
+  caddy_config:

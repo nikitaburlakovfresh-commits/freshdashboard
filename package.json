@@ -1,0 +1,21 @@
+{
+  "name": "fresh-portal-r1",
+  "version": "0.1.0-pilot",
+  "private": true,
+  "description": "Fresh Portal R1 engineering pilot \u2014 synthetic, not production readiness.",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=server && npm run build --workspace=client",
+    "dev": "npm run dev --workspace=server",
+    "start": "npm run start --workspace=server",
+    "test": "npm run test --workspace=server",
+    "db:migrate": "npm run db:migrate --workspace=server",
+    "db:seed": "npm run db:seed --workspace=server"
+  },
+  "engines": {
+    "node": ">=22 <23"
+  }
+}
