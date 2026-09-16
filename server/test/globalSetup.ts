@@ -48,7 +48,7 @@ module.exports = async function globalSetup() {
               idempotency_records, submissions, work_item_fields, work_items,
               sessions RESTART IDENTITY CASCADE`,
     );
-    await client.query('TRUNCATE report_staging_access,report_staging_files,report_staging_batches');
+    await client.query('TRUNCATE report_review_revisions,report_staging_access,report_staging_files,report_staging_batches');
     await client.query('TRUNCATE administrator_bootstrap');
     await client.query('TRUNCATE org_change_proposals, organization_editor_provisioning');
     await client.query("DELETE FROM role_permissions WHERE role_code='SUPER_ADMIN' AND permission_code<>'organization.directory.review'");
@@ -56,7 +56,7 @@ module.exports = async function globalSetup() {
     await client.query(`DELETE FROM app_users`);
     // Synthetic metadata only. No deployed database is reachable through the
     // local/name/version guard above. Immutable history is never disabled.
-    await client.query('TRUNCATE report_staging_files,report_staging_batches,org_directory_name_history, org_directory_affiliation_history, org_directory_units');
+    await client.query('TRUNCATE report_review_revisions,report_staging_files,report_staging_batches,org_directory_name_history, org_directory_affiliation_history, org_directory_units');
     await client.query(`INSERT INTO org_directory_units
       (id,code,kind,lifecycle_state,is_demo,demo_locked,effective_from,pilot_org_unit_id)
       SELECT id,code,'ORG_UNIT','ACTIVE',true,true,'2020-01-01',id FROM org_units`);

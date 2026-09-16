@@ -71,7 +71,9 @@ export default function PreparedReportsPage() {
     <section className="org-scope"><Icon name="shield"/><div><strong>Карантин → проверка → согласование</strong>
       <p>Только два агрегатных формата QLIK. Без VIN, сотрудников и детализации. Антивирусная проверка ещё не подключена:
         исходники не доступны для скачивания. Предпросмотр не снимает карантин.</p>
-      <p>Локальный обзор сети остаётся отдельным: <Link to="/">открыть текущий дашборд</Link>. Его цифры здесь не перезаписываются.</p></div></section>
+      <p><Link to="/saved-network">Открыть серверный обзор сети · PREVIEW</Link> — карточки из сохранённого пакета.
+        <Link to="/"> Локальный дашборд</Link> остаётся отдельным; его цифры не перезаписываются.</p>
+      <p>Ручная загрузка — тестовый и резервный канал. Облачная доставка QLIK по расписанию будет подключена отдельно.</p></div></section>
     <div className="reports-feedback" aria-live="polite">{error && <p className="org-error" role="alert">{error}</p>}{notice && <p>{notice}</p>}
       {busy && <p role="status">Выполняется запрос к серверу…</p>}</div>
     <div className="org-editor-actions"><button className="btn" onClick={refresh} disabled={busy}>Обновить доступ и список</button></div>
@@ -103,6 +105,8 @@ export default function PreparedReportsPage() {
       </section>
       {selected && <section className="portal-panel reports-detail"><div className="portal-eyebrow">03 / ПРОВЕРКА ПАКЕТА</div><h2>{stagingStatus(selected)}</h2>
         <p>{periodLabel(selected.period)} · рабочие показатели не изменены</p>
+        {selected.preview?.valid_structure&&<div className="org-editor-actions"><Link className="btn" to={`/prepared-reports/${selected.id}/review`}>Проверить период и привязки</Link>
+          <Link className="btn reports-primary" to={`/saved-network/${selected.id}`}>Открыть обзор сети · PREVIEW →</Link></div>}
         <dl className="org-facts"><div><dt>Идентификатор / версия</dt><dd>{selected.id} / {selected.version}</dd></div>
           <div><dt>Парсер / mapping</dt><dd>{selected.parser_version} / {selected.mapping_version}</dd></div>
           <div><dt>SHA-256 предпросмотра</dt><dd>{selected.preview_hash ?? 'Проверка ещё не сохранена'}</dd></div>

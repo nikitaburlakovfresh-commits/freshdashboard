@@ -10,6 +10,8 @@ import DashboardPage from './pages/DashboardPage';
 import PortalModulePage from './pages/PortalModulePage';
 import OrganizationPage from './pages/OrganizationPage';
 import PreparedReportsPage from './pages/PreparedReportsPage';
+import SavedNetworkPage,{SavedBranchPage} from './pages/SavedNetworkPage';
+import ReportReviewPage from './pages/ReportReviewPage';
 
 export default function App() {
   const { me, loading } = useAuth();
@@ -40,6 +42,10 @@ export default function App() {
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/organization" element={<OrganizationPage />} />
         <Route path="/prepared-reports" element={<PreparedReportsPage />} />
+        <Route path="/prepared-reports/:id/review" element={<ReportReviewPage />} />
+        <Route path="/saved-network" element={<SavedNetworkPage />} />
+        <Route path="/saved-network/:id" element={<SavedNetworkPage />} />
+        <Route path="/saved-network/:id/branches/:itemId" element={<SavedBranchPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

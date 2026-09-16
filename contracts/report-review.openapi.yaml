@@ -1,0 +1,233 @@
+openapi: 3.0.3
+info:
+  title: FRESH Saved Report Draft Review and Preview
+  version: 0.1.0-draft
+  description: >-
+    Extension of report-staging.openapi.yaml. PRIVATE own-batch projection only.
+    Every operation requires current individual bootstrap SUPER_ADMIN NETWORK
+    grant, directory.review and separately provisioned data_source.probe.
+    No new permission, no RM/RF all-network data, no publication or download.
+    Response models are mirrored in server/src/reporting/shared/reviewModel.ts.
+servers: [{url: /api/v1}]
+security: [{sessionCookie: []}]
+paths:
+  /report-batches/{id}/review:
+    parameters: [{$ref: '#/components/parameters/Batch'}]
+    get:
+      operationId: getReportReview
+      summary: Own draft, stable source-row UUIDs, current same-root candidates and last 20 revisions
+      x-permission: data_source.probe
+      x-scope: CURRENT_ADMIN_OWN_STAGING
+      responses:
+        '200':
+          description: DRAFT only; candidates do not prove historical affiliation
+          headers:
+            Cache-Control: {schema: {type: string, enum: ['no-store, private']}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Review'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: saveReportReview
+      summary: Append draft revision, audit, NONE outbox and idempotent receipt in one transaction
+      x-permission: data_source.probe
+      x-scope: CURRENT_ADMIN_OWN_STAGING
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, pattern: '^[A-Za-z0-9._:-]{16,128}$'}}
+        - {name: X-CSRF-Token, in: header, required: true, schema: {type: string}}
+        - {name: Origin, in: header, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        description: Maximum 32 KiB. Edits are sparse; unmentioned proposals retained, null clears.
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Command'}
+      responses:
+        '200':
+          description: Immutable small receipt; replay rechecks current authorization
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batch_id,version,revision_hash,status,canonical_applied]
+                properties:
+                  batch_id: {type: string, format: uuid}
+                  version: {type: integer, minimum: 1, maximum: 1000}
+                  revision_hash: {type: string, pattern: '^[a-f0-9]{64}$'}
+                  status: {type: string, enum: [DRAFT]}
+                  canonical_applied: {type: boolean, enum: [false]}
+        default: {$ref: '#/components/responses/Error'}
+  /report-batches/{id}/overview:
+    parameters: [{$ref: '#/components/parameters/Batch'}]
+    get:
+      operationId: getSavedOverview
+      summary: Own immutable report totals and source-row cards, without merging report formats
+      x-permission: data_source.probe
+      x-scope: CURRENT_ADMIN_OWN_STAGING
+      responses:
+        '200':
+          description: PREVIEW; exact SavedOverview model, no derived metrics or canonical writes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batch_id,mode,canonical_applied,commit_available,malware_scan,preview_hash,review,reports,rows,files,controls,comparison]
+                properties:
+                  batch_id: {type: string, format: uuid}
+                  network_id: {type: string, format: uuid}
+                  mode: {type: string, enum: [PREVIEW]}
+                  canonical_applied: {type: boolean, enum: [false]}
+                  commit_available: {type: boolean, enum: [false]}
+                  malware_scan: {type: string, enum: [NOT_SCANNED]}
+                  preview_hash: {type: string}
+                  parser_version: {type: string}
+                  created_at: {type: string, format: date-time}
+                  original_period: {type: object, description: Immutable original staging metadata, not replaced by draft}
+                  review: {$ref: '#/components/schemas/Review'}
+                  rows: {type: array, items: {$ref: '#/components/schemas/SourceRow'}}
+                  reports: {type: array, maxItems: 2, items: {type: object, description: Existing closed Report model from reporting/shared/reportModel.ts}}
+                  files: {type: array, maxItems: 2, items: {type: object, description: Immutable id/display_name/content_hash/byte_size manifest}}
+                  controls: {type: array, items: {type: object, description: Existing immutable per-source reconcile result}}
+                  comparison: {type: array, items: {type: string}}
+        default: {$ref: '#/components/responses/Error'}
+  /report-batches/{id}/branches/{itemId}:
+    parameters:
+      - {$ref: '#/components/parameters/Batch'}
+      - {name: itemId, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getSavedBranch
+      summary: Resolve one exact source-row UUID, not an activated business branch
+      x-permission: data_source.probe
+      x-scope: CURRENT_ADMIN_OWN_STAGING
+      responses:
+        '200':
+          description: PREVIEW; exact SavedBranch model, one source row and batch provenance
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batch_id,mode,canonical_applied,preview_hash,review_version,period,mapping,report,row,files]
+                properties:
+                  batch_id: {type: string, format: uuid}
+                  mode: {type: string, enum: [PREVIEW]}
+                  canonical_applied: {type: boolean, enum: [false]}
+                  preview_hash: {type: string}
+                  review_version: {type: integer, minimum: 0}
+                  period: {$ref: '#/components/schemas/Period'}
+                  mapping: {$ref: '#/components/schemas/SourceRow'}
+                  report: {type: object, description: Report kind/file/sheet/columns/optional stockDate; no other rows or total}
+                  row: {type: object, description: Exact ReportRow name/key/row/values; null preserved}
+                  files: {type: array, maxItems: 2, items: {type: object, description: Immutable batch manifest}}
+        default: {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    sessionCookie: {type: apiKey, in: cookie, name: __Host-fresh_session}
+  parameters:
+    Batch: {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+  responses:
+    Error:
+      description: >-
+        401 missing/expired session; 403 denied capability, Origin or CSRF;
+        404 foreign/missing batch/row; 409 stale version/hash or changed idempotency
+        payload; 422 invalid/unprobed source, schema/date/mapping/size/version cap;
+        429 rate limit with Retry-After; 503 temporary failure. Common envelope.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [code,message,request_id,details]
+            properties:
+              code: {type: string}
+              message: {type: string}
+              request_id: {type: string}
+              details: {type: object}
+  schemas:
+    Period:
+      type: object
+      nullable: true
+      additionalProperties: false
+      required: [start,end,planStart,planEnd,basis]
+      description: Null means unknown. Explicit inclusive display dates are PROPOSED, never CONFIRMED.
+      properties:
+        start: {type: string, format: date}
+        end: {type: string, format: date}
+        planStart: {type: string, description: ISO date or empty; both plan dates supplied or both empty}
+        planEnd: {type: string}
+        basis: {type: string, minLength: 10, maxLength: 500}
+    Command:
+      type: object
+      additionalProperties: false
+      required: [expected_version,preview_hash,period,edits,reason]
+      properties:
+        expected_version: {type: integer, minimum: 0, maximum: 999}
+        preview_hash: {type: string, pattern: '^[a-f0-9]{64}$'}
+        period: {$ref: '#/components/schemas/Period'}
+        reason: {type: string, minLength: 10, maxLength: 500}
+        edits:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [item_id,org_unit_id]
+            properties:
+              item_id: {type: string, format: uuid}
+              org_unit_id: {type: string, format: uuid, nullable: true}
+    SourceRow:
+      type: object
+      required: [item_id,report_kind,source_name,source_row,org_unit_id,status]
+      properties:
+        item_id: {type: string, format: uuid}
+        report_kind: {type: string, enum: [summary,sales]}
+        source_name: {type: string}
+        source_row: {type: integer, minimum: 3}
+        org_unit_id: {type: string, format: uuid, nullable: true}
+        status: {type: string, enum: [UNRESOLVED,PROPOSED,STALE]}
+    Review:
+      type: object
+      required: [batch_id,preview_hash,status,canonical_applied,current,rows,candidates,history]
+      properties:
+        batch_id: {type: string, format: uuid}
+        preview_hash: {type: string}
+        status: {type: string, enum: [DRAFT]}
+        canonical_applied: {type: boolean, enum: [false]}
+        current:
+          type: object
+          required: [version,period,mappings,revision_hash,created_at,reason]
+          properties:
+            version: {type: integer, minimum: 0, maximum: 1000}
+            period: {$ref: '#/components/schemas/Period'}
+            mappings:
+              type: array
+              maxItems: 1000
+              items:
+                type: object
+                required: [item_id,org_unit_id]
+                properties:
+                  item_id: {type: string, format: uuid}
+                  org_unit_id: {type: string, format: uuid}
+            revision_hash: {type: string, nullable: true}
+            created_at: {type: string, format: date-time, nullable: true}
+            reason: {type: string}
+        rows: {type: array, maxItems: 1000, items: {$ref: '#/components/schemas/SourceRow'}}
+        candidates:
+          type: array
+          items:
+            type: object
+            required: [id,code,display_name,lifecycle_state]
+            properties:
+              id: {type: string, format: uuid}
+              code: {type: string}
+              display_name: {type: string}
+              lifecycle_state: {type: string, enum: [PRE_LAUNCH,ACTIVE,PAUSED]}
+        history:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [version,created_at,reason,revision_hash]
+            properties:
+              version: {type: integer}
+              created_at: {type: string, format: date-time}
+              reason: {type: string}
+              revision_hash: {type: string}
