@@ -135,9 +135,37 @@ describe('ORG-DB: PostgreSQL 16 effective history constraints', () => {
       await expect(client.query(sql,params)).rejects.toMatchObject({ code });
     } finally { await client.query('ROLLBACK'); client.release(); }
   }
-  test('ORG-DB-01 existing pilot identities still have exact A/B IDs and restricted roles', async () => {
+  test('ORG-DB-01 existing pilot identities still have exact A/B IDs; role catalog is data (TZ 3.2A), not a frozen enum', async () => {
     expect((await pool.query('SELECT id FROM org_units ORDER BY code')).rows.map(r=>r.id)).toEqual([A,B]);
-    expect((await pool.query('SELECT code FROM roles ORDER BY code')).rows.map(r=>r.code)).toEqual(['REGIONAL_MANAGER','RF','SUPER_ADMIN']);
+    // TZ 3.2A: the role catalog is seeded data meant to grow via migration/admin UI,
+    // not a closed set — so this asserts the original pilot roles are still present
+    // and protected (is_system), not that no other role may ever exist.
+    const roles = (await pool.query('SELECT code, is_system FROM roles ORDER BY code')).rows;
+    const byCode: Record<string, boolean> = {};
+    for (const r of roles) byCode[r.code] = r.is_system;
+    expect(byCode['REGIONAL_MANAGER']).toBe(true);
+    expect(byCode['RF']).toBe(true);
+    expect(byCode['SUPER_ADMIN']).toBe(true);
+  });
+  test('ORG-DB-01b TZ 3.2A.6: system role code/scope_kind is immutable; display_name may still change', async () => {
+    await rejected("UPDATE roles SET code='HACKED' WHERE code='RF'",[]);
+    await rejected("UPDATE roles SET scope_kind='NETWORK' WHERE code='RF'",[]);
+    await rejected('DELETE FROM roles WHERE code=$1',['RF']);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("UPDATE roles SET display_name='Руководитель филиала (операционный, тест)' WHERE code='RF'");
+      await client.query('ROLLBACK');
+    } finally { client.release(); }
+  });
+  test('ORG-DB-01c TZ 3.2A: full branch/UC role catalog from the TZ table is present and system-protected', async () => {
+    const expected = ['ACCOUNTANT','ACTING_BH','ACTING_RF','BH','COMMERCIAL_DIRECTOR','FINANCE_HEAD',
+      'FRESH_ACADEMY','HR_BRANCH','HR_UC','KSO_HEAD','LAUNCH_TEAM','LEGAL_BRANCH','LEGAL_UC','MARKETING',
+      'OWNER_REP','QUALITY_CONTROL','REGIONAL_MANAGER','RF','RKSO','ROO','ROP','SHARED_LOGIN','STOCK',
+      'SUPER_ADMIN','TECHNICAL_COORDINATOR'];
+    const rows = (await pool.query('SELECT code, is_system FROM roles ORDER BY code')).rows;
+    expect(rows.map(r => r.code)).toEqual(expected);
+    expect(rows.every(r => r.is_system)).toBe(true);
   });
   test('ORG-DB-02 overlapping name/affiliation intervals are rejected by exclusion constraints', async () => {
     await rejected("INSERT INTO org_directory_name_history(org_unit_id,display_name,effective_from,change_reason) VALUES($1,'Overlap','2025-01-01','Test')",[A],'23P01');

@@ -36,17 +36,58 @@ export async function getWorkItemRow(client: PoolClient, id: string): Promise<Wo
   return res.rows[0];
 }
 
-export async function lockField(client: PoolClient, workItemId: string) {
+// Locks a single named field row for CAS (patchWorkItemFields writes one
+// field per call). Returns undefined if the template has no such field
+// (caller maps that to VALIDATION_ERROR, never guessing a default path).
+export async function lockFieldByPath(client: PoolClient, workItemId: string, fieldPath: string) {
   const res = await client.query(
-    'SELECT * FROM work_item_fields WHERE work_item_id = $1 FOR UPDATE',
-    [workItemId],
+    'SELECT * FROM work_item_fields WHERE work_item_id = $1 AND field_path = $2 FOR UPDATE',
+    [workItemId, fieldPath],
   );
   return res.rows[0];
 }
 
-export async function getField(client: PoolClient, workItemId: string) {
-  const res = await client.query('SELECT * FROM work_item_fields WHERE work_item_id = $1', [workItemId]);
-  return res.rows[0];
+// Locks every field row belonging to a work item, in a stable order.
+// submitWorkItem uses this: with templates.field_schema now able to
+// describe more than one field, a snapshot at submit time must validate
+// and capture ALL of them together, not just one hardcoded field.
+export async function lockAllFields(client: PoolClient, workItemId: string) {
+  const res = await client.query(
+    'SELECT * FROM work_item_fields WHERE work_item_id = $1 ORDER BY field_path FOR UPDATE',
+    [workItemId],
+  );
+  return res.rows;
+}
+
+export async function getFields(client: PoolClient, workItemId: string) {
+  const res = await client.query('SELECT * FROM work_item_fields WHERE work_item_id = $1 ORDER BY field_path', [workItemId]);
+  return res.rows;
+}
+
+export interface TemplateRow {
+  id: string;
+  code: string;
+  version: number;
+  requires_acceptance: boolean;
+  field_schema_version: number;
+  display_name: string;
+  is_system: boolean;
+  field_schema: { field_path: string; label: string; type: string; required: boolean; min_chars: number; max_chars: number }[];
+  field_ownership_rules: Record<string, string>;
+  field_visibility_rules: Record<string, string[]>;
+}
+
+// Templates are append-only (templates_immutable trigger blocks UPDATE/
+// DELETE outright), so a plain un-locked read is always consistent --
+// there is no concurrent-mutation case to guard against.
+export async function getTemplateByCode(client: PoolClient, code: string): Promise<TemplateRow | null> {
+  const res = await client.query('SELECT * FROM templates WHERE code = $1', [code]);
+  return res.rows[0] ?? null;
+}
+
+export async function getTemplateById(client: PoolClient, id: string): Promise<TemplateRow | null> {
+  const res = await client.query('SELECT * FROM templates WHERE id = $1', [id]);
+  return res.rows[0] ?? null;
 }
 
 export async function getCurrentSubmission(client: PoolClient, workItem: WorkItemRow) {

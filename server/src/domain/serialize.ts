@@ -4,11 +4,17 @@ function toIso(v: Date | string | null): string | null {
   return d.toISOString().replace(/\.000Z$/, 'Z');
 }
 
-export function serializeWorkItem(row: any, field: any, submission: any | null) {
+// `template` is the templates row referenced by row.template_version_id --
+// template_code is read from it instead of a hardcoded literal, so this
+// stays correct once more than one template exists (§13.13.1). `fields` is
+// every work_item_fields row for this work item, in field_path order --
+// today that is always exactly the one field pilot_task_v1 defines, but the
+// shape no longer assumes that.
+export function serializeWorkItem(row: any, template: { code: string }, fields: any[], submission: any | null) {
   return {
     id: row.id,
     org_unit_id: row.org_unit_id,
-    template_code: 'pilot_task_v1',
+    template_code: template.code,
     template_version_id: row.template_version_id,
     requires_acceptance: row.requires_acceptance,
     title: row.title,
@@ -19,15 +25,13 @@ export function serializeWorkItem(row: any, field: any, submission: any | null) 
     entity_version: Number(row.entity_version),
     is_blocked: row.is_blocked,
     blocked_reason: row.blocked_reason,
-    fields: [
-      {
-        field_path: 'completion_summary',
-        value: field.value,
-        field_version: Number(field.field_version),
-        updated_at: toIso(field.updated_at),
-        updated_by: field.updated_by,
-      },
-    ],
+    fields: fields.map((field) => ({
+      field_path: field.field_path,
+      value: field.value,
+      field_version: Number(field.field_version),
+      updated_at: toIso(field.updated_at),
+      updated_by: field.updated_by,
+    })),
     submission_revision: row.submission_revision,
     current_submission: submission ? serializeSubmission(submission) : null,
     rework_count: row.rework_count,
@@ -41,6 +45,7 @@ export function serializeSubmission(s: any) {
     id: s.id,
     revision: s.revision,
     completion_summary: s.completion_summary,
+    field_values: s.field_values,
     field_version: Number(s.field_version),
     entity_version: Number(s.entity_version),
     template_version_id: s.template_version_id,

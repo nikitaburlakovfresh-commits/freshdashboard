@@ -3,12 +3,13 @@ import { withTransaction } from '../db/pool';
 import { ApiError } from '../util/errors';
 import { AuthedUser } from '../auth/session';
 import { getEffectiveGrants, isActiveRfWithGrant } from './grants';
-import { lockWorkItem, getWorkItemRow, lockField, getField, getCurrentSubmission, WorkItemRow } from './workItemRepo';
+import {
+  lockWorkItem, getWorkItemRow, lockFieldByPath, lockAllFields, getFields, getCurrentSubmission,
+  getTemplateByCode, getTemplateById, TemplateRow, WorkItemRow,
+} from './workItemRepo';
 import { serializeWorkItem } from './serialize';
 import { writeAuditAndOutbox } from './auditOutbox';
 import { beginIdempotent, completeIdempotent, IdempotentOperation } from './idempotency';
-
-const TEMPLATE_ID = '00000000-0000-4000-8000-000000000101';
 
 export interface ActorContext {
   authUser: AuthedUser;
@@ -28,9 +29,30 @@ async function currentRfOrgIds(client: PoolClient, userId: string): Promise<Set<
 }
 
 async function loadCard(client: PoolClient, workItem: WorkItemRow) {
-  const field = await getField(client, workItem.id);
+  const template = await getTemplateById(client, workItem.template_version_id);
+  if (!template) throw new ApiError('NOT_FOUND', 'Объект не найден.');
+  const fields = await getFields(client, workItem.id);
   const submission = await getCurrentSubmission(client, workItem);
-  return serializeWorkItem(workItem, field, submission);
+  return serializeWorkItem(workItem, template, fields, submission);
+}
+
+// Field def lookup + shared validation, driven by templates.field_schema
+// (§13.13.1) instead of a hardcoded 'completion_summary'/1-4000 pair.
+function findFieldDef(template: TemplateRow, fieldPath: string) {
+  return template.field_schema.find((f) => f.field_path === fieldPath);
+}
+function validateFieldValue(fieldDef: { label: string; min_chars: number; max_chars: number }, value: unknown, path: string): string {
+  if (
+    typeof value !== 'string' ||
+    value.length < fieldDef.min_chars ||
+    value.length > fieldDef.max_chars ||
+    !/\S/.test(value)
+  ) {
+    throw new ApiError('VALIDATION_ERROR', `Значение обязательно, ${fieldDef.min_chars}-${fieldDef.max_chars} символов, не только пробелы.`, {
+      issues: [{ path, issue: `${fieldDef.min_chars}-${fieldDef.max_chars} non-whitespace` }],
+    });
+  }
+  return value;
 }
 
 /** Shared idempotency wrapper for all business mutations except auth. */
@@ -129,10 +151,21 @@ export async function listWorkItems(
     `;
     const res = await client.query(sql, values);
     const items = [];
+    // Templates are immutable once created, so caching by id across this
+    // page's rows is safe and avoids one lookup per row for list views
+    // that repeat the same (today, only) template many times over.
+    const templateCache = new Map<string, TemplateRow>();
     for (const row of res.rows) {
-      const field = await getField(client, row.id);
+      let template = templateCache.get(row.template_version_id);
+      if (!template) {
+        const found = await getTemplateById(client, row.template_version_id);
+        if (!found) throw new ApiError('NOT_FOUND', 'Объект не найден.');
+        template = found;
+        templateCache.set(row.template_version_id, template);
+      }
+      const fields = await getFields(client, row.id);
       const submission = await getCurrentSubmission(client, row);
-      items.push(serializeWorkItem(row, field, submission));
+      items.push(serializeWorkItem(row, template, fields, submission));
     }
     const nextCursor =
       res.rows.length === params.limit
@@ -226,14 +259,31 @@ export async function createWorkItem(
   body: { org_unit_id: string; template_code: string; title: string; due_at: string },
 ) {
   requireIdempotencyKey(idemKey);
-  if (body.template_code !== 'pilot_task_v1') {
-    throw new ApiError('VALIDATION_ERROR', 'Неизвестный шаблон.', { issues: [{ path: 'template_code', issue: 'must be pilot_task_v1' }] });
-  }
   validateTitle(body.title);
   const dueAt = validateUtcTimestamp(body.due_at, 'due_at');
 
   return withTransaction(async (client) => {
     return withIdempotency(client, ctx.authUser.userId, 'createWorkItem', idemKey, null, body, async () => {
+      // Template lookup is now data-driven (§13.13.1) instead of a hardcoded
+      // string compare, but templates are append-only/immutable so, like the
+      // grants re-read below, doing it here right before the mutating INSERT
+      // carries no staleness risk -- it can never have changed mid-request.
+      if (typeof body.template_code !== 'string') {
+        throw new ApiError('VALIDATION_ERROR', 'Неизвестный шаблон.', { issues: [{ path: 'template_code', issue: 'required' }] });
+      }
+      const template = await getTemplateByCode(client, body.template_code);
+      if (!template) {
+        throw new ApiError('VALIDATION_ERROR', 'Неизвестный шаблон.', { issues: [{ path: 'template_code', issue: 'unknown template_code' }] });
+      }
+      // Multi-field templates need a submissions snapshot contract that does
+      // not exist yet (migration 007 header) -- fail closed here rather than
+      // silently letting submitWorkItem drop every field but one.
+      if (template.field_schema.length !== 1) {
+        throw new ApiError('VALIDATION_ERROR', 'Шаблон с несколькими полями пока не поддержан для создания задач.', {
+          issues: [{ path: 'template_code', issue: 'multi-field templates not yet supported' }],
+        });
+      }
+
       // Grants are re-read HERE, inside the idempotency advisory lock and
       // as the very last check before the mutating INSERT — not once at
       // the top of the transaction — so a grant revoked concurrently right
@@ -248,13 +298,15 @@ export async function createWorkItem(
       const inserted = await client.query(
         `INSERT INTO work_items (org_unit_id, template_version_id, title, due_at, created_by)
          VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [body.org_unit_id, TEMPLATE_ID, body.title, dueAt, ctx.authUser.userId],
+        [body.org_unit_id, template.id, body.title, dueAt, ctx.authUser.userId],
       );
       const workItem = inserted.rows[0];
-      await client.query(
-        `INSERT INTO work_item_fields (work_item_id, org_unit_id, updated_by) VALUES ($1, $2, $3)`,
-        [workItem.id, workItem.org_unit_id, ctx.authUser.userId],
-      );
+      for (const fieldDef of template.field_schema) {
+        await client.query(
+          `INSERT INTO work_item_fields (work_item_id, org_unit_id, field_path, updated_by) VALUES ($1, $2, $3, $4)`,
+          [workItem.id, workItem.org_unit_id, fieldDef.field_path, ctx.authUser.userId],
+        );
+      }
 
       await writeAuditAndOutbox(client, {
         actorUserId: ctx.authUser.userId,
@@ -461,22 +513,16 @@ export async function patchWorkItemFields(
   if (!Array.isArray(body.changes) || body.changes.length !== 1) {
     throw new ApiError('VALIDATION_ERROR', 'Ожидается ровно одно изменение поля.', { issues: [{ path: 'changes', issue: 'exactly one item' }] });
   }
+  // Batching >1 change per call is deferred until createWorkItem accepts
+  // multi-field templates (migration 007 header) -- keeping this at
+  // exactly one change avoids a half-applied multi-field patch contract.
   const change = body.changes[0];
-  if (change.field_path !== 'completion_summary') {
-    throw new ApiError('VALIDATION_ERROR', 'Неизвестное поле.', { issues: [{ path: 'changes[0].field_path', issue: 'must be completion_summary' }] });
+  if (typeof change.field_path !== 'string') {
+    throw new ApiError('VALIDATION_ERROR', 'Неизвестное поле.', { issues: [{ path: 'changes[0].field_path', issue: 'required' }] });
   }
+  const fieldPath = change.field_path;
   const expectedFieldVersion = requireVersion(change.expected_version);
-  if (
-    typeof change.new_value !== 'string' ||
-    change.new_value.length < 1 ||
-    change.new_value.length > 4000 ||
-    !/\S/.test(change.new_value)
-  ) {
-    throw new ApiError('VALIDATION_ERROR', 'Значение обязательно, 1-4000 символов, не только пробелы.', {
-      issues: [{ path: 'changes[0].new_value', issue: '1-4000 non-whitespace' }],
-    });
-  }
-  const newValue = change.new_value;
+  const rawNewValue = change.new_value;
 
   return withTransaction(async (client) => {
     return withIdempotency(client, ctx.authUser.userId, 'patchWorkItemFields', idemKey, workItemId, body, async () => {
@@ -492,7 +538,23 @@ export async function patchWorkItemFields(
         throw new ApiError('INVALID_TRANSITION', 'Переход из текущего состояния запрещён.', { current_status: workItem.status as any });
       }
 
-      const field = await lockField(client, workItemId);
+      // Field def + ownership are read from the template (§13.13.1) instead
+      // of a hardcoded 'completion_summary' compare, so an unknown field_path
+      // or one this template does not grant RF write access to is rejected
+      // the same way regardless of which template the work item uses.
+      const template = await getTemplateById(client, workItem.template_version_id);
+      if (!template) throw new ApiError('NOT_FOUND', 'Объект не найден.');
+      const fieldDef = findFieldDef(template, fieldPath);
+      if (!fieldDef) {
+        throw new ApiError('VALIDATION_ERROR', 'Неизвестное поле.', { issues: [{ path: 'changes[0].field_path', issue: 'unknown field_path for this template' }] });
+      }
+      if (template.field_ownership_rules[fieldPath] !== 'RF') {
+        throw new ApiError('FORBIDDEN_FIELD', 'Действие с полем не разрешено.');
+      }
+      const newValue = validateFieldValue(fieldDef, rawNewValue, 'changes[0].new_value');
+
+      const field = await lockFieldByPath(client, workItemId, fieldPath);
+      if (!field) throw new ApiError('NOT_FOUND', 'Объект не найден.');
       if (field.field_version !== expectedFieldVersion) {
         // Field CAS reject -> FIELD_PATCH_REJECTED security/audit event (§4).
         await writeAuditAndOutbox(client, {
@@ -516,7 +578,7 @@ export async function patchWorkItemFields(
           current_entity_version: workItem.entity_version,
           conflicts: [
             {
-              field_path: 'completion_summary',
+              field_path: fieldPath,
               expected_version: expectedFieldVersion,
               current_version: field.field_version,
               current_value: field.value,
@@ -528,8 +590,8 @@ export async function patchWorkItemFields(
       const previousValue = field.value;
       await client.query(
         `UPDATE work_item_fields SET value = $1, field_version = field_version + 1, updated_by = $2, updated_at = now()
-         WHERE work_item_id = $3`,
-        [newValue, ctx.authUser.userId, workItemId],
+         WHERE work_item_id = $3 AND field_path = $4`,
+        [newValue, ctx.authUser.userId, workItemId, fieldPath],
       );
       const updatedWi = await client.query(
         `UPDATE work_items SET entity_version = entity_version + 1, updated_at = now() WHERE id = $1 RETURNING *`,
@@ -547,14 +609,14 @@ export async function patchWorkItemFields(
         aggregateId: workItemId,
         aggregateVersion: newRow.entity_version,
         requestId: ctx.requestId,
-        beforeState: { field_version: field.field_version, value: previousValue },
-        afterState: { field_version: field.field_version + 1, value: newValue },
+        beforeState: { field_path: fieldPath, field_version: field.field_version, value: previousValue },
+        afterState: { field_path: fieldPath, field_version: field.field_version + 1, value: newValue },
         resolution: 'APPLIED',
         retentionClass: 'WORK_ITEM_STANDARD',
         ip: ctx.ip,
         userAgent: ctx.userAgent,
         eventType: 'work_item.fields_patched',
-        payload: { work_item_id: workItemId, field_path: 'completion_summary' },
+        payload: { work_item_id: workItemId, field_path: fieldPath },
       });
 
       const card = await loadCard(client, newRow);
@@ -590,10 +652,25 @@ export async function submitWorkItem(ctx: ActorContext, workItemId: string, idem
       if (workItem.is_blocked) {
         throw new ApiError('WORK_ITEM_BLOCKED', 'Нельзя сдать заблокированную задачу.');
       }
-      const field = await lockField(client, workItemId);
-      if (!field.value || !/\S/.test(field.value)) {
-        throw new ApiError('COMPLETION_REQUIRED', 'Результат должен быть заполнен перед сдачей.');
+      // Every field on this work item is locked and validated together at
+      // submit time (not just one hardcoded field) so a future multi-field
+      // template cannot be submitted with some fields silently unfilled.
+      // Today templates only ever define one field, so this is exactly one
+      // row -- but the loop, not the field count, is what makes the check
+      // real for later phases.
+      const fields = await lockAllFields(client, workItemId);
+      for (const f of fields) {
+        if (!f.value || !/\S/.test(f.value)) {
+          throw new ApiError('COMPLETION_REQUIRED', 'Результат должен быть заполнен перед сдачей.');
+        }
       }
+      const fieldValues: Record<string, string> = {};
+      for (const f of fields) fieldValues[f.field_path] = f.value;
+      // completion_summary stays the source of truth for this release's
+      // single-field templates (contract column, read by every existing
+      // reviewer/report query); field_values is the forward-compatible
+      // snapshot migration 007 added alongside it, not a replacement yet.
+      const primaryField = fields.find((f) => f.field_path === 'completion_summary') ?? fields[0];
 
       const nextRevision = workItem.submission_revision + 1;
       const now = new Date();
@@ -607,14 +684,15 @@ export async function submitWorkItem(ctx: ActorContext, workItemId: string, idem
       // transiently violates the constraint.
       const submissionRes = await client.query(
         `INSERT INTO submissions (work_item_id, org_unit_id, revision, completion_summary, field_version,
-             entity_version, template_version_id, due_at, submitted_by, submission_marker)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+             field_values, entity_version, template_version_id, due_at, submitted_by, submission_marker)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
         [
           workItemId,
           workItem.org_unit_id,
           nextRevision,
-          field.value,
-          field.field_version,
+          primaryField.value,
+          primaryField.field_version,
+          JSON.stringify(fieldValues),
           nextEntityVersion,
           workItem.template_version_id,
           workItem.due_at,
@@ -995,7 +1073,10 @@ async function mapAuditToHistoryEntry(client: PoolClient, entry: any) {
   let fieldChange = null;
   if (entry.action === 'FIELDS_PATCH') {
     fieldChange = {
-      field_path: 'completion_summary',
+      // patchWorkItemFields now stores field_path in the audit before/after
+      // state itself, so this reads back whichever field actually changed
+      // instead of assuming completion_summary.
+      field_path: after?.field_path ?? before?.field_path ?? 'completion_summary',
       previous_value: before?.value ?? null,
       new_value: after?.value,
       field_version: after?.field_version,
