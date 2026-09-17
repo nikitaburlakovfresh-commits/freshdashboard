@@ -59,6 +59,10 @@ function validateFieldValue(fieldDef: FieldDef, value: unknown, path: string): s
       return validateDateField(value, path);
     case 'text':
       return validateTextField(fieldDef, value, path);
+    case 'select':
+      return validateSelectField(fieldDef, value, path);
+    case 'repeatable_group':
+      return validateRepeatableGroupField(fieldDef, value, path);
     default:
       // Fail closed: an unrecognized type is a template authoring bug, not
       // something to silently accept as free text.
@@ -101,6 +105,74 @@ function validateNumberField(fieldDef: FieldDef, value: unknown, path: string): 
     throw new ApiError('VALIDATION_ERROR', `Значение должно быть не больше ${fieldDef.max_value}.`, { issues: [{ path, issue: `must be <= ${fieldDef.max_value}` }] });
   }
   return value;
+}
+
+function validateSelectField(fieldDef: FieldDef, value: unknown, path: string): string {
+  const options = fieldDef.options ?? [];
+  if (options.length === 0) {
+    // A 'select' field with no options is a template authoring bug, not
+    // something a submitter can ever satisfy -- fail closed rather than
+    // accepting arbitrary text.
+    throw new ApiError('VALIDATION_ERROR', 'Шаблон поля не содержит вариантов выбора.', { issues: [{ path, issue: 'select field has no options' }] });
+  }
+  if (typeof value !== 'string' || !options.includes(value)) {
+    throw new ApiError('VALIDATION_ERROR', 'Ожидается один из предусмотренных вариантов.', { issues: [{ path, issue: `must be one of: ${options.join(', ')}` }] });
+  }
+  return value;
+}
+
+// A repeatable_group field's value is a JSON-stringified array of item
+// objects (e.g. one "ТС"/"звонок"/"клиент" card per item), still stored in the
+// same work_item_fields.value text column every scalar field type
+// already uses. Each item is validated against child_fields and the
+// canonical JSON is re-serialized (dropping unknown keys) rather than
+// trusting the caller's exact bytes -- the same "never persist unvalidated
+// input verbatim" rule the scalar validators already follow.
+function validateRepeatableGroupField(fieldDef: FieldDef, value: unknown, path: string): string {
+  const childFields = fieldDef.child_fields ?? [];
+  if (childFields.length === 0) {
+    throw new ApiError('VALIDATION_ERROR', 'Шаблон группы не содержит полей.', { issues: [{ path, issue: 'repeatable_group has no child_fields' }] });
+  }
+  if (typeof value !== 'string') {
+    throw new ApiError('VALIDATION_ERROR', 'Ожидается список записей.', { issues: [{ path, issue: 'must be a JSON array string' }] });
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new ApiError('VALIDATION_ERROR', 'Недействительный список записей.', { issues: [{ path, issue: 'must be valid JSON' }] });
+  }
+  if (!Array.isArray(parsed)) {
+    throw new ApiError('VALIDATION_ERROR', 'Ожидается список записей.', { issues: [{ path, issue: 'must be a JSON array' }] });
+  }
+  const minItems = fieldDef.min_items ?? 0;
+  const maxItems = fieldDef.max_items ?? 100;
+  if (parsed.length < minItems) {
+    throw new ApiError('VALIDATION_ERROR', `Нужно не меньше ${minItems} записей.`, { issues: [{ path, issue: `must have >= ${minItems} items` }] });
+  }
+  if (parsed.length > maxItems) {
+    throw new ApiError('VALIDATION_ERROR', `Допустимо не больше ${maxItems} записей.`, { issues: [{ path, issue: `must have <= ${maxItems} items` }] });
+  }
+  const normalized = parsed.map((item, index) => {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      throw new ApiError('VALIDATION_ERROR', 'Каждая запись должна быть объектом.', { issues: [{ path: `${path}[${index}]`, issue: 'must be an object' }] });
+    }
+    const record = item as Record<string, unknown>;
+    const normalizedItem: Record<string, string> = {};
+    for (const child of childFields) {
+      const raw = record[child.field_path];
+      const childPath = `${path}[${index}].${child.field_path}`;
+      if (raw === undefined || raw === null || raw === '') {
+        if (child.required) {
+          throw new ApiError('VALIDATION_ERROR', 'Обязательное поле записи не заполнено.', { issues: [{ path: childPath, issue: 'required' }] });
+        }
+        continue;
+      }
+      normalizedItem[child.field_path] = validateFieldValue(child as FieldDef, raw, childPath);
+    }
+    return normalizedItem;
+  });
+  return JSON.stringify(normalized);
 }
 
 function validateUrlField(fieldDef: FieldDef, value: unknown, path: string): string {
@@ -354,12 +426,17 @@ export async function createWorkItem(
       if (!template) {
         throw new ApiError('VALIDATION_ERROR', 'Неизвестный шаблон.', { issues: [{ path: 'template_code', issue: 'unknown template_code' }] });
       }
-      // Multi-field templates need a submissions snapshot contract that does
-      // not exist yet (migration 007 header) -- fail closed here rather than
-      // silently letting submitWorkItem drop every field but one.
-      if (template.field_schema.length !== 1) {
-        throw new ApiError('VALIDATION_ERROR', 'Шаблон с несколькими полями пока не поддержан для создания задач.', {
-          issues: [{ path: 'template_code', issue: 'multi-field templates not yet supported' }],
+      // Multi-field templates are supported: submitWorkItem already locks
+      // and validates every field row together (not just one hardcoded
+      // field), and field_values is the per-field snapshot migration 007
+      // added for exactly this. The only remaining single-field assumption
+      // is submissions.completion_summary itself, which falls back to the
+      // first field in field_schema order when no field is literally named
+      // 'completion_summary' -- a legacy display column, not a correctness
+      // gate, since every field is still independently required at submit.
+      if (template.field_schema.length === 0) {
+        throw new ApiError('VALIDATION_ERROR', 'Шаблон не содержит полей.', {
+          issues: [{ path: 'template_code', issue: 'template has no fields' }],
         });
       }
 

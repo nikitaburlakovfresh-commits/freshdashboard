@@ -64,6 +64,45 @@ export async function getFields(client: PoolClient, workItemId: string) {
   return res.rows;
 }
 
+export interface ChildFieldDef {
+  field_path: string;
+  label: string;
+  type: 'text' | 'number' | 'url' | 'date' | 'select';
+  required: boolean;
+  min_chars?: number;
+  max_chars?: number;
+  min_value?: number;
+  max_value?: number;
+  options?: string[];
+}
+
+export interface FieldDef {
+  field_path: string;
+  label: string;
+  type: 'text' | 'number' | 'url' | 'date' | 'select' | 'repeatable_group';
+  required: boolean;
+  // Purely organizational (UI grouping label, e.g. "ПОКАЗАТЕЛИ 45+") -- not
+  // read or enforced by validateFieldValue. Lets a template mirror the
+  // named blocks captured from the real daily-log screens without needing
+  // a nested schema shape.
+  section?: string;
+  min_chars?: number;
+  max_chars?: number;
+  min_value?: number;
+  max_value?: number;
+  options?: string[];
+  // 'repeatable_group' only: an array-of-objects field (e.g. one "ТС"/
+  // "звонок"/"клиент" card per item), stored as a JSON-stringified array
+  // in the same work_item_fields.value text column every other field
+  // type already uses -- no schema change needed. child_fields describes
+  // the shape of each item; nesting is one level deep only (no
+  // repeatable_group inside a repeatable_group), matching every captured
+  // daily-log screen.
+  child_fields?: ChildFieldDef[];
+  min_items?: number;
+  max_items?: number;
+}
+
 export interface TemplateRow {
   id: string;
   code: string;
@@ -78,16 +117,7 @@ export interface TemplateRow {
   // tasks described in §13.14 (link/KPI-value/metric fields). Unknown
   // future types fail closed in validateFieldValue rather than silently
   // falling back to text rules.
-  field_schema: {
-    field_path: string;
-    label: string;
-    type: string;
-    required: boolean;
-    min_chars?: number;
-    max_chars?: number;
-    min_value?: number;
-    max_value?: number;
-  }[];
+  field_schema: FieldDef[];
   field_ownership_rules: Record<string, string>;
   field_visibility_rules: Record<string, string[]>;
 }

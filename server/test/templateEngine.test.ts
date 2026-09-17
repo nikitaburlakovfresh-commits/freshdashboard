@@ -4,8 +4,12 @@
  * field, with type-aware field validation (number/url/date) added in the
  * same phase. Exercises the full HTTP surface (create -> assign -> start
  * -> patch fields -> submit) exactly like lifecycle.test.ts, just against
- * new single-field templates instead of pilot_task_v1, since createWorkItem
- * still only accepts single-field templates this release.
+ * new single-field templates instead of pilot_task_v1. Also covers the
+ * multi-field / select / repeatable_group extensions added for the real
+ * per-role daily-log catalog: createWorkItem no longer rejects multi-field
+ * templates, since submitWorkItem already locked and validated every field
+ * row together before this change -- only the artificial single-field gate
+ * in createWorkItem was removed.
  */
 import { pool, closePool } from '../src/db/pool';
 import { _resetForTests as resetRateLimits } from '../src/auth/rateLimit';
@@ -17,6 +21,8 @@ const METRIC_TEMPLATE_ID = '00000000-0000-4000-8000-000000000201';
 const LINK_TEMPLATE_ID = '00000000-0000-4000-8000-000000000202';
 const DATE_TEMPLATE_ID = '00000000-0000-4000-8000-000000000203';
 const MULTI_FIELD_TEMPLATE_ID = '00000000-0000-4000-8000-000000000204';
+const SELECT_TEMPLATE_ID = '00000000-0000-4000-8000-000000000205';
+const GROUP_TEMPLATE_ID = '00000000-0000-4000-8000-000000000206';
 
 beforeAll(async () => {
   await pool.query(
@@ -34,9 +40,19 @@ beforeAll(async () => {
      ($4, 'multi_field_v1', 1, 'Мультиполевой шаблон (тест)', false,
        '[{"field_path":"field_a","label":"A","type":"text","required":true,"min_chars":1,"max_chars":100},
          {"field_path":"field_b","label":"B","type":"text","required":true,"min_chars":1,"max_chars":100}]'::jsonb,
-       '{"field_a":"RF","field_b":"RF"}'::jsonb, '{}'::jsonb)
+       '{"field_a":"RF","field_b":"RF"}'::jsonb, '{}'::jsonb),
+     ($5, 'select_task_v1', 1, 'Задача с выбором (тест)', false,
+       '[{"field_path":"call_outcome","label":"Результат звонка","type":"select","required":true,"options":["Дозвон","Отказ","Перенос","Выдача"]}]'::jsonb,
+       '{"call_outcome":"RF"}'::jsonb, '{}'::jsonb),
+     ($6, 'group_task_v1', 1, 'Задача со списком ТС (тест)', false,
+       '[{"field_path":"vehicles","label":"Решения по ТС","type":"repeatable_group","required":true,"min_items":2,"max_items":10,
+          "child_fields":[
+            {"field_path":"crm_link","label":"Ссылка на ТС в CRM","type":"url","required":true,"max_chars":500},
+            {"field_path":"comment","label":"Решение по ТС","type":"text","required":true,"min_chars":1,"max_chars":1000}
+          ]}]'::jsonb,
+       '{"vehicles":"RF"}'::jsonb, '{}'::jsonb)
      ON CONFLICT (id) DO NOTHING`,
-    [METRIC_TEMPLATE_ID, LINK_TEMPLATE_ID, DATE_TEMPLATE_ID, MULTI_FIELD_TEMPLATE_ID],
+    [METRIC_TEMPLATE_ID, LINK_TEMPLATE_ID, DATE_TEMPLATE_ID, MULTI_FIELD_TEMPLATE_ID, SELECT_TEMPLATE_ID, GROUP_TEMPLATE_ID],
   );
 });
 
@@ -130,13 +146,137 @@ describe('TE-01..TE-03 templates beyond pilot_task_v1 (§13.13.1)', () => {
     expect(goodDate.body.fields[0].value).toBe('2026-12-01');
   });
 
-  test('TE-05 createWorkItem rejects a multi-field template (submissions storage not built for it yet)', async () => {
-    const rmA = await login('rm_a');
-    const res = await authed(rmA)
-      .post('/api/v1/work-items')
-      .set('Idempotency-Key', idemKey('create-multi'))
-      .send({ org_unit_id: ORG_A, title: 'Тест мультиполя', due_at: '2027-01-01T00:00:00Z', template_code: 'multi_field_v1' });
-    expect(res.status).toBe(422);
-    expect(res.body.code).toBe('VALIDATION_ERROR');
+  test('TE-05 a multi-field template creates/patches/submits end to end with every field required', async () => {
+    const { rfA, wi } = await createTask('multi_field_v1');
+
+    const missingSecond = await authed(rfA)
+      .post(`/api/v1/work-items/${wi.id}/submit`)
+      .set('Idempotency-Key', idemKey('submit-multi-early'))
+      .send({ expected_entity_version: 3 });
+    expect(missingSecond.status).toBe(422);
+    expect(missingSecond.body.code).toBe('COMPLETION_REQUIRED');
+
+    const patchA = await authed(rfA)
+      .patch(`/api/v1/work-items/${wi.id}/fields`)
+      .set('Idempotency-Key', idemKey('patch-a'))
+      .send({ changes: [{ field_path: 'field_a', expected_version: 1, new_value: 'Значение A' }] });
+    expect(patchA.status).toBe(200);
+
+    const patchB = await authed(rfA)
+      .patch(`/api/v1/work-items/${wi.id}/fields`)
+      .set('Idempotency-Key', idemKey('patch-b'))
+      .send({ changes: [{ field_path: 'field_b', expected_version: 1, new_value: 'Значение B' }] });
+    expect(patchB.status).toBe(200);
+
+    const submitted = await authed(rfA)
+      .post(`/api/v1/work-items/${wi.id}/submit`)
+      .set('Idempotency-Key', idemKey('submit-multi'))
+      .send({ expected_entity_version: 5 });
+    expect(submitted.status).toBe(200);
+    expect(submitted.body.current_submission.field_values).toEqual({ field_a: 'Значение A', field_b: 'Значение B' });
+  });
+
+  test('TE-06 a select field only accepts one of its declared options', async () => {
+    const { rfA, wi } = await createTask('select_task_v1');
+    const badOption = await authed(rfA)
+      .patch(`/api/v1/work-items/${wi.id}/fields`)
+      .set('Idempotency-Key', idemKey('patch-badselect'))
+      .send({ changes: [{ field_path: 'call_outcome', expected_version: 1, new_value: 'Неизвестный вариант' }] });
+    expect(badOption.status).toBe(422);
+
+    const goodOption = await authed(rfA)
+      .patch(`/api/v1/work-items/${wi.id}/fields`)
+      .set('Idempotency-Key', idemKey('patch-goodselect'))
+      .send({ changes: [{ field_path: 'call_outcome', expected_version: 1, new_value: 'Дозвон' }] });
+    expect(goodOption.status).toBe(200);
+    expect(goodOption.body.fields[0].value).toBe('Дозвон');
+  });
+
+  test('TE-07 a repeatable_group field validates min_items and each item against child_fields', async () => {
+    const { rfA, wi } = await createTask('group_task_v1');
+
+    const tooFew = await authed(rfA)
+      .patch(`/api/v1/work-items/${wi.id}/fields`)
+      .set('Idempotency-Key', idemKey('patch-toofew'))
+      .send({
+        changes: [{
+          field_path: 'vehicles',
+          expected_version: 1,
+          new_value: JSON.stringify([{ crm_link: 'https://crm.freshauto.ru/1', comment: 'Переоценка' }]),
+        }],
+      });
+    expect(tooFew.status).toBe(422);
+
+    const missingRequiredChild = await authed(rfA)
+      .patch(`/api/v1/work-items/${wi.id}/fields`)
+      .set('Idempotency-Key', idemKey('patch-missingchild'))
+      .send({
+        changes: [{
+          field_path: 'vehicles',
+          expected_version: 1,
+          new_value: JSON.stringify([
+            { comment: 'Нет ссылки' },
+            { crm_link: 'https://crm.freshauto.ru/2', comment: 'Вывод в рекламу' },
+          ]),
+        }],
+      });
+    expect(missingRequiredChild.status).toBe(422);
+
+    const ok = await authed(rfA)
+      .patch(`/api/v1/work-items/${wi.id}/fields`)
+      .set('Idempotency-Key', idemKey('patch-groupok'))
+      .send({
+        changes: [{
+          field_path: 'vehicles',
+          expected_version: 1,
+          new_value: JSON.stringify([
+            { crm_link: 'https://crm.freshauto.ru/1', comment: 'Переоценка' },
+            { crm_link: 'https://crm.freshauto.ru/2', comment: 'Вывод в рекламу' },
+          ]),
+        }],
+      });
+    expect(ok.status).toBe(200);
+    expect(JSON.parse(ok.body.fields[0].value)).toEqual([
+      { crm_link: 'https://crm.freshauto.ru/1', comment: 'Переоценка' },
+      { crm_link: 'https://crm.freshauto.ru/2', comment: 'Вывод в рекламу' },
+    ]);
+
+    const submitted = await authed(rfA)
+      .post(`/api/v1/work-items/${wi.id}/submit`)
+      .set('Idempotency-Key', idemKey('submit-group'))
+      .send({ expected_entity_version: 4 });
+     expect(submitted.status).toBe(200);
+  });
+
+  test('TE-08 migration 008 RF daily-log templates (Task 1/3/4/5/6) load with the captured field shape', async () => {
+    const expected: Record<string, { fieldCount: number; allOwnedByRf: boolean }> = {
+      rf_planning_meeting_v1: { fieldCount: 6, allOwnedByRf: true },
+      rf_share_45plus_analysis_v1: { fieldCount: 5, allOwnedByRf: true },
+      rf_traffic_analysis_v1: { fieldCount: 6, allOwnedByRf: true },
+      rf_warehouse_analysis_v1: { fieldCount: 22, allOwnedByRf: true },
+      rf_kso_analysis_v1: { fieldCount: 9, allOwnedByRf: true },
+    };
+
+    const { rows } = await pool.query(
+      `SELECT code, field_schema, field_ownership_rules, field_visibility_rules, is_system
+       FROM templates WHERE code = ANY($1)`,
+      [Object.keys(expected)],
+    );
+    expect(rows).toHaveLength(5);
+
+    for (const row of rows) {
+      const want = expected[row.code];
+      expect(row.field_schema).toHaveLength(want.fieldCount);
+      expect(row.is_system).toBe(false);
+      // Every captured field is RF-owned per the source screenshots; no
+      // field on these five templates is attributed to any other role.
+      const ownerValues = Object.values(row.field_ownership_rules as Record<string, string>);
+      expect(ownerValues.every(v => v === 'RF')).toBe(want.allOwnedByRf);
+      expect(Object.keys(row.field_ownership_rules)).toHaveLength(want.fieldCount);
+      // field_visibility_rules is intentionally empty: not read by any
+      // server code yet (see migration 008 header), so no extra-role
+      // visibility should be silently implied by this data.
+      expect(row.field_visibility_rules).toEqual({});
+    }
   });
 });
