@@ -41,16 +41,95 @@ async function loadCard(client: PoolClient, workItem: WorkItemRow) {
 function findFieldDef(template: TemplateRow, fieldPath: string) {
   return template.field_schema.find((f) => f.field_path === fieldPath);
 }
-function validateFieldValue(fieldDef: { label: string; min_chars: number; max_chars: number }, value: unknown, path: string): string {
+type FieldDef = TemplateRow['field_schema'][number];
+
+// Every branch below returns the exact string to persist in
+// work_item_fields.value (still a plain text column -- type-specific
+// storage is a later migration, not needed while values round-trip as
+// text). Validation is dispatched by fieldDef.type so a role-specific
+// hard task (§13.14: link/KPI value/metric) gets real format checking
+// instead of the old one-size-fits-all 'text, 1-4000 chars' rule.
+function validateFieldValue(fieldDef: FieldDef, value: unknown, path: string): string {
+  switch (fieldDef.type) {
+    case 'number':
+      return validateNumberField(fieldDef, value, path);
+    case 'url':
+      return validateUrlField(fieldDef, value, path);
+    case 'date':
+      return validateDateField(value, path);
+    case 'text':
+      return validateTextField(fieldDef, value, path);
+    default:
+      // Fail closed: an unrecognized type is a template authoring bug, not
+      // something to silently accept as free text.
+      throw new ApiError('VALIDATION_ERROR', 'Неподдерживаемый тип поля шаблона.', {
+        issues: [{ path, issue: `unknown field type: ${fieldDef.type}` }],
+      });
+  }
+}
+
+function validateTextField(fieldDef: FieldDef, value: unknown, path: string): string {
+  const minChars = fieldDef.min_chars ?? 1;
+  const maxChars = fieldDef.max_chars ?? 4000;
   if (
     typeof value !== 'string' ||
-    value.length < fieldDef.min_chars ||
-    value.length > fieldDef.max_chars ||
+    value.length < minChars ||
+    value.length > maxChars ||
     !/\S/.test(value)
   ) {
-    throw new ApiError('VALIDATION_ERROR', `Значение обязательно, ${fieldDef.min_chars}-${fieldDef.max_chars} символов, не только пробелы.`, {
-      issues: [{ path, issue: `${fieldDef.min_chars}-${fieldDef.max_chars} non-whitespace` }],
+    throw new ApiError('VALIDATION_ERROR', `Значение обязательно, ${minChars}-${maxChars} символов, не только пробелы.`, {
+      issues: [{ path, issue: `${minChars}-${maxChars} non-whitespace` }],
     });
+  }
+  return value;
+}
+
+// Accepts a plain decimal string (optionally signed/fractional) -- not
+// exponent notation or Infinity/NaN spellings, which Number() would
+// otherwise accept. Stored as the original string so no precision is
+// lost round-tripping through work_item_fields.value.
+const NUMBER_PATTERN = /^-?\d+(\.\d+)?$/;
+function validateNumberField(fieldDef: FieldDef, value: unknown, path: string): string {
+  if (typeof value !== 'string' || !NUMBER_PATTERN.test(value)) {
+    throw new ApiError('VALIDATION_ERROR', 'Ожидается числовое значение.', { issues: [{ path, issue: 'must be a plain decimal number' }] });
+  }
+  const n = Number(value);
+  if (fieldDef.min_value !== undefined && n < fieldDef.min_value) {
+    throw new ApiError('VALIDATION_ERROR', `Значение должно быть не меньше ${fieldDef.min_value}.`, { issues: [{ path, issue: `must be >= ${fieldDef.min_value}` }] });
+  }
+  if (fieldDef.max_value !== undefined && n > fieldDef.max_value) {
+    throw new ApiError('VALIDATION_ERROR', `Значение должно быть не больше ${fieldDef.max_value}.`, { issues: [{ path, issue: `must be <= ${fieldDef.max_value}` }] });
+  }
+  return value;
+}
+
+function validateUrlField(fieldDef: FieldDef, value: unknown, path: string): string {
+  const maxChars = fieldDef.max_chars ?? 2048;
+  if (typeof value !== 'string' || value.length === 0 || value.length > maxChars) {
+    throw new ApiError('VALIDATION_ERROR', `Ссылка обязательна, до ${maxChars} символов.`, { issues: [{ path, issue: `1-${maxChars} chars` }] });
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new ApiError('VALIDATION_ERROR', 'Недействительная ссылка.', { issues: [{ path, issue: 'must be an absolute http(s) URL' }] });
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new ApiError('VALIDATION_ERROR', 'Ссылка должна быть http/https.', { issues: [{ path, issue: 'must be http or https' }] });
+  }
+  return value;
+}
+
+// Calendar date only (YYYY-MM-DD), matching the §13.14 "next event date"
+// use case -- not a full timestamp, so this deliberately does not reuse
+// validateUtcTimestamp's RFC3339-with-Z shape.
+function validateDateField(value: unknown, path: string): string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new ApiError('VALIDATION_ERROR', 'Ожидается дата в формате YYYY-MM-DD.', { issues: [{ path, issue: 'must be YYYY-MM-DD' }] });
+  }
+  const d = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== value) {
+    throw new ApiError('VALIDATION_ERROR', 'Недействительная календарная дата.', { issues: [{ path, issue: 'invalid calendar date' }] });
   }
   return value;
 }

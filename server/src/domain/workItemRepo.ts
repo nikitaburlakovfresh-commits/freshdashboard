@@ -72,7 +72,22 @@ export interface TemplateRow {
   field_schema_version: number;
   display_name: string;
   is_system: boolean;
-  field_schema: { field_path: string; label: string; type: string; required: boolean; min_chars: number; max_chars: number }[];
+  // `type` currently in use: 'text' (existing pilot field, validated by
+  // min_chars/max_chars), plus 'number' (min_value/max_value), 'url', and
+  // 'date' (calendar date, no extra bounds) for the role-specific hard
+  // tasks described in §13.14 (link/KPI-value/metric fields). Unknown
+  // future types fail closed in validateFieldValue rather than silently
+  // falling back to text rules.
+  field_schema: {
+    field_path: string;
+    label: string;
+    type: string;
+    required: boolean;
+    min_chars?: number;
+    max_chars?: number;
+    min_value?: number;
+    max_value?: number;
+  }[];
   field_ownership_rules: Record<string, string>;
   field_visibility_rules: Record<string, string[]>;
 }
