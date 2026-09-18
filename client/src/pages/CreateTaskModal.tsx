@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { createWorkItem } from '../api/endpoints';
-import type { Grant } from '../api/types';
+import React, { useEffect, useState } from 'react';
+import { createWorkItem, listTaskTemplates } from '../api/endpoints';
+import type { Grant, TaskTemplate } from '../api/types';
 import { orgUnitLabel } from '../constants/orgUnits';
 
 export default function CreateTaskModal({
@@ -18,6 +18,14 @@ export default function CreateTaskModal({
   const [dueAt, setDueAt] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
+  const [templateCode, setTemplateCode] = useState('pilot_task_v1');
+  useEffect(() => {
+    let live = true;
+    listTaskTemplates().then(data => { if (live) setTemplates(data.items); })
+      .catch(err => { if (live) setError(err.message ?? 'Не удалось загрузить шаблоны.'); });
+    return () => { live = false; };
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,8 +44,8 @@ export default function CreateTaskModal({
     }
     setSubmitting(true);
     try {
-      const dueIso = new Date(`${dueAt}Z`).toISOString().replace(/\.\d{3}Z$/, 'Z');
-      await createWorkItem({ org_unit_id: orgUnitId, title, due_at: dueIso });
+      const dueIso = new Date(`${dueAt}+03:00`).toISOString().replace(/\.\d{3}Z$/, 'Z');
+      await createWorkItem({ org_unit_id: orgUnitId, title, due_at: dueIso, template_code: templateCode });
       onCreated();
       onClose();
     } catch (err: any) {
@@ -71,10 +79,19 @@ export default function CreateTaskModal({
           ))}
         </select>
 
+        <label htmlFor="task-template" style={labelStyle}>Шаблон и роль исполнителя</label>
+        <select id="task-template" value={templateCode} disabled={submitting || !templates.length}
+          onChange={e => setTemplateCode(e.target.value)} style={inputStyle}>
+          {!templates.length && <option value="pilot_task_v1">Загрузка шаблонов…</option>}
+          {templates.map(t => <option key={t.code} value={t.code}>{t.owner_role} · {t.display_name}</option>)}
+        </select>
+        <p style={{fontSize:12,color:'var(--fresh-text-muted)'}}>Один исполнитель, одна роль. Назначение сотрудника выполняется в карточке после создания.</p>
+        {templateCode.startsWith('rf_') && <p style={{fontSize:12,color:'var(--fresh-warning)'}}>Предварительная форма РФ; не публикация KPI и не завершённый ежедневник.</p>}
+
         <label htmlFor="task-title" style={labelStyle}>Название</label>
         <input id="task-title" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} placeholder="Например: Проверить остатки на складе" />
 
-        <label htmlFor="task-due" style={labelStyle}>Срок выполнения (UTC)</label>
+        <label htmlFor="task-due" style={labelStyle}>Срок выполнения (Москва, UTC+3)</label>
         <input id="task-due" type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} style={inputStyle} />
 
         {error && <div role="alert" style={{ color: 'var(--fresh-danger)', fontSize: 13, marginTop: 10 }}>{error}</div>}
@@ -83,7 +100,7 @@ export default function CreateTaskModal({
           <button type="button" onClick={onClose} style={secondaryBtn}>
             Отмена
           </button>
-          <button type="submit" disabled={submitting} style={primaryBtn(submitting)}>
+          <button type="submit" disabled={submitting || !templates.some(t => t.code === templateCode)} style={primaryBtn(submitting)}>
             {submitting ? 'Создание…' : 'Создать'}
           </button>
         </div>

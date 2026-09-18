@@ -34,7 +34,7 @@ export interface MeResponse extends SessionResponse {
 }
 
 export interface SavedField {
-  field_path: 'completion_summary';
+  field_path: string;
   value: string | null;
   field_version: number;
   updated_at: string;
@@ -57,9 +57,13 @@ export interface Submission {
 export interface WorkItem {
   id: string;
   org_unit_id: string;
-  template_code: 'pilot_task_v1';
+  template_code: string;
+  template_display_name: string;
+  field_schema: FieldDef[];
+  field_ownership_rules: Record<string, string>;
+  owner_role: string | null;
   template_version_id: string;
-  requires_acceptance: true;
+  requires_acceptance: boolean;
   title: string;
   due_at: string;
   status: WorkItemStatus;
@@ -79,6 +83,32 @@ export interface WorkItem {
 export interface WorkItemPage {
   items: WorkItem[];
   next_cursor: string | null;
+  current_business_date: string;
+}
+
+export interface FieldDef {
+  field_path: string;
+  label: string;
+  type: 'text' | 'number' | 'url' | 'date' | 'select' | 'repeatable_group';
+  required: boolean;
+  section?: string;
+  min_chars?: number;
+  max_chars?: number;
+  min_value?: number;
+  max_value?: number;
+  options?: string[];
+  child_fields?: FieldDef[];
+  min_items?: number;
+  max_items?: number;
+}
+
+export interface TaskTemplate {
+  code: string;
+  display_name: string;
+  version: number;
+  owner_role: string;
+  field_schema: FieldDef[];
+  requires_acceptance: boolean;
 }
 
 export interface HistoryEntry {

@@ -47,7 +47,11 @@ workItemsRouter.get(
     const status = req.query.status as string | undefined;
     const limit = parseLimit(req.query.limit);
     const cursor = req.query.cursor as string | undefined;
-    const result = await svc.listWorkItems(buildCtx(req), { orgFilter, status, limit, cursor });
+    if (req.query.mine !== undefined && req.query.mine !== 'true') throw new ApiError('VALIDATION_ERROR', 'mine должен быть true.');
+    if (req.query.role !== undefined && (typeof req.query.role !== 'string' || !/^[A-Z][A-Z0-9_]{0,63}$/.test(req.query.role))) {
+      throw new ApiError('VALIDATION_ERROR', 'Некорректная роль.');
+    }
+    const result = await svc.listWorkItems(buildCtx(req), { orgFilter, status, limit, cursor, mine: req.query.mine === 'true', role: req.query.role as string | undefined });
     res.status(200).json(result);
   }),
 );
@@ -65,6 +69,11 @@ workItemsRouter.post(
     res.status(result.status).json(result.body);
   }),
 );
+
+workItemsRouter.get('/templates', requireSession, wrap(async (req, res) => {
+  enforceSessionRateLimit(req.authUser!.sessionId, false);
+  res.status(200).json(await svc.listTaskTemplates(buildCtx(req)));
+}));
 
 // GET /work-items/:id
 workItemsRouter.get(

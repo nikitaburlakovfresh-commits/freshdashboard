@@ -1,3 +1,5 @@
+import type { TemplateRow } from './workItemRepo';
+
 function toIso(v: Date | string | null): string | null {
   if (v === null) return null;
   const d = typeof v === 'string' ? new Date(v) : v;
@@ -10,11 +12,16 @@ function toIso(v: Date | string | null): string | null {
 // every work_item_fields row for this work item, in field_path order --
 // today that is always exactly the one field pilot_task_v1 defines, but the
 // shape no longer assumes that.
-export function serializeWorkItem(row: any, template: { code: string }, fields: any[], submission: any | null) {
+export function serializeWorkItem(row: any, template: TemplateRow, fields: any[], submission: any | null) {
   return {
     id: row.id,
     org_unit_id: row.org_unit_id,
     template_code: template.code,
+    template_display_name: template.display_name,
+    field_schema: template.field_schema,
+    field_ownership_rules: template.field_ownership_rules,
+    owner_role: [...new Set(Object.values(template.field_ownership_rules))].length === 1
+      ? Object.values(template.field_ownership_rules)[0] : null,
     template_version_id: row.template_version_id,
     requires_acceptance: row.requires_acceptance,
     title: row.title,

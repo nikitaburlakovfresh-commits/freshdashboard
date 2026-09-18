@@ -16,6 +16,9 @@ import type { WorkItem, HistoryEntry } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import StatusBadge from '../components/StatusBadge';
 import { apiFetch } from '../api/client';
+import TaskFields from '../components/TaskFields';
+import { hasUnsavedFields, mergeSavedFields, requiredFieldsPresent } from '../domain/taskForm';
+import type { FieldDrafts } from '../domain/taskForm';
 
 const EVENT_LABELS: Record<string, string> = {
   'work_item.created': 'Задача создана',
@@ -38,7 +41,7 @@ export default function TaskDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
-  const [summaryDraft, setSummaryDraft] = useState('');
+  const [drafts, setDrafts] = useState<FieldDrafts>({});
   const [showReasonFor, setShowReasonFor] = useState<null | 'cancel' | 'rework' | 'reopen'>(null);
   const [reason, setReason] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
@@ -52,7 +55,7 @@ export default function TaskDetailPage() {
       const [wi, hist] = await Promise.all([getWorkItem(id), getWorkItemHistory(id, { limit: 100 })]);
       setItem(wi);
       setHistory(hist.items);
-      setSummaryDraft(wi.fields[0]?.value ?? '');
+      setDrafts(mergeSavedFields({}, wi.fields));
     } catch (err: any) {
       setError(err?.message ?? 'Не удалось загрузить задачу.');
     } finally {
@@ -74,10 +77,22 @@ export default function TaskDetailPage() {
   // required role per action; this only decides whether to render the
   // executor controls at all.
   const isOwnExecutor = item
-    ? grants.some((g) => g.role !== 'REGIONAL_MANAGER' && g.role !== 'SUPER_ADMIN' && g.org_unit_id === item.org_unit_id)
+    ? grants.some((g) => g.role === item.owner_role && g.org_unit_id === item.org_unit_id)
       && item.assignee_user_id === me?.user.id
     : false;
-  const dirty = summaryDraft !== (item?.fields[0]?.value ?? '');
+  const dirty = hasUnsavedFields(drafts);
+  useEffect(() => {
+    if (!dirty) return;
+    const unload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    const navigation = (e: MouseEvent) => {
+      if ((e.target as HTMLElement).closest('a[href]') && !window.confirm('Есть несохранённые поля. Покинуть карточку без сохранения?')) {
+        e.preventDefault(); e.stopPropagation();
+      }
+    };
+    window.addEventListener('beforeunload', unload);
+    document.addEventListener('click', navigation, true);
+    return () => { window.removeEventListener('beforeunload', unload); document.removeEventListener('click', navigation, true); };
+  }, [dirty]);
   useEffect(() => {
     if (!item || !isRm || item.status !== 'DRAFT') return;
     let live = true;
@@ -87,13 +102,14 @@ export default function TaskDetailPage() {
     return () => { live = false; };
   }, [item?.id, item?.status, isRm]);
 
-  async function runAction(fn: () => Promise<WorkItem>) {
+  async function runAction(fn: () => Promise<WorkItem>, savedPath?: string) {
+    if (dirty && !savedPath) { setError('Сначала сохраните изменённые поля.'); return; }
     setActionBusy(true);
     setError(null);
     try {
       const updated = await fn();
       setItem(updated);
-      setSummaryDraft(updated.fields[0]?.value ?? '');
+      setDrafts(current => mergeSavedFields(current, updated.fields, savedPath));
       const hist = await getWorkItemHistory(updated.id, { limit: 100 });
       setHistory(hist.items);
     } catch (err: any) {
@@ -109,7 +125,7 @@ export default function TaskDetailPage() {
 
   return (
     <div className="task-detail-page" style={{ maxWidth: 900 }}>
-      <button onClick={() => navigate('/tasks')} style={backBtn}>
+      <button onClick={() => { if (!dirty || window.confirm('Покинуть карточку без сохранения полей?')) navigate('/tasks'); }} style={backBtn}>
         ← К списку задач
       </button>
 
@@ -117,7 +133,7 @@ export default function TaskDetailPage() {
         <div style={{ minWidth: 0 }}>
           <h1 style={{ fontSize: 20, margin: 0, color: 'var(--fresh-dark)' }}>{item.title}</h1>
           <div style={{ fontSize: 13, color: 'var(--fresh-text-muted)', marginTop: 6 }}>
-            Срок: {new Date(item.due_at).toLocaleString('ru-RU', {timeZone: 'UTC'})} UTC · Версия: {item.entity_version}
+            Срок: {new Date(item.due_at).toLocaleString('ru-RU', {timeZone: 'Europe/Moscow'})} МСК · Версия: {item.entity_version}
             {item.rework_count > 0 && ` · Доработок: ${item.rework_count}`}
           </div>
         </div>
@@ -130,45 +146,22 @@ export default function TaskDetailPage() {
         </div>
       )}
 
-      {error && <div role="alert" style={{ color: 'var(--fresh-danger)', marginTop: 14, fontSize: 13 }}>{error}</div>}
+      {error && <div role="alert" style={{ color: 'var(--fresh-danger)', marginTop: 14, fontSize: 13 }}>{error}
+        <p>Введённые поля остаются в этой карточке. При конфликте скопируйте свой текст перед загрузкой актуальной версии.</p>
+        <button disabled={actionBusy} onClick={() => { if (!dirty || window.confirm('Загрузить серверную версию и отбросить несохранённые поля?')) load(); }}>Загрузить актуальную версию</button>
+      </div>}
 
       <section style={card}>
         <h2 style={cardTitle}>Результат выполнения</h2>
-        {isOwnExecutor && ['ASSIGNED', 'IN_PROGRESS'].includes(item.status) ? (
-          <>
-            <textarea
-              value={summaryDraft}
-              onChange={(e) => setSummaryDraft(e.target.value)}
-              rows={5}
-              aria-label="Результат выполнения"
-              style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--fresh-border)', fontSize: 14, fontFamily: 'inherit', resize: 'vertical' }}
-              placeholder="Опишите, что сделано…"
-            />
-            <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-              <button
-                disabled={actionBusy || !summaryDraft.trim() || Array.from(summaryDraft).length > 4000 || !dirty}
-                onClick={() =>
-                  runAction(() =>
-                    patchWorkItemFields(item.id, {
-                      changes: [{ field_path: 'completion_summary', expected_version: item.fields[0].field_version, new_value: summaryDraft }],
-                    }),
-                  )
-                }
-                style={primaryBtn(actionBusy)}
-              >
-                Сохранить результат
-              </button>
-            </div>
-            <p style={{fontSize:12,color:dirty?'var(--fresh-warning)':'var(--fresh-text-muted)'}} aria-live="polite">
-              {actionBusy ? 'Сохранение…' : dirty ? 'Есть несохранённые изменения' : item.fields[0]?.value ? 'Результат сохранён' : 'Заполните результат перед сдачей'}
-              {' · '}{Array.from(summaryDraft).length}/4000
-            </p>
-          </>
-        ) : (
-          <p style={{ fontSize: 14, color: item.fields[0]?.value ? 'var(--fresh-dark)' : 'var(--fresh-text-muted)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-            {item.fields[0]?.value ?? 'Результат ещё не заполнен.'}
-          </p>
-        )}
+        <TaskFields item={item} drafts={drafts} editable={isOwnExecutor && ['ASSIGNED','IN_PROGRESS'].includes(item.status)}
+          busy={actionBusy}
+          onChange={(path,value) => setDrafts(current => ({...current,[path]:{...current[path],value}}))}
+          onSave={path => {
+            const draft = drafts[path];
+            if (!draft) return;
+            runAction(() => patchWorkItemFields(item.id, {changes:[{field_path:path,expected_version:draft.version,new_value:draft.value}]}), path);
+          }}/>
+        {dirty && <p role="status" style={{color:'var(--fresh-warning)',fontSize:13}}>Есть несохранённые поля. Сдача и смена статуса доступны после сохранения.</p>}
       </section>
 
       <section style={card}>
@@ -196,17 +189,17 @@ export default function TaskDetailPage() {
           )}
 
           {isOwnExecutor && item.status === 'ASSIGNED' && (
-            <button disabled={actionBusy} onClick={() => runAction(() => startWorkItem(item.id, { expected_entity_version: item.entity_version }))} style={primaryBtn(actionBusy)}>
+            <button disabled={actionBusy || dirty} onClick={() => runAction(() => startWorkItem(item.id, { expected_entity_version: item.entity_version }))} style={primaryBtn(actionBusy)}>
               Начать работу
             </button>
           )}
 
           {isOwnExecutor && ['ASSIGNED', 'IN_PROGRESS'].includes(item.status) && !item.is_blocked && (
             <button
-              disabled={actionBusy || dirty || !item.fields[0]?.value?.trim()}
+              disabled={actionBusy || dirty || !requiredFieldsPresent(item.field_schema, item.fields)}
               onClick={() => runAction(() => submitWorkItem(item.id, { expected_entity_version: item.entity_version }))}
               style={primaryBtn(actionBusy)}
-              title={dirty ? 'Сначала сохраните изменения' : !item.fields[0]?.value ? 'Заполните результат перед сдачей' : undefined}
+              title={dirty ? 'Сначала сохраните изменения' : 'Сервер проверит все обязательные поля'}
             >
               Сдать на проверку
             </button>
@@ -295,7 +288,7 @@ export default function TaskDetailPage() {
           {history.map((h) => (
             <div key={h.event_id} style={{ borderLeft: '2px solid var(--fresh-border)', paddingLeft: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fresh-dark)' }}>{EVENT_LABELS[h.event_type] ?? h.event_type}</div>
-              <div style={{ fontSize: 12, color: 'var(--fresh-text-muted)', marginTop: 2 }}>{new Date(h.occurred_at).toLocaleString('ru-RU', {timeZone:'UTC'})} UTC</div>
+              <div style={{ fontSize: 12, color: 'var(--fresh-text-muted)', marginTop: 2 }}>{new Date(h.occurred_at).toLocaleString('ru-RU', {timeZone:'Europe/Moscow'})} МСК</div>
               {h.reason && <div style={{ fontSize: 12, color: 'var(--fresh-dark)', marginTop: 4, overflowWrap: 'anywhere' }}>Причина: {h.reason}</div>}
             </div>
           ))}

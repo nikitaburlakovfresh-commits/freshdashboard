@@ -1,0 +1,22 @@
+.task-fields { min-width:0; }
+.task-fields-note,.task-field-footer span {font-size:12px;color:var(--fresh-text-muted);line-height:1.6}
+.task-fields-notice {font-size:13px;line-height:1.6;border-left:3px solid var(--fresh-warning);padding:10px 14px;background:var(--fresh-warning-bg)}
+.task-field {border-top:1px solid var(--fresh-border);padding:18px 0;min-width:0}
+.task-field h3 {font-size:15px;margin:0 0 12px;color:var(--fresh-dark);overflow-wrap:anywhere}
+.task-required {font-size:12px;font-weight:400;color:var(--fresh-text-muted)}
+.task-fields input,.task-fields textarea,.task-fields select {width:100%;min-height:44px;border:1px solid var(--fresh-border);border-radius:8px;padding:10px;background:var(--fresh-surface);color:var(--fresh-dark);font:inherit;box-sizing:border-box}
+.task-fields textarea {resize:vertical}
+.task-fields button {min-height:44px;padding:10px 14px;border:0;border-radius:12px;background:#003DFF;color:white;cursor:pointer;font:inherit;font-size:13px;max-width:100%;overflow-wrap:anywhere}
+.task-fields button:disabled {opacity:.5;cursor:default}
+.task-fields .task-field-secondary {background:var(--fresh-surface);color:var(--fresh-dark);border:1px solid var(--fresh-border);margin:4px 8px 4px 0}
+.task-field-footer {display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:12px}
+.task-group-row {border:1px solid var(--fresh-border);border-radius:10px;margin:10px 0;padding:14px;min-width:0}
+.task-group-row legend {font-size:13px;color:var(--fresh-text-muted)}
+.task-group-row label {display:block;margin:10px 0;font-size:13px}
+.task-group-row label>span {display:block;margin-bottom:6px}
+.task-field-value {white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;color:var(--fresh-dark);line-height:1.6}
+.personal-task-list {display:grid;gap:12px}
+.personal-task {display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:16px;border:1px solid var(--fresh-border);border-radius:12px;color:var(--fresh-dark);text-decoration:none;background:var(--fresh-surface)}
+.personal-task strong {display:block;overflow-wrap:anywhere}
+.personal-task small {display:block;margin-top:8px;color:var(--fresh-text-muted);line-height:1.6}
+@media(max-width:600px){.personal-task{flex-direction:column}.task-field-footer{align-items:stretch;flex-direction:column}}

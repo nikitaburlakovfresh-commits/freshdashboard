@@ -8,6 +8,7 @@ import type {
   NotificationPage,
   Notification,
   WorkItemStatus,
+  TaskTemplate,
 } from './types';
 
 export function login(login_: string, password: string) {
@@ -22,7 +23,7 @@ export function getMe() {
   return apiFetch<MeResponse>('/me');
 }
 
-export function listWorkItems(params: { org_unit_id?: string; status?: WorkItemStatus; limit?: number; cursor?: string }) {
+export function listWorkItems(params: { org_unit_id?: string; status?: WorkItemStatus; limit?: number; cursor?: string; mine?: boolean; role?: string }) {
   return apiFetch<WorkItemPage>('/work-items', { query: params });
 }
 
@@ -30,11 +31,15 @@ export function getWorkItem(id: string) {
   return apiFetch<WorkItem>(`/work-items/${id}`);
 }
 
-export function createWorkItem(body: { org_unit_id: string; title: string; due_at: string }) {
+export function listTaskTemplates() {
+  return apiFetch<{items: TaskTemplate[]}>('/work-items/templates');
+}
+
+export function createWorkItem(body: { org_unit_id: string; title: string; due_at: string; template_code?: string }) {
   return apiFetch<WorkItem>('/work-items', {
     method: 'POST',
     idempotent: true,
-    body: { ...body, template_code: 'pilot_task_v1' },
+    body: { template_code: 'pilot_task_v1', ...body },
   });
 }
 
@@ -46,7 +51,7 @@ export function startWorkItem(id: string, body: { expected_entity_version: numbe
   return apiFetch<WorkItem>(`/work-items/${id}/start`, { method: 'POST', idempotent: true, body });
 }
 
-export function patchWorkItemFields(id: string, body: { changes: [{ field_path: 'completion_summary'; expected_version: number; new_value: string }] }) {
+export function patchWorkItemFields(id: string, body: { changes: [{ field_path: string; expected_version: number; new_value: string }] }) {
   return apiFetch<WorkItem>(`/work-items/${id}/fields`, { method: 'PATCH', idempotent: true, body });
 }
 

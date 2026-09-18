@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FRESH Portal · Личные пользователи, назначения и запуск филиалов</title>
+<title>FRESH Portal · Личные задачи ролей и подготовка beta</title>
 <style>
 :root{font-family:Arial,sans-serif;color:#19212b;background:#f4f6fb;font-synthesis:none}*{box-sizing:border-box}
 body{margin:0}main{max-width:1240px;margin:auto;padding:40px 24px 64px}header{display:flex;gap:28px;align-items:start;justify-content:space-between;border-bottom:1px solid #dce2ee;padding-bottom:30px}
@@ -12,12 +12,22 @@ p{line-height:1.7;max-width:820px;color:#4c596c}small{font-size:12px;letter-spac
 a{color:#143cff;text-decoration:none}a:hover{text-decoration:underline}footer{margin-top:36px;font-size:13px;color:#596678}button{font:inherit}
 @media(max-width:700px){main{padding:24px 14px}header{display:block}.badge{display:inline-block}.grid{grid-template-columns:1fr}.mobile{padding:12px;gap:10px}}
 </style></head><body><main>
-<header><div><small>FRESH Portal · локальная проверка</small><h1>Личный вход<br>и управляемый доступ</h1>
-<p>Создание личной записи, одноразовый первый вход, отдельное назначение роли и контролируемый запуск филиала. Готовность кода не подменяет установку и приёмку на боевых данных.</p></div>
+<header><div><small>FRESH Portal · локальная проверка</small><h1>Личные задачи ролей<br>и подготовка beta</h1>
+<p>Личный вход, раздельные роли, формы по шаблону и проверка результата руководителем. Готовность кода не подменяет установку и приёмку на боевых данных.</p></div>
 <span class="badge">Не установлен на production</span></header>
 <div class="note"><strong>Это визуальный отчёт, не второй портал.</strong>
 <p>Здесь только снимки настоящего интерфейса с локальными синтетическими записями. Боевая база, пароли и сессии не подключены.
 Авторизация и команды проверены отдельно на same-origin стенде; встроенный предпросмотр не заменяет эту проверку.</p></div>
+<h2>Новый этап: задачи каждой роли</h2>
+<p>РФ, РОП и РОО работают со своими поручениями. Незавершённая задача сохраняет номер, срок и историю между днями. Личный список не выдаётся за завершённый дневной отчёт: business date, окна заполнения и регулярная генерация остаются отдельной разработкой.</p>
+<div class="grid">
+<figure class="card"><a href="personal-qa/desktop-personal-light.png" target="_blank" rel="noopener"><img src="personal-qa/desktop-personal-light.png" alt="Личные открытые задачи РОП"></a><figcaption>Точная роль и персональный исполнитель. Принятые и отменённые задачи не смешиваются с открытыми.</figcaption></figure>
+<figure class="card"><a href="personal-qa/desktop-fields-light.png" target="_blank" rel="noopener"><img src="personal-qa/desktop-fields-light.png" alt="Проверенная многострочная форма РФ"></a><figcaption>Числа, текст и повторяемые записи. Синтетический результат после возврата, исправления и принятия.</figcaption></figure>
+<figure class="card"><a href="personal-qa/desktop-create-dark.png" target="_blank" rel="noopener"><img loading="lazy" src="personal-qa/desktop-create-dark.png" alt="Выбор шаблона и роли"></a><figcaption>РМ выбирает шаблон и срок по Москве; исполнитель назначается отдельно.</figcaption></figure>
+<figure class="card"><a href="personal-qa/desktop-day-change.png" target="_blank" rel="noopener"><img loading="lazy" src="personal-qa/desktop-day-change.png" alt="Предупреждение после смены московской даты"></a><figcaption>Полночь не перезагружает страницу и не обнуляет незавершённые задачи.</figcaption></figure>
+</div>
+<div class="mobile" style="margin-top:20px"><img loading="lazy" src="personal-qa/mobile-personal-dark.png" alt="Личный список РОО на телефоне"><img loading="lazy" src="personal-qa/mobile-role-form-dark.png" alt="Отдельный результат РОО"></div>
+<div class="note"><strong>298 серверных и 48 клиентских проверок пройдены.</strong><p>Проверен браузерный цикл с синтетическими данными. Новый выпуск не установлен на production. Собственный сервер утверждён основным хранилищем; Диск остаётся временным источником переноса. Полные ежедневники, перенос истории и публикация KPI ещё не завершены.</p></div>
 <h2>Личные пользователи и первый вход</h2>
 <p>Новая запись создаётся без ролей. Приглашение действует 72 часа, показывается один раз и может быть отозвано. Автоматической отправки нет. После установки пароля сотрудник входит обычным способом; права назначаются отдельно.</p>
 <div class="grid">

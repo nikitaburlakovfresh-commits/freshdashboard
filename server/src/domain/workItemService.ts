@@ -291,10 +291,30 @@ function requireIdempotencyKey(key: string | undefined): string {
   return key;
 }
 
+// Catalog exposes immutable schemas, never another person's task values.
+// Creating tasks remains RM-only; SUPER_ADMIN is not an implicit executor.
+export async function listTaskTemplates(ctx: ActorContext) {
+  return withTransaction(async client => {
+    if (!(await currentRmOrgIds(client, ctx.authUser.userId)).size) {
+      throw new ApiError('FORBIDDEN', 'Нет права постановки задач.');
+    }
+    const result = await client.query<TemplateRow>('SELECT * FROM templates ORDER BY display_name, code');
+    return { items: result.rows.filter(t => {
+      const roles = new Set(Object.values(t.field_ownership_rules));
+      return roles.size === 1 && t.field_schema.length > 0 &&
+        t.field_schema.every(f => t.field_ownership_rules[f.field_path]);
+    }).map(t => ({
+      code: t.code, display_name: t.display_name, version: t.version,
+      owner_role: deriveTemplateOwnerRole(t), field_schema: t.field_schema,
+      requires_acceptance: t.requires_acceptance,
+    })) };
+  });
+}
+
 // ---------- listWorkItems ----------
 export async function listWorkItems(
   ctx: ActorContext,
-  params: { orgFilter?: string; status?: string; limit: number; cursor?: string },
+  params: { orgFilter?: string; status?: string; limit: number; cursor?: string; mine?: boolean; role?: string },
 ) {
   return withTransaction(async (client) => {
     const rmOrgs = await currentRmOrgIds(client, ctx.authUser.userId);
@@ -312,7 +332,12 @@ export async function listWorkItems(
     // caller's grant set has changed since the cursor was issued (grant
     // added/revoked), decodeCursor rejects it with INVALID_CURSOR instead
     // of silently paginating over a stale/inconsistent grant snapshot.
-    const cursorFilterKey = buildCursorFilterKey(params.orgFilter, params.status, allGrantedOrgs);
+    if (params.role && !params.mine) throw new ApiError('VALIDATION_ERROR', 'Фильтр роли доступен только в личном списке.');
+    const cursorFilterKey = JSON.stringify({
+      base: buildCursorFilterKey(params.orgFilter, params.status, allGrantedOrgs),
+      mine: params.mine ?? false, role: params.role ?? null,
+      roles: [...operationalRoles].sort(([a],[b]) => a.localeCompare(b)).map(([org, roles]) => [org, [...roles].sort()]),
+    });
     let cursorCreatedAt: string | null = null;
     let cursorId: string | null = null;
     if (params.cursor) {
@@ -341,6 +366,24 @@ export async function listWorkItems(
     values.push(ctx.authUser.userId);
     idx += 2;
 
+    if (params.mine) {
+      conditions.push(`wi.assignee_user_id = $${idx++}`);
+      values.push(ctx.authUser.userId);
+      conditions.push(`wi.status IN ('ASSIGNED', 'IN_PROGRESS', 'SUBMITTED')`);
+      // Exact single owner role AND exact branch. A remaining ROP grant
+      // must not expose a formerly assigned RF task in the personal view.
+      const scopes: string[] = [];
+      for (const [org, roles] of operationalRoles) {
+        for (const role of roles) {
+          if (params.role && params.role !== role) continue;
+          scopes.push(`(wi.org_unit_id = $${idx++} AND
+            EXISTS (SELECT 1 FROM jsonb_each_text(t.field_ownership_rules)) AND
+            NOT EXISTS (SELECT 1 FROM jsonb_each_text(t.field_ownership_rules) o WHERE o.value <> $${idx++}))`);
+          values.push(org, role);
+        }
+      }
+      conditions.push(scopes.length ? `(${scopes.join(' OR ')})` : 'FALSE');
+    }
     if (params.status) {
       conditions.push(`wi.status = $${idx++}`);
       values.push(params.status);
@@ -352,7 +395,7 @@ export async function listWorkItems(
 
     values.push(params.limit);
     const sql = `
-      SELECT wi.* FROM work_items wi
+      SELECT wi.* FROM work_items wi JOIN templates t ON t.id = wi.template_version_id
       WHERE ${conditions.join(' AND ')}
       ORDER BY wi.created_at ASC, wi.id ASC
       LIMIT $${idx}
@@ -379,7 +422,8 @@ export async function listWorkItems(
       res.rows.length === params.limit
         ? encodeCursor(res.rows[res.rows.length - 1].created_at, res.rows[res.rows.length - 1].id, ctx.authUser.userId, cursorFilterKey)
         : null;
-    return { items, next_cursor: nextCursor };
+    const clock = await client.query("SELECT to_char(now() AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day");
+    return { items, next_cursor: nextCursor, current_business_date: clock.rows[0].day };
   });
 }
 
