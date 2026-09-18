@@ -2,7 +2,7 @@ import { PoolClient } from 'pg';
 import { withTransaction } from '../db/pool';
 import { ApiError } from '../util/errors';
 import { AuthedUser } from '../auth/session';
-import { getEffectiveGrants, isActiveRfWithGrant } from './grants';
+import { getEffectiveGrants, isActiveRoleWithGrant } from './grants';
 import {
   lockWorkItem, getWorkItemRow, lockFieldByPath, lockAllFields, getFields, getCurrentSubmission,
   getTemplateByCode, getTemplateById, TemplateRow, WorkItemRow,
@@ -23,9 +23,54 @@ async function currentRmOrgIds(client: PoolClient, userId: string): Promise<Set<
   return new Set(grants.filter((g) => g.role === 'REGIONAL_MANAGER').map((g) => g.orgUnitId).filter((id):id is string=>id!==null));
 }
 
-async function currentRfOrgIds(client: PoolClient, userId: string): Promise<Set<string>> {
+// Generalized replacement for the old RF-only currentRfOrgIds (ТЗ
+// "Авторизация по всем ролям индивидуальная", 2026-09-18): returns every
+// org unit where the actor currently holds ANY non-REGIONAL_MANAGER,
+// non-revoked, in-window grant, together with WHICH role(s) they hold
+// there. Two call-site styles read this map:
+//  - loose "still an active branch employee" freshness check (get/list/
+//    history/notifications): Set(map.keys()) -- matches the ORIGINAL
+//    intent of the re-read-after-lock comments below ("so a concurrently
+//    revoked grant is still caught"), not a role-identity check, so it is
+//    intentionally left permissive across whatever operational role the
+//    actor happens to hold in that org.
+//  - strict "does the actor hold THIS SPECIFIC role here" check (start/
+//    patch/submit/reopen/assign/eligible-assignees), via
+//    map.get(orgUnitId)?.has(requiredRole) -- required wherever an action
+//    is gated to the exact role a template names as its field owner.
+async function currentOperationalRolesByOrg(client: PoolClient, userId: string): Promise<Map<string, Set<string>>> {
   const grants = await getEffectiveGrants(client, userId);
-  return new Set(grants.filter((g) => g.role === 'RF').map((g) => g.orgUnitId).filter((id):id is string=>id!==null));
+  const map = new Map<string, Set<string>>();
+  for (const g of grants) {
+    if (g.role === 'REGIONAL_MANAGER' || g.orgUnitId === null) continue;
+    if (!map.has(g.orgUnitId)) map.set(g.orgUnitId, new Set());
+    map.get(g.orgUnitId)!.add(g.role);
+  }
+  return map;
+}
+
+// A template's executor role is derived from field_ownership_rules rather
+// than a hardcoded 'RF' literal or a new templates.owner_role_code column:
+// every field's declared owner already names the role, and today every
+// template (pilot_task_v1, migration 007 test fixtures, migration 008's 5
+// RF daily-log templates) has exactly one distinct owner across all of its
+// fields. A template mixing owner roles across fields (a future shared
+// aggregator, e.g. TZ §13.14 daily_log_branch/add_to_daily_log) is
+// explicitly out of scope for this phase -- fail closed with a clear
+// VALIDATION_ERROR instead of silently picking one role, so that scenario
+// surfaces as a deliberate design decision later, not a silent bug now.
+function deriveTemplateOwnerRole(template: TemplateRow): string {
+  const roles = new Set(Object.values(template.field_ownership_rules));
+  if (roles.size === 0) {
+    throw new ApiError('VALIDATION_ERROR', 'Шаблон не определяет роль-владельца полей.');
+  }
+  if (roles.size > 1) {
+    throw new ApiError(
+      'VALIDATION_ERROR',
+      'Шаблоны с несколькими ролями-владельцами полей пока не поддерживаются.',
+    );
+  }
+  return [...roles][0];
 }
 
 async function loadCard(client: PoolClient, workItem: WorkItemRow) {
@@ -241,8 +286,8 @@ export async function listWorkItems(
 ) {
   return withTransaction(async (client) => {
     const rmOrgs = await currentRmOrgIds(client, ctx.authUser.userId);
-    const rfOrgs = await currentRfOrgIds(client, ctx.authUser.userId);
-    const allGrantedOrgs = new Set([...rmOrgs, ...rfOrgs]);
+    const operationalRoles = await currentOperationalRolesByOrg(client, ctx.authUser.userId);
+    const allGrantedOrgs = new Set([...rmOrgs, ...operationalRoles.keys()]);
 
     if (params.orgFilter && !allGrantedOrgs.has(params.orgFilter)) {
       throw new ApiError('FORBIDDEN', 'Нет доступа к запрошенному филиалу.');
@@ -369,19 +414,26 @@ export async function getEligibleAssignees(ctx: ActorContext, workItemId: string
     const rmOrgs = await currentRmOrgIds(client, ctx.authUser.userId);
     if (!rmOrgs.has(row.org_unit_id)) throw new ApiError('NOT_FOUND', 'Объект не найден.');
 
+    // Candidate pool is scoped to the template's declared owner role
+    // (§ generalization 2026-09-18), not a hardcoded 'RF' literal, so the
+    // picker offers the right people once a template targets ROP/ROO/etc.
+    const template = await getTemplateById(client, row.template_version_id);
+    if (!template) throw new ApiError('NOT_FOUND', 'Объект не найден.');
+    const ownerRole = deriveTemplateOwnerRole(template);
+
     const res = await client.query(
       `SELECT u.id, u.full_name, u.login
        FROM app_users u
        JOIN role_grants rg ON rg.user_id = u.id
        WHERE u.is_active
          AND NOT u.password_last_shared_indicator
-         AND rg.role_code = 'RF'
+         AND rg.role_code = $2
          AND rg.org_unit_id = $1
          AND rg.revoked_at IS NULL
          AND rg.valid_from <= now()
          AND (rg.valid_until IS NULL OR rg.valid_until > now())
        ORDER BY u.full_name`,
-      [row.org_unit_id],
+      [row.org_unit_id, ownerRole],
     );
     return {
       items: res.rows.map((r) => ({ id: r.id, full_name: r.full_name, login: r.login })),
@@ -395,9 +447,10 @@ export async function getWorkItem(ctx: ActorContext, workItemId: string) {
     const row = await getWorkItemRow(client, workItemId);
     if (!row) throw new ApiError('NOT_FOUND', 'Объект не найден.');
     const rmOrgs = await currentRmOrgIds(client, ctx.authUser.userId);
-    const rfOrgs = await currentRfOrgIds(client, ctx.authUser.userId);
+    const operationalRoles = await currentOperationalRolesByOrg(client, ctx.authUser.userId);
     const visible =
-      rmOrgs.has(row.org_unit_id) || (rfOrgs.has(row.org_unit_id) && row.assignee_user_id === ctx.authUser.userId);
+      rmOrgs.has(row.org_unit_id) ||
+      (operationalRoles.has(row.org_unit_id) && row.assignee_user_id === ctx.authUser.userId);
     if (!visible) throw new ApiError('NOT_FOUND', 'Объект не найден.');
     return loadCard(client, row);
   });
@@ -561,7 +614,14 @@ export async function assignWorkItem(
       if (workItem.status !== 'DRAFT') {
         throw new ApiError('INVALID_TRANSITION', 'Переход из текущего состояния запрещён.', { current_status: workItem.status as any });
       }
-      const eligible = await isActiveRfWithGrant(client, assigneeId, workItem.org_unit_id);
+      // Candidate must hold the role the TEMPLATE names as field owner
+      // (generalization 2026-09-18), not a hardcoded RF check -- so
+      // assigning a ROP/ROO/etc.-owned template only accepts an active
+      // grantee of that same role.
+      const templateForAssign = await getTemplateById(client, workItem.template_version_id);
+      if (!templateForAssign) throw new ApiError('NOT_FOUND', 'Объект не найден.');
+      const assignOwnerRole = deriveTemplateOwnerRole(templateForAssign);
+      const eligible = await isActiveRoleWithGrant(client, assigneeId, workItem.org_unit_id, assignOwnerRole);
       if (!eligible) {
         throw new ApiError('ASSIGNEE_INELIGIBLE', 'Указанный исполнитель недоступен для назначения.');
       }
@@ -609,11 +669,16 @@ export async function startWorkItem(ctx: ActorContext, workItemId: string, idemK
     return withIdempotency(client, ctx.authUser.userId, 'startWorkItem', idemKey, workItemId, body, async () => {
       const workItem = await lockWorkItem(client, workItemId);
       if (!workItem) throw new ApiError('NOT_FOUND', 'Объект не найден.');
-      // Re-read grants AFTER the row lock so a concurrently revoked RF grant
-      // is still caught.
-      const rfOrgs = await currentRfOrgIds(client, ctx.authUser.userId);
-      const isOwnRf = rfOrgs.has(workItem.org_unit_id) && workItem.assignee_user_id === ctx.authUser.userId;
-      if (!isOwnRf) throw new ApiError('FORBIDDEN', 'Действие не разрешено.');
+      // Re-read grants AFTER the row lock so a concurrently revoked grant is
+      // still caught. Generalized 2026-09-18: the actor must hold the exact
+      // role the TEMPLATE names as field owner (not a hardcoded RF check),
+      // so a ROP/ROO/etc.-owned template's own assignee can start it too.
+      const startTemplate = await getTemplateById(client, workItem.template_version_id);
+      if (!startTemplate) throw new ApiError('NOT_FOUND', 'Объект не найден.');
+      const startOwnerRole = deriveTemplateOwnerRole(startTemplate);
+      const startRolesHeld = (await currentOperationalRolesByOrg(client, ctx.authUser.userId)).get(workItem.org_unit_id) ?? new Set<string>();
+      const isOwnExecutor = startRolesHeld.has(startOwnerRole) && workItem.assignee_user_id === ctx.authUser.userId;
+      if (!isOwnExecutor) throw new ApiError('FORBIDDEN', 'Действие не разрешено.');
 
       if (workItem.entity_version !== expectedVersion) {
         throw new ApiError('ENTITY_VERSION_CONFLICT', 'Версия сущности изменилась.', {
@@ -634,7 +699,7 @@ export async function startWorkItem(ctx: ActorContext, workItemId: string, idemK
 
       await writeAuditAndOutbox(client, {
         actorUserId: ctx.authUser.userId,
-        actorRole: 'RF',
+        actorRole: startOwnerRole,
         orgUnitId: workItem.org_unit_id,
         workItemId,
         action: 'START',
@@ -684,11 +749,14 @@ export async function patchWorkItemFields(
     return withIdempotency(client, ctx.authUser.userId, 'patchWorkItemFields', idemKey, workItemId, body, async () => {
       const workItem = await lockWorkItem(client, workItemId);
       if (!workItem) throw new ApiError('NOT_FOUND', 'Объект не найден.');
-      // Re-read grants AFTER the row lock so a concurrently revoked RF grant
-      // is still caught.
-      const rfOrgs = await currentRfOrgIds(client, ctx.authUser.userId);
-      const isOwnRf = rfOrgs.has(workItem.org_unit_id) && workItem.assignee_user_id === ctx.authUser.userId;
-      if (!isOwnRf) throw new ApiError('FORBIDDEN_FIELD', 'Действие с полем не разрешено.');
+      // Re-read grants AFTER the row lock so a concurrently revoked grant is
+      // still caught. Loose gate first (any operational role in this org +
+      // is the assignee) -- same "still an active branch employee" freshness
+      // check the RF-only code used to do; the field-specific role match
+      // happens below once the field's declared owner role is known.
+      const rolesHeld = (await currentOperationalRolesByOrg(client, ctx.authUser.userId)).get(workItem.org_unit_id) ?? new Set<string>();
+      const isOwnExecutor = rolesHeld.size > 0 && workItem.assignee_user_id === ctx.authUser.userId;
+      if (!isOwnExecutor) throw new ApiError('FORBIDDEN_FIELD', 'Действие с полем не разрешено.');
 
       if (!['ASSIGNED', 'IN_PROGRESS'].includes(workItem.status)) {
         throw new ApiError('INVALID_TRANSITION', 'Переход из текущего состояния запрещён.', { current_status: workItem.status as any });
@@ -696,15 +764,18 @@ export async function patchWorkItemFields(
 
       // Field def + ownership are read from the template (§13.13.1) instead
       // of a hardcoded 'completion_summary' compare, so an unknown field_path
-      // or one this template does not grant RF write access to is rejected
-      // the same way regardless of which template the work item uses.
+      // or one this template does not grant the actor's held role write
+      // access to is rejected the same way regardless of which template the
+      // work item uses or which role owns its fields (generalized 2026-09-18:
+      // was a hardcoded !== 'RF' compare).
       const template = await getTemplateById(client, workItem.template_version_id);
       if (!template) throw new ApiError('NOT_FOUND', 'Объект не найден.');
       const fieldDef = findFieldDef(template, fieldPath);
       if (!fieldDef) {
         throw new ApiError('VALIDATION_ERROR', 'Неизвестное поле.', { issues: [{ path: 'changes[0].field_path', issue: 'unknown field_path for this template' }] });
       }
-      if (template.field_ownership_rules[fieldPath] !== 'RF') {
+      const fieldOwnerRole = template.field_ownership_rules[fieldPath];
+      if (!fieldOwnerRole || !rolesHeld.has(fieldOwnerRole)) {
         throw new ApiError('FORBIDDEN_FIELD', 'Действие с полем не разрешено.');
       }
       const newValue = validateFieldValue(fieldDef, rawNewValue, 'changes[0].new_value');
@@ -715,7 +786,7 @@ export async function patchWorkItemFields(
         // Field CAS reject -> FIELD_PATCH_REJECTED security/audit event (§4).
         await writeAuditAndOutbox(client, {
           actorUserId: ctx.authUser.userId,
-          actorRole: 'RF',
+          actorRole: fieldOwnerRole,
           orgUnitId: workItem.org_unit_id,
           workItemId,
           action: 'FIELD_PATCH_REJECTED',
@@ -757,7 +828,7 @@ export async function patchWorkItemFields(
 
       await writeAuditAndOutbox(client, {
         actorUserId: ctx.authUser.userId,
-        actorRole: 'RF',
+        actorRole: fieldOwnerRole,
         orgUnitId: workItem.org_unit_id,
         workItemId,
         action: 'FIELDS_PATCH',
@@ -790,11 +861,15 @@ export async function submitWorkItem(ctx: ActorContext, workItemId: string, idem
     return withIdempotency(client, ctx.authUser.userId, 'submitWorkItem', idemKey, workItemId, body, async () => {
       const workItem = await lockWorkItem(client, workItemId);
       if (!workItem) throw new ApiError('NOT_FOUND', 'Объект не найден.');
-      // Re-read grants AFTER the row lock so a concurrently revoked RF grant
-      // is still caught.
-      const rfOrgs = await currentRfOrgIds(client, ctx.authUser.userId);
-      const isOwnRf = rfOrgs.has(workItem.org_unit_id) && workItem.assignee_user_id === ctx.authUser.userId;
-      if (!isOwnRf) throw new ApiError('FORBIDDEN', 'Действие не разрешено.');
+      // Re-read grants AFTER the row lock so a concurrently revoked grant is
+      // still caught. Generalized 2026-09-18: the actor must hold the exact
+      // role the TEMPLATE names as field owner (not a hardcoded RF check).
+      const submitTemplate = await getTemplateById(client, workItem.template_version_id);
+      if (!submitTemplate) throw new ApiError('NOT_FOUND', 'Объект не найден.');
+      const submitOwnerRole = deriveTemplateOwnerRole(submitTemplate);
+      const submitRolesHeld = (await currentOperationalRolesByOrg(client, ctx.authUser.userId)).get(workItem.org_unit_id) ?? new Set<string>();
+      const isOwnExecutorSubmit = submitRolesHeld.has(submitOwnerRole) && workItem.assignee_user_id === ctx.authUser.userId;
+      if (!isOwnExecutorSubmit) throw new ApiError('FORBIDDEN', 'Действие не разрешено.');
 
       if (workItem.entity_version !== expectedVersion) {
         throw new ApiError('ENTITY_VERSION_CONFLICT', 'Версия сущности изменилась.', {
@@ -868,7 +943,7 @@ export async function submitWorkItem(ctx: ActorContext, workItemId: string, idem
 
       await writeAuditAndOutbox(client, {
         actorUserId: ctx.authUser.userId,
-        actorRole: 'RF',
+        actorRole: submitOwnerRole,
         orgUnitId: workItem.org_unit_id,
         workItemId,
         action: 'SUBMIT',
@@ -1125,7 +1200,15 @@ export async function reopenWorkItem(ctx: ActorContext, workItemId: string, idem
       if (workItem.status !== 'COMPLETED') {
         throw new ApiError('INVALID_TRANSITION', 'Переход из текущего состояния запрещён.', { current_status: workItem.status as any });
       }
-      if (!workItem.assignee_user_id || !(await isActiveRfWithGrant(client, workItem.assignee_user_id, workItem.org_unit_id))) {
+      // Generalized 2026-09-18: the previous assignee must still hold the
+      // role the TEMPLATE names as field owner (not a hardcoded RF check).
+      const reopenTemplate = await getTemplateById(client, workItem.template_version_id);
+      if (!reopenTemplate) throw new ApiError('NOT_FOUND', 'Объект не найден.');
+      const reopenOwnerRole = deriveTemplateOwnerRole(reopenTemplate);
+      if (
+        !workItem.assignee_user_id ||
+        !(await isActiveRoleWithGrant(client, workItem.assignee_user_id, workItem.org_unit_id, reopenOwnerRole))
+      ) {
         throw new ApiError('ASSIGNEE_INELIGIBLE', 'Прежний исполнитель недоступен для возобновления.');
       }
 
@@ -1169,8 +1252,10 @@ export async function getWorkItemHistory(ctx: ActorContext, workItemId: string, 
     const row = await getWorkItemRow(client, workItemId);
     if (!row) throw new ApiError('NOT_FOUND', 'Объект не найден.');
     const rmOrgs = await currentRmOrgIds(client, ctx.authUser.userId);
-    const rfOrgs = await currentRfOrgIds(client, ctx.authUser.userId);
-    const visible = rmOrgs.has(row.org_unit_id) || (rfOrgs.has(row.org_unit_id) && row.assignee_user_id === ctx.authUser.userId);
+    const operationalRoles = await currentOperationalRolesByOrg(client, ctx.authUser.userId);
+    const visible =
+      rmOrgs.has(row.org_unit_id) ||
+      (operationalRoles.has(row.org_unit_id) && row.assignee_user_id === ctx.authUser.userId);
     if (!visible) throw new ApiError('NOT_FOUND', 'Объект не найден.');
 
     let cursorVersion: number | null = null;
@@ -1258,8 +1343,8 @@ async function mapAuditToHistoryEntry(client: PoolClient, entry: any) {
 export async function listNotifications(ctx: ActorContext, params: { unreadOnly: boolean; limit: number; cursor?: string }) {
   return withTransaction(async (client) => {
     const rmOrgs = await currentRmOrgIds(client, ctx.authUser.userId);
-    const rfOrgs = await currentRfOrgIds(client, ctx.authUser.userId);
-    const grantedOrgs = new Set([...rmOrgs, ...rfOrgs]);
+    const operationalRoles = await currentOperationalRolesByOrg(client, ctx.authUser.userId);
+    const grantedOrgs = new Set([...rmOrgs, ...operationalRoles.keys()]);
 
     let cursorCreatedAt: string | null = null;
     let cursorId: string | null = null;
@@ -1318,8 +1403,8 @@ export async function readNotification(ctx: ActorContext, notificationId: string
 
   return withTransaction(async (client) => {
     const rmOrgs = await currentRmOrgIds(client, ctx.authUser.userId);
-    const rfOrgs = await currentRfOrgIds(client, ctx.authUser.userId);
-    const grantedOrgs = new Set([...rmOrgs, ...rfOrgs]);
+    const operationalRoles = await currentOperationalRolesByOrg(client, ctx.authUser.userId);
+    const grantedOrgs = new Set([...rmOrgs, ...operationalRoles.keys()]);
 
     return withIdempotency(client, ctx.authUser.userId, 'readNotification', idemKey, notificationId, body, async () => {
       const res = await client.query('SELECT * FROM notifications WHERE id = $1 FOR UPDATE', [notificationId]);

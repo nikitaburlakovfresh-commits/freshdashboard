@@ -23,8 +23,29 @@ const DATE_TEMPLATE_ID = '00000000-0000-4000-8000-000000000203';
 const MULTI_FIELD_TEMPLATE_ID = '00000000-0000-4000-8000-000000000204';
 const SELECT_TEMPLATE_ID = '00000000-0000-4000-8000-000000000205';
 const GROUP_TEMPLATE_ID = '00000000-0000-4000-8000-000000000206';
+const ROP_TEMPLATE_ID = '00000000-0000-4000-8000-000000000207';
 
 beforeAll(async () => {
+  // TE-09 fixture: a template owned by ROP (not RF), plus a dedicated
+  // rop_a user holding ONLY the ROP grant in org A -- proves the
+  // 2026-09-18 authorization generalization actually works end to end for
+  // a role other than RF, not just that RF still works.
+  const rfARow = await pool.query("SELECT password_hash FROM app_users WHERE login = 'rf_a'");
+  await pool.query(
+    `INSERT INTO app_users (login, full_name, password_hash, password_hash_updated_at)
+     VALUES ('rop_a', 'Тестовый РОП A', $1, now())
+     ON CONFLICT (login) DO NOTHING`,
+    [rfARow.rows[0].password_hash],
+  );
+  const ropUser = await pool.query("SELECT id FROM app_users WHERE login = 'rop_a'");
+  await pool.query(
+    `INSERT INTO role_grants (user_id, role_code, org_unit_id, valid_from)
+     SELECT $1, 'ROP', '00000000-0000-4000-8000-00000000000a', now()
+     WHERE NOT EXISTS (
+       SELECT 1 FROM role_grants WHERE user_id = $1 AND role_code = 'ROP' AND org_unit_id = '00000000-0000-4000-8000-00000000000a' AND revoked_at IS NULL
+     )`,
+    [ropUser.rows[0].id],
+  );
   await pool.query(
     `INSERT INTO templates (id, code, version, display_name, is_system, field_schema, field_ownership_rules, field_visibility_rules)
      VALUES
@@ -50,9 +71,12 @@ beforeAll(async () => {
             {"field_path":"crm_link","label":"Ссылка на ТС в CRM","type":"url","required":true,"max_chars":500},
             {"field_path":"comment","label":"Решение по ТС","type":"text","required":true,"min_chars":1,"max_chars":1000}
           ]}]'::jsonb,
-       '{"vehicles":"RF"}'::jsonb, '{}'::jsonb)
+       '{"vehicles":"RF"}'::jsonb, '{}'::jsonb),
+     ($7, 'rop_task_v1', 1, 'Задача РОП (тест)', false,
+       '[{"field_path":"rop_result","label":"Результат РОП","type":"text","required":true,"min_chars":1,"max_chars":500}]'::jsonb,
+       '{"rop_result":"ROP"}'::jsonb, '{}'::jsonb)
      ON CONFLICT (id) DO NOTHING`,
-    [METRIC_TEMPLATE_ID, LINK_TEMPLATE_ID, DATE_TEMPLATE_ID, MULTI_FIELD_TEMPLATE_ID, SELECT_TEMPLATE_ID, GROUP_TEMPLATE_ID],
+    [METRIC_TEMPLATE_ID, LINK_TEMPLATE_ID, DATE_TEMPLATE_ID, MULTI_FIELD_TEMPLATE_ID, SELECT_TEMPLATE_ID, GROUP_TEMPLATE_ID, ROP_TEMPLATE_ID],
   );
 });
 
@@ -278,5 +302,68 @@ describe('TE-01..TE-03 templates beyond pilot_task_v1 (§13.13.1)', () => {
       // visibility should be silently implied by this data.
       expect(row.field_visibility_rules).toEqual({});
     }
+  });
+
+  test('TE-09 a template owned by ROP (not RF) authorizes rop_a end to end; rf_a is ineligible for it', async () => {
+    const rmA = await login('rm_a');
+    const ropA = await login('rop_a');
+    const { rows: ropRows } = await pool.query("SELECT id FROM app_users WHERE login = 'rop_a'");
+    const { rows: rfRows } = await pool.query("SELECT id FROM app_users WHERE login = 'rf_a'");
+
+    const created = await authed(rmA)
+      .post('/api/v1/work-items')
+      .set('Idempotency-Key', idemKey('rop-create'))
+      .send({ org_unit_id: ORG_A, title: 'Задача РОП', due_at: '2027-01-01T00:00:00Z', template_code: 'rop_task_v1' });
+    expect(created.status).toBe(201);
+    const wi = created.body;
+
+    // eligible-assignees for a ROP-owned template must list rop_a, not rf_a.
+    const eligible = await authed(rmA).get(`/api/v1/work-items/${wi.id}/eligible-assignees`);
+    expect(eligible.status).toBe(200);
+    const eligibleIds = eligible.body.items.map((u: { id: string }) => u.id);
+    expect(eligibleIds).toContain(ropRows[0].id);
+    expect(eligibleIds).not.toContain(rfRows[0].id);
+
+    // Assigning the RF-only user to a ROP-owned template is ineligible.
+    const badAssign = await authed(rmA)
+      .post(`/api/v1/work-items/${wi.id}/assign`)
+      .set('Idempotency-Key', idemKey('rop-assign-wrong'))
+      .send({ expected_entity_version: 1, assignee_user_id: rfRows[0].id });
+    expect(badAssign.status).toBe(422);
+    expect(badAssign.body.code).toBe('ASSIGNEE_INELIGIBLE');
+
+    // Assigning the ROP-grant holder succeeds, and they can start/patch/submit.
+    const assign = await authed(rmA)
+      .post(`/api/v1/work-items/${wi.id}/assign`)
+      .set('Idempotency-Key', idemKey('rop-assign'))
+      .send({ expected_entity_version: 1, assignee_user_id: ropRows[0].id });
+    expect(assign.status).toBe(200);
+
+    const started = await authed(ropA)
+      .post(`/api/v1/work-items/${wi.id}/start`)
+      .set('Idempotency-Key', idemKey('rop-start'))
+      .send({ expected_entity_version: 2 });
+    expect(started.status).toBe(200);
+
+    const patched = await authed(ropA)
+      .patch(`/api/v1/work-items/${wi.id}/fields`)
+      .set('Idempotency-Key', idemKey('rop-patch'))
+      .send({ changes: [{ field_path: 'rop_result', expected_version: 1, new_value: 'Готово' }] });
+    expect(patched.status).toBe(200);
+    expect(patched.body.fields[0].value).toBe('Готово');
+
+    const submitted = await authed(ropA)
+      .post(`/api/v1/work-items/${wi.id}/submit`)
+      .set('Idempotency-Key', idemKey('rop-submit'))
+      .send({ expected_entity_version: 4 });
+    expect(submitted.status).toBe(200);
+    expect(submitted.body.current_submission.field_values).toEqual({ rop_result: 'Готово' });
+
+    // Audit trail records the actual role that acted, not a hardcoded 'RF'.
+    const audit = await pool.query(
+      `SELECT action, actor_role FROM audit_log WHERE aggregate_id = $1 AND action IN ('START','FIELDS_PATCH','SUBMIT') ORDER BY occurred_at`,
+      [wi.id],
+    );
+    expect(audit.rows.every((r) => r.actor_role === 'ROP')).toBe(true);
   });
 });

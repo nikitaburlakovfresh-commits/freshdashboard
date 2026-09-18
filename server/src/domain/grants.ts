@@ -6,8 +6,14 @@ interface GrantBase {
   validUntil: string | null;
   permissions: string[];
 }
+// role is a free-form role_catalog code for ORG_UNIT scope (TZ v2.12 role
+// catalog has 20+ operational roles -- RF/ROP/ROO/RKSO/STOCK/... -- not just
+// the original two-role pilot pair), so callers must not assume the value
+// is 'REGIONAL_MANAGER' | 'RF'. NETWORK scope is left as 'SUPER_ADMIN' only,
+// matching this file's pre-existing (narrower) NETWORK-role handling --
+// widening that side is a separate concern, not touched here.
 export type EffectiveGrant = GrantBase & (
-  { role: 'REGIONAL_MANAGER' | 'RF'; scopeKind:'ORG_UNIT'; orgUnitId:string } |
+  { role: string; scopeKind:'ORG_UNIT'; orgUnitId:string } |
   { role: 'SUPER_ADMIN'; scopeKind:'NETWORK'; orgUnitId:null }
 );
 
@@ -41,7 +47,7 @@ export async function getEffectiveGrants(client: PoolClient, userId: string): Pr
 export async function hasGrant(
   client: PoolClient,
   userId: string,
-  role: 'REGIONAL_MANAGER' | 'RF',
+  role: string,
   orgUnitId: string,
 ): Promise<boolean> {
   const res = await client.query(
@@ -54,15 +60,26 @@ export async function hasGrant(
   return (res.rowCount ?? 0) > 0;
 }
 
-export async function isActiveRfWithGrant(client: PoolClient, userId: string, orgUnitId: string): Promise<boolean> {
+// Generalized replacement for the old RF-only isActiveRfWithGrant: the
+// role to check is now a parameter (driven by a template's declared owner
+// role, ТЗ "Авторизация по всем ролям индивидуальная" -- 2026-09-18), not a
+// hardcoded literal. Same shape/semantics otherwise: active user, not a
+// shared login, currently-effective (non-revoked, in-window) grant of that
+// exact role in that exact org unit.
+export async function isActiveRoleWithGrant(
+  client: PoolClient,
+  userId: string,
+  orgUnitId: string,
+  roleCode: string,
+): Promise<boolean> {
   const res = await client.query(
     `SELECT 1 FROM app_users u
      JOIN role_grants rg ON rg.user_id = u.id
      WHERE u.id = $1 AND u.is_active AND NOT u.password_last_shared_indicator
-       AND rg.role_code = 'RF' AND rg.org_unit_id = $2
+       AND rg.role_code = $2 AND rg.org_unit_id = $3
        AND rg.revoked_at IS NULL AND rg.valid_from <= now()
        AND (rg.valid_until IS NULL OR rg.valid_until > now())`,
-    [userId, orgUnitId],
+    [userId, roleCode, orgUnitId],
   );
   return (res.rowCount ?? 0) > 0;
 }
