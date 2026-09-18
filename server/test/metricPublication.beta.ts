@@ -1,6 +1,14 @@
 // Synthetic local PG16 only. The scanner boundary is mocked ONLY by Jest.
 // This tests publication decisions, not the effectiveness of antivirus signatures.
-jest.mock('../src/reporting/scanner',()=>({scanBytes:jest.fn(async()=>({scanner:'SYNTHETIC_TEST_SCANNER',result:'CLEAN'}))}));
+jest.mock('../src/reporting/scanner',()=>{
+  const scanBytes=jest.fn(async(_bytes?:Buffer)=>({scanner:'SYNTHETIC_TEST_SCANNER',result:'CLEAN'}));
+  // BETA-02. Режим проверки читается так же, как в рабочем коде: 'off' даёт
+  // честный статус NOT_SCANNED, 'clamav' идёт через антивирусную границу.
+  const scanSource=(bytes:Buffer)=>require('../src/config').config.reportScanMode==='off'
+    ? Promise.resolve({scanner:'NOT_SCANNED/REPORT_SCAN_MODE=off',result:'NOT_SCANNED'})
+    : scanBytes(bytes);
+  return {scanBytes,scanSource};
+});
 import request from 'supertest';
 import fs from 'fs/promises';
 import os from 'os';
@@ -12,6 +20,7 @@ import { provisionOrganizationEditor } from '../src/domain/orgEditorProvisioning
 import { provisionReportStaging } from '../src/reporting/provisioning';
 import { provisionFactAccess } from '../src/reporting/factProvisioning';
 import { scanBytes } from '../src/reporting/scanner';
+import { config } from '../src/config';
 import { _resetForTests as resetLimits } from '../src/auth/rateLimit';
 import { app,login,authed,Session,ORIGIN,TEST_PASSWORD } from './helpers';
 import { makeWorkbook,summaryRows } from './reportFixtures';
@@ -211,4 +220,38 @@ test('PUB-20 original totals mismatch blocks only publication, never manufacture
   expect((await scan()).status).toBe(200);
   const v=await verify();expect(v.body.can_commit).toBe(false);expect(v.body.blockers.join(' ')).toContain('итог отчёта');
   batch=prior;await refresh();
+});
+
+test('PUB-21 unscanned original is blocked while the antivirus mode is required',async()=>{
+  (scanBytes as jest.Mock).mockResolvedValueOnce({scanner:'SYNTHETIC_NOT_SCANNED',result:'NOT_SCANNED'});
+  expect((await scan()).status).toBe(200);
+  const v=await verify();
+  expect(v.body.can_commit).toBe(false);
+  expect(v.body.blockers.join(' ')).toContain('антивирус');
+});
+test('PUB-22 released without antivirus: publication is allowed and honestly marked NOT_SCANNED',async()=>{
+  config.reportScanMode='off' as any;
+  try {
+    expect((await scan()).status).toBe(200);
+    const receipt=(await pool.query("SELECT result,scanner FROM report_source_scans ORDER BY scanned_at DESC,id DESC LIMIT 1")).rows[0];
+    expect(receipt.result).toBe('NOT_SCANNED');
+    expect(receipt.scanner).toContain('REPORT_SCAN_MODE=off');
+    const p=(await verify()).body;
+    expect(p.can_commit).toBe(true);
+    const published=await publish(p);
+    expect(published.status).toBe(200);
+    const provenance=(await pool.query("SELECT provenance FROM report_fact_snapshots ORDER BY created_at DESC,id DESC LIMIT 1")).rows[0].provenance;
+    // Отсутствие проверки зафиксировано в истории и не выдаётся за CLEAN.
+    expect(provenance.scan_status).toBe('NOT_SCANNED');
+    expect(provenance.scan_mode).toBe('off');
+  } finally {config.reportScanMode='clamav' as any;}
+});
+test('PUB-23 infected original stays blocked even without the antivirus requirement',async()=>{
+  (scanBytes as jest.Mock).mockResolvedValueOnce({scanner:'SYNTHETIC_INFECTED',result:'INFECTED'});
+  expect((await scan()).status).toBe(200);
+  config.reportScanMode='off' as any;
+  try {
+    const v=await verify();
+    expect(v.body.can_commit).toBe(false);
+  } finally {config.reportScanMode='clamav' as any;}
 });

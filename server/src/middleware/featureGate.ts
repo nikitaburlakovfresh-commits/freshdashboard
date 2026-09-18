@@ -19,6 +19,6 @@ export function requireReportIntake(_req: Request, _res: Response, next: NextFun
 
 /** Явный признак для интерфейса. Клиент обязан отображать состояние, а не
  * угадывать его; при этом скрытие элементов не является механизмом запрета. */
-export function featureFlags(): { report_intake: boolean } {
-  return { report_intake: config.reportIntakeEnabled };
+export function featureFlags(): { report_intake: boolean; source_scan_mode: 'clamav' | 'off' } {
+  return { report_intake: config.reportIntakeEnabled, source_scan_mode: config.reportScanMode };
 }

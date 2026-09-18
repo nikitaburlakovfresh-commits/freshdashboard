@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import type { PoolClient } from 'pg';
 import type { AuthedUser } from '../auth/session';
 import { withTransaction } from '../db/pool';
+import { config } from '../config';
 import { ApiError } from '../util/errors';
 import { canonicalJsonHash } from '../util/crypto';
 import { beginIdempotent,completeIdempotent } from '../domain/idempotency';
@@ -9,7 +10,7 @@ import { writeAuditAndOutbox } from '../domain/auditOutbox';
 import { reviewContext,sourceItemId } from './review';
 import { factAccess,publisher } from './factAccess';
 import { readSource,uuid } from './storage';
-import { scanBytes } from './scanner';
+import { scanSource,SourceScanResult } from './scanner';
 import { METRIC_NAMES,reconcile,validDate,type MetricKey,type ReportKind } from './shared/reportModel';
 
 const invalid=(s:string)=>new ApiError('VALIDATION_ERROR',s);
@@ -67,8 +68,8 @@ export async function scanBatch(auth:AuthedUser,id:string,raw:any,requestId:stri
       const {b}=await reviewContext(c,auth,id);await publisher(c,auth);
       return {id:b.id,files:await files(c,b.id)};
     });
-    const receipts:{file:any;scanner:string;result:'CLEAN'|'INFECTED'}[]=[];
-    for(const f of sources.files)receipts.push({file:f,...await scanBytes(await readSource(sources.id,f))});
+    const receipts:{file:any;scanner:string;result:SourceScanResult}[]=[];
+    for(const f of sources.files)receipts.push({file:f,...await scanSource(await readSource(sources.id,f))});
     return await withTransaction(async c=>{
       await reviewContext(c,auth,sources.id);await publisher(c,auth);
       for(const r of receipts) {
@@ -98,7 +99,14 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
   const sourceFiles=await files(c,context.b.id);
   for(const f of sourceFiles) {
     await readSource(context.b.id,f);
-    if(f.result!=='CLEAN'||!f.scan_current)blockers.push(`Оригинал «${f.display_name}»: нужна чистая антивирусная проверка не старше 24 часов.`);
+    // BETA-02. Без проверки публикация допускается только при явно включённом
+    // режиме REPORT_SCAN_MODE=off, и только с честным статусом NOT_SCANNED.
+    // Заражённый или устаревший результат блокирует публикацию в любом режиме.
+    const scanOk=f.scan_current===true&&(f.result==='CLEAN'||
+      (f.result==='NOT_SCANNED'&&config.reportScanMode==='off'));
+    if(!scanOk)blockers.push(config.reportScanMode==='off'
+      ? `Оригинал «${f.display_name}»: нужна отметка проверки источника не старше 24 часов.`
+      : `Оригинал «${f.display_name}»: нужна чистая антивирусная проверка не старше 24 часов.`);
   }
   const allTargets=new Set<string>();
   for(const choice of b.choices) {
@@ -142,6 +150,7 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
         previous_id:previous?.id??null,previous_value:previous?.value??null,revision:(previous?.revision??0)+1,
         provenance:{kind:'APPROVED_SOURCE_AGGREGATE',channel:'FORM_UI',producer:'QLIK',batch_id:context.b.id,
           file_id:sourceFile.id,file_hash:sourceFile.content_hash,scan_id:sourceFile.scan_id??null,
+          scan_status:sourceFile.result??'NOT_SCANNED',scan_mode:config.reportScanMode,
           report_kind:report.kind,sheet:report.sheet,address:report.columns[choice.metric]!+row.row,
           parser_version:context.b.parser_version,review_hash:view.current.revision_hash,
           extraction:'SOURCE_CELL_V1',methodology:choice.methodology,source_selection_reason:b.reason,

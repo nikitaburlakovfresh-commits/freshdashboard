@@ -82,3 +82,22 @@ test('scan process receives explicit resource limits and stable locale',async()=
     '--max-filesize=8M','--max-scansize=64M','--max-files=2048','--max-recursion=16']));
   expect((spawn as jest.Mock).mock.calls[1][2].env).toMatchObject({LC_ALL:'C',TZ:'UTC'});
 });
+test('BETA-02 mode off returns an honest NOT_SCANNED receipt without starting the scanner',async()=>{
+  const { config }=require('../src/config');
+  const { scanSource }=require('../src/reporting/scanner');
+  config.reportScanMode='off';
+  try {
+    const receipt=await scanSource(Buffer.from('synthetic bytes'));
+    expect(receipt.result).toBe('NOT_SCANNED');
+    expect(receipt.scanner).toContain('REPORT_SCAN_MODE=off');
+    expect(spawn).not.toHaveBeenCalled();
+    await expect(scanSource(Buffer.alloc(0))).rejects.toMatchObject({code:'VALIDATION_ERROR'});
+  } finally {config.reportScanMode='clamav';}
+});
+test('BETA-02 antivirus mode keeps the real scanner boundary in place',async()=>{
+  const { scanSource }=require('../src/reporting/scanner');
+  const v=`ClamAV 1.4.3/28000/${new Date().toUTCString()}\n`;
+  responses([{output:v},{output:'stdin: OK\n'},{output:v}]);
+  expect((await scanSource(Buffer.from('synthetic bytes'))).result).toBe('CLEAN');
+  expect(spawn).toHaveBeenCalled();
+});

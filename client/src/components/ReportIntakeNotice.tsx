@@ -10,8 +10,36 @@ export function useReportIntakeEnabled(): boolean {
   return me?.features?.report_intake !== false;
 }
 
+/** BETA-02. Режим проверки оригиналов. 'off' означает, что антивирусная
+ * проверка не выполняется и публикация помечается статусом NOT_SCANNED. */
+export function useSourceScanMode(): 'clamav' | 'off' {
+  const { me } = useAuth();
+  return me?.features?.source_scan_mode === 'off' ? 'off' : 'clamav';
+}
+
 export default function ReportIntakeNotice() {
-  if (useReportIntakeEnabled()) return null;
+  const intake = useReportIntakeEnabled();
+  const scanMode = useSourceScanMode();
+  if (intake && scanMode === 'clamav') return null;
+  if (intake)
+    return (
+      <section className="org-scope" role="status">
+        <div>
+          <strong>Антивирусная проверка оригиналов сейчас не выполняется</strong>
+          <p>
+            Приём отчётов и публикация показателей работают. Оригиналы файлов проверяются на
+            структуру, размер и целостность, но антивирусная проверка отключена до переноса портала
+            на локальные серверы. Такие срезы получают честный статус проверки{' '}
+            <code>NOT_SCANNED</code> вместо <code>CLEAN</code>, и это видно в истории публикации.
+          </p>
+          <p>
+            Оригиналы остаются в приватном карантине и не выдаются пользователям на скачивание.
+            После включения антивирусного контура режим меняется настройкой, без правки кода и без
+            изменения ранее опубликованных данных.
+          </p>
+        </div>
+      </section>
+    );
   return (
     <section className="org-scope" role="status">
       <div>

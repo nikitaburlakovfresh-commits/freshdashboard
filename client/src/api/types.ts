@@ -33,7 +33,7 @@ export interface MeResponse extends SessionResponse {
   grants: Grant[];
   // BETA-01. Признак ограниченного выпуска. Старые ответы без поля
   // трактуются как «контур доступен», чтобы не выдумывать состояние.
-  features?: { report_intake?: boolean };
+  features?: { report_intake?: boolean; source_scan_mode?: 'clamav' | 'off' };
 }
 
 export interface SavedField {

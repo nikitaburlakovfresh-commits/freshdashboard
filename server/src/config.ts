@@ -38,6 +38,14 @@ export const config = {
   reportIntakeEnabled: !['false', '0', 'off', 'no'].includes(
     (process.env.REPORT_INTAKE_ENABLED ?? 'true').trim().toLowerCase(),
   ),
+
+  // BETA-02. Режим проверки оригиналов отчётов. 'clamav' — обязательная
+  // антивирусная проверка (контур сохранён для локальных серверов); 'off' —
+  // проверка не выполняется, и это фиксируется в receipt как NOT_SCANNED, а не
+  // выдаётся за чистый результат. Значение по умолчанию не ослабляет поведение.
+  reportScanMode: (process.env.REPORT_SCAN_MODE ?? 'clamav').trim().toLowerCase() === 'off'
+    ? ('off' as const)
+    : ('clamav' as const),
 };
 
 if (!config.sessionHmacSecret || !config.csrfHmacSecret || !config.allowedOrigin) {

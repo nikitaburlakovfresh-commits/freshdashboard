@@ -1,6 +1,9 @@
 import { spawn } from 'child_process';
 import { ApiError } from '../util/errors';
+import { config } from '../config';
 import { MAX_FILE_BYTES } from './storage';
+
+export type SourceScanResult='CLEAN'|'INFECTED'|'NOT_SCANNED';
 
 // Fixed executable, stdin only, no shell, no caller-supplied flags or paths.
 // No environment switch that can fabricate a CLEAN receipt in production.
@@ -17,6 +20,16 @@ function run(args:string[],input?:Buffer):Promise<{code:number|null;output:strin
     child.on('close',code=>{if(!settled){settled=true;clearTimeout(timer);resolve({code,output});}});
     child.stdin.end(input);
   });
+}
+/** BETA-02. Антивирусный контур сохранён целиком и включается режимом
+ * REPORT_SCAN_MODE=clamav. В режиме 'off' проверка НЕ выполняется и НЕ
+ * подделывается: возвращается честный статус NOT_SCANNED, который в публикации
+ * трактуется отдельно от CLEAN. Размер и тип файла проверяются в любом режиме. */
+export async function scanSource(bytes:Buffer):Promise<{scanner:string;result:SourceScanResult}> {
+  if(!Buffer.isBuffer(bytes)||bytes.length===0||bytes.length>MAX_FILE_BYTES)
+    throw new ApiError('VALIDATION_ERROR','Недопустимый размер файла для проверки оригинала.');
+  if(config.reportScanMode==='off')return {scanner:'NOT_SCANNED/REPORT_SCAN_MODE=off',result:'NOT_SCANNED'};
+  return scanBytes(bytes);
 }
 let scanning=false;
 export async function scanBytes(bytes:Buffer):Promise<{scanner:string;result:'CLEAN'|'INFECTED'}> {
