@@ -1,0 +1,39 @@
+# Explicit release overlay, NOT automatically loaded. Existing production
+# composition must be reviewed/merged; never replace .env, Caddy or data volumes.
+# Single app process/replica: scanner concurrency is process-wide.
+services:
+  app:
+    mem_limit: 2304m
+    cpus: 1.5
+    volumes:
+      - fresh_clamav_signatures:/var/lib/clamav:ro
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      # App remains usable for diaries if AV becomes stale; this health marks
+      # the full release unavailable. Docker does NOT auto-restart unhealthy.
+      test: ["CMD", "node", "ops/av/check-signatures.cjs"]
+      interval: 5m
+      timeout: 15s
+      start_period: 5m
+      retries: 1
+  av-updater:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: av-updater
+    restart: unless-stopped
+    mem_limit: 1536m
+    cpus: 0.5
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - fresh_clamav_signatures:/var/lib/clamav
+    # No host ports, no original files, no production .env.
+volumes:
+  fresh_clamav_signatures:

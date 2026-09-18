@@ -1,11 +1,12 @@
 import { spawn } from 'child_process';
 import { ApiError } from '../util/errors';
+import { MAX_FILE_BYTES } from './storage';
 
 // Fixed executable, stdin only, no shell, no caller-supplied flags or paths.
 // No environment switch that can fabricate a CLEAN receipt in production.
 function run(args:string[],input?:Buffer):Promise<{code:number|null;output:string}> {
   return new Promise((resolve,reject)=>{
-    const child=spawn('/usr/bin/clamscan',args,{stdio:['pipe','pipe','pipe']});
+    const child=spawn('/usr/bin/clamscan',args,{stdio:['pipe','pipe','pipe'],env:{...process.env,LC_ALL:'C',TZ:'UTC'}});
     let output='',length=0,settled=false;
     const fail=()=>{if(!settled){settled=true;clearTimeout(timer);child.kill('SIGKILL');reject(new ApiError('TEMPORARILY_UNAVAILABLE','Антивирус недоступен или проверка не завершена. Новый результат проверки не получен.'));}};
     const timer=setTimeout(fail,30000);
@@ -17,14 +18,23 @@ function run(args:string[],input?:Buffer):Promise<{code:number|null;output:strin
     child.stdin.end(input);
   });
 }
+let scanning=false;
 export async function scanBytes(bytes:Buffer):Promise<{scanner:string;result:'CLEAN'|'INFECTED'}> {
+  if(!Buffer.isBuffer(bytes)||bytes.length===0||bytes.length>MAX_FILE_BYTES)
+    throw new ApiError('VALIDATION_ERROR','Недопустимый размер файла для антивирусной проверки.');
+  if(scanning)throw new ApiError('TEMPORARILY_UNAVAILABLE','Антивирус занят. Повторите проверку позднее.');
+  scanning=true;
+  try {return await scan(bytes);} finally {scanning=false;}
+}
+async function scan(bytes:Buffer):Promise<{scanner:string;result:'CLEAN'|'INFECTED'}> {
   const before=await run(['--version']);
   const version=before.output.trim();
   const date=Date.parse(version.split('/').slice(2).join('/'));
   if(before.code!==0||!/^ClamAV [\w.+-]+\/\d+\//.test(version)||!Number.isFinite(date)||
     Date.now()-date>48*3600000||date>Date.now()+3600000)
     throw new ApiError('TEMPORARILY_UNAVAILABLE','Нужны проверяемые сигнатуры ClamAV не старше 48 часов.');
-  const scan=await run(['--stdout','--no-summary','--alert-exceeds-max=yes','--alert-encrypted=yes','-'],bytes);
+  const scan=await run(['--stdout','--no-summary','--alert-exceeds-max=yes','--alert-encrypted=yes',
+    '--max-filesize=8M','--max-scansize=64M','--max-files=2048','--max-recursion=16','-'],bytes);
   const after=await run(['--version']);
   if(after.code!==0||after.output.trim()!==version||![0,1].includes(scan.code??-1))
     throw new ApiError('TEMPORARILY_UNAVAILABLE','Антивирусная проверка не завершена. Оригинал остаётся в карантине.');
