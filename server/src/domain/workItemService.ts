@@ -1,5 +1,5 @@
 import { PoolClient } from 'pg';
-import { withTransaction } from '../db/pool';
+import { withTransaction as databaseTransaction } from '../db/pool';
 import { ApiError } from '../util/errors';
 import { AuthedUser } from '../auth/session';
 import { getEffectiveGrants, isActiveRoleWithGrant } from './grants';
@@ -16,6 +16,18 @@ export interface ActorContext {
   requestId: string;
   ip: string | null;
   userAgent: string | null;
+}
+
+// Assignment administration (011) can revoke a grant while a business command
+// is in flight. Fence authorization BEFORE any task/idempotency row lock and
+// retain it through commit. A re-read alone leaves a check-to-INSERT race.
+// Same table order as access administration; SHARE allows concurrent readers
+// and task writers, but serializes them with grant/catalog/user mutations.
+function withTransaction<T>(fn:(client:PoolClient)=>Promise<T>):Promise<T> {
+  return databaseTransaction(async client=>{
+    await client.query('LOCK TABLE app_users, sessions, role_grants, roles, role_permissions IN SHARE MODE');
+    return fn(client);
+  });
 }
 
 async function currentRmOrgIds(client: PoolClient, userId: string): Promise<Set<string>> {

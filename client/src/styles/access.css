@@ -1,0 +1,15 @@
+.access-page .portal-panel { margin-top: 24px; }
+.access-users { display: grid; gap: 12px; max-height: 380px; overflow: auto; }
+.access-users article { padding: 16px; border: 1px solid var(--fresh-border); border-radius: 10px; display: grid; grid-template-columns: minmax(180px,.8fr) minmax(0,1.2fr); gap: 16px; }
+.access-users strong { font-size: 14px; }
+.access-users small { display: block; margin-top: 6px; color: var(--fresh-text-muted); font-size: 12px; line-height: 1.6; }
+.access-users ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-size: 12px; }
+.access-users article,.access-permissions { overflow-wrap: anywhere; }
+.access-notice { background: var(--fresh-info-bg); border-left: 3px solid var(--fresh-blue); padding: 14px 18px; border-radius: 8px; font-size: 13px; line-height: 1.7; }
+.access-permissions { font-size: 12px; line-height: 1.8; padding-left: 20px; }
+.access-page .org-apply-dialog .btn { color: var(--fresh-text); }
+@media(max-width:640px) {
+  .access-users article { grid-template-columns: 1fr; }
+  .access-page .org-section-heading { flex-wrap: wrap; }
+  .access-page .portal-heading h1 { font-size: 24px; }
+}
