@@ -4,6 +4,7 @@ import { getOverview,savePolicy,moscowToday,type OperationalOverview,type Branch
 import StatusBadge from '../components/StatusBadge';
 import LocalBusinessData from '../components/LocalBusinessData';
 import PublishedFacts from '../components/PublishedFacts';
+import BranchGrid from '../components/BranchGrid';
 import '../styles/portal.css';
 import '../styles/beta-workspace.css';
 const fields=[['open_tasks','Открытые задачи'],['overdue_tasks','Срок исполнения истёк'],['awaiting_review','На проверке'],['completed_tasks','Принятые задачи']] as const;
@@ -33,6 +34,7 @@ export default function OperationalPage() {
         <p>Область просмотра: {branch.visibility==='BRANCH'?'все доступные задачи и дневные записи филиала':'только ваши задачи и дневные записи, не итоги всего филиала'}.</p>
         <Link to="/organization">История структуры и назначений →</Link></section>}
       <div className="beta-counters">{totals.map(t=><article className="portal-panel" key={t.label}><span>{t.label}</span><strong>{t.count}</strong><small>По вашей области доступа</small></article>)}</div>
+      <BranchGrid org={orgId}/>
       <PublishedFacts org={orgId}/>
       <section className="portal-panel"><div className="portal-section-head"><div><h2>{orgId?'Ежедневники филиала':'Филиалы и ежедневники'} · {date}</h2><p className="portal-muted">Считаются только созданные записи. Процент дисциплины не рассчитывается без утверждённого расписания.</p></div></div>
         {!data.branches.length&&<p>Нет доступных филиалов на выбранную дату. Административный доступ к справочнику сам по себе не даёт доступа к бизнес-данным.</p>}

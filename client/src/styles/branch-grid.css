@@ -1,0 +1,43 @@
+/* Сетка филиалов и настройка порогов: плоский плотный вид портала Fresh. */
+.branch-grid {
+  display: grid; gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.branch-card {
+  background: var(--fresh-surface); border: 1px solid var(--fresh-border);
+  border-radius: var(--radius-lg); padding: var(--space-3);
+  display: flex; flex-direction: column; gap: var(--space-2);
+  border-left: 3px solid var(--rag-none);
+}
+.branch-card[data-rag="RED"] { border-left-color: var(--rag-red); }
+.branch-card[data-rag="AMBER"] { border-left-color: var(--rag-amber); }
+.branch-card[data-rag="GREEN"] { border-left-color: var(--rag-green); }
+.branch-card > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.branch-card h3 { margin: 0; font-size: var(--text-base); font-weight: 600; }
+.branch-card dl { margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.branch-metric {
+  display: grid; grid-template-columns: 1fr auto; align-items: baseline;
+  gap: 0 var(--space-2); padding: var(--space-1) 0; border-top: 1px solid var(--fresh-border);
+}
+.branch-metric dt { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--fresh-text-muted); }
+.branch-metric dd { margin: 0; font-size: var(--text-sm); font-weight: 600; }
+.branch-metric small { grid-column: 1 / -1; font-size: var(--text-xs); color: var(--fresh-text-muted); }
+.branch-card > footer { font-size: var(--text-xs); }
+.branch-grid-warning {
+  background: var(--rag-amber-bg); color: var(--rag-amber);
+  border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); font-size: var(--text-sm);
+}
+.threshold-form { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; }
+.threshold-form label { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-xs); color: var(--fresh-text-muted); }
+.threshold-form select, .threshold-form input, .threshold-form textarea {
+  font: inherit; font-size: var(--text-sm); padding: 6px 8px;
+  border: 1px solid var(--fresh-border); border-radius: var(--radius-md);
+  background: var(--fresh-surface); color: var(--fresh-dark);
+}
+.threshold-form .threshold-reason { grid-column: 1 / -1; }
+.threshold-form textarea { min-height: 56px; resize: vertical; }
+.threshold-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.threshold-table th, .threshold-table td {
+  text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--fresh-border); vertical-align: top;
+}
+.threshold-table th { font-size: var(--text-xs); color: var(--fresh-text-muted); font-weight: 600; }

@@ -1,0 +1,65 @@
+import type { AuthedUser } from '../auth/session';
+import { withTransaction } from '../db/pool';
+import { factAccess } from '../reporting/factAccess';
+import { METRIC_NAMES } from '../reporting/shared/reportModel';
+import { ApiError } from '../util/errors';
+import { uuid } from '../reporting/storage';
+import { evaluateRag, resolveThresholds, thresholdFor, type Rag } from './thresholds';
+
+const invalid=(s:string)=>new ApiError('VALIDATION_ERROR',s);
+const validDate=(v:unknown):v is string=>typeof v==='string'&&/^\d{4}-\d\d-\d\d$/.test(v)&&!Number.isNaN(Date.parse(v));
+
+/**
+ * Сетка филиалов ТЗ v2.12: только опубликованные показатели в пределах допусков
+ * пользователя. Статус светофора берётся из настроенных порогов; при отсутствии
+ * данных или порога статус NONE — это не ноль и не выполнение.
+ */
+export async function branchOverview(auth:AuthedUser,query:any) {
+  const q=query??{};
+  if(Object.keys(q).some(k=>!['start','end','org'].includes(k)))throw invalid('Фильтры сетки не принимаются.');
+  if(!validDate(q.start)||!validDate(q.end)||q.start>q.end)throw invalid('Укажите точный период опубликованного среза.');
+  if(q.org!==undefined&&(typeof q.org!=='string'||!uuid.test(q.org)))throw invalid('Филиал указан неверно.');
+  return withTransaction(async c=>{
+    const grants=await factAccess(c,auth,'READ');
+    if(!grants.length)throw new ApiError('FORBIDDEN','Нет отдельного доступа к опубликованным бизнес-показателям.');
+    if(q.org&&!grants.some(g=>g.org_unit_id===q.org))throw new ApiError('NOT_FOUND','Филиал недоступен.');
+    const allowed=grants.filter(g=>!q.org||g.org_unit_id===q.org)
+      .flatMap(g=>g.metrics.map(metric=>({org:g.org_unit_id,metric})));
+    if(!allowed.length)return {mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:q.start,period_end:q.end,
+      metric_names:METRIC_NAMES,branches:[],thresholds_configured:false};
+    const rows=(await c.query(`SELECT s.org_unit_id,s.metric,s.value::text value,s.unit,s.revision,s.created_at,
+      n.display_name FROM report_fact_snapshots s
+      JOIN report_fact_current p ON p.snapshot_id=s.id
+      JOIN org_directory_name_history n ON n.org_unit_id=s.org_unit_id AND n.effective_to IS NULL
+        AND n.effective_from<=(now() AT TIME ZONE 'Europe/Moscow')::date
+      WHERE s.period_start=$1 AND s.period_end=$2
+        AND EXISTS(SELECT 1 FROM jsonb_to_recordset($3::jsonb) a(org uuid,metric text)
+          WHERE a.org=s.org_unit_id AND a.metric=s.metric)
+      ORDER BY n.display_name,s.metric LIMIT 2001`,[q.start,q.end,JSON.stringify(allowed)])).rows;
+    if(rows.length>2000)throw invalid('Слишком много строк: выберите один филиал.');
+    const thresholds=await resolveThresholds(c,q.end);
+    type MetricCell={metric:string;metric_name:string;value:number;unit:string;rag:Rag;basis:string|null;
+      basis_value:number|null;threshold_id:string|null;revision:number;published_at:string};
+    const byOrg=new Map<string,{org_unit_id:string;display_name:string;metrics:MetricCell[]}>();
+    const planFor=new Map<string,number>();
+    for(const r of rows)if(r.metric==='plan')planFor.set(r.org_unit_id,Number(r.value));
+    for(const r of rows) {
+      const entry=byOrg.get(r.org_unit_id)??{org_unit_id:r.org_unit_id,display_name:r.display_name,metrics:[] as MetricCell[]};
+      const t=thresholdFor(thresholds,r.metric,r.org_unit_id);
+      const {rag,basis_value}=evaluateRag(t,Number(r.value),planFor.get(r.org_unit_id)??null);
+      entry.metrics.push({metric:r.metric,metric_name:(METRIC_NAMES as Record<string,string>)[r.metric]??r.metric,
+        value:Number(r.value),unit:r.unit,rag,basis:t?.basis??null,basis_value,
+        threshold_id:t?.id??null,revision:r.revision,published_at:r.created_at});
+      byOrg.set(r.org_unit_id,entry);
+    }
+    const branches=[...byOrg.values()].map(b=>{
+      const worst:Rag=b.metrics.some(m=>m.rag==='RED')?'RED'
+        :b.metrics.some(m=>m.rag==='AMBER')?'AMBER'
+          :b.metrics.some(m=>m.rag==='GREEN')?'GREEN':'NONE';
+      return {...b,rag:worst,metrics_without_threshold:b.metrics.filter(m=>!m.threshold_id).map(m=>m.metric)};
+    });
+    return {mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:q.start,period_end:q.end,
+      metric_names:METRIC_NAMES,branches,thresholds_configured:thresholds.length>0,
+      aggregation:'NONE',freshness:'NOT_EVALUATED'};
+  });
+}

@@ -10,6 +10,7 @@ import { reportBatchesRouter } from './routes/reportBatches';
 import { accessRouter } from './routes/access';
 import { dailyRouter } from './routes/dailyLogs';
 import { reportFactsRouter } from './routes/reportFacts';
+import { metricsRouter } from './routes/metrics';
 import { ApiError, errorBody } from './util/errors';
 
 export function createApp() {
@@ -38,6 +39,7 @@ export function createApp() {
   app.use('/api/v1/access', accessRouter);
   app.use('/api/v1/daily-logs', dailyRouter);
   app.use('/api/v1/report-facts', reportFactsRouter);
+  app.use('/api/v1/metrics', metricsRouter);
 
   app.get('/api/v1/healthz', (_req, res) => {
     res.status(200).json({ status: 'ok' });
