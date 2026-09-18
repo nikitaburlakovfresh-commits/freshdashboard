@@ -10,6 +10,7 @@ import {
 import { serializeWorkItem } from './serialize';
 import { writeAuditAndOutbox } from './auditOutbox';
 import { beginIdempotent, completeIdempotent, IdempotentOperation } from './idempotency';
+import { assertDailyWindow, dailyMetadata, dailyLinks, dailyDate, ensureDailyLog, liveFence } from './dailyLogs';
 
 export interface ActorContext {
   authUser: AuthedUser;
@@ -90,7 +91,11 @@ async function loadCard(client: PoolClient, workItem: WorkItemRow) {
   if (!template) throw new ApiError('NOT_FOUND', 'Объект не найден.');
   const fields = await getFields(client, workItem.id);
   const submission = await getCurrentSubmission(client, workItem);
-  return serializeWorkItem(workItem, template, fields, submission);
+  const daily = await dailyMetadata(client,workItem.id);
+  return {...serializeWorkItem(workItem, template, fields, submission),daily_log:daily,
+    daily_links:daily?await dailyLinks(client,workItem.id,
+      ['SUBMITTED','COMPLETED'].includes(workItem.status)?workItem.current_submission_id??undefined:undefined):[],
+    current_business_date:(await client.query("SELECT to_char(now() AT TIME ZONE 'Europe/Moscow','YYYY-MM-DD') AS day")).rows[0].day};
 }
 
 // Field def lookup + shared validation, driven by templates.field_schema
@@ -298,7 +303,7 @@ export async function listTaskTemplates(ctx: ActorContext) {
     if (!(await currentRmOrgIds(client, ctx.authUser.userId)).size) {
       throw new ApiError('FORBIDDEN', 'Нет права постановки задач.');
     }
-    const result = await client.query<TemplateRow>('SELECT * FROM templates ORDER BY display_name, code');
+    const result = await client.query<TemplateRow>("SELECT * FROM templates WHERE code NOT LIKE 'personal_daily_%' ORDER BY display_name, code");
     return { items: result.rows.filter(t => {
       const roles = new Set(Object.values(t.field_ownership_rules));
       return roles.size === 1 && t.field_schema.length > 0 &&
@@ -365,6 +370,14 @@ export async function listWorkItems(
     values.push(Array.from(rmOrgs));
     values.push(ctx.authUser.userId);
     idx += 2;
+    // A revoked diary role must not be readable via another surviving role.
+    conditions.push(`(NOT EXISTS (SELECT 1 FROM daily_log_records d WHERE d.work_item_id=wi.id)
+      OR wi.org_unit_id=ANY($${idx++}::uuid[]) OR EXISTS (
+        SELECT 1 FROM daily_log_records d JOIN role_grants g ON g.user_id=d.user_id
+          AND g.org_unit_id=d.org_unit_id AND g.role_code=d.role_code
+        WHERE d.work_item_id=wi.id AND g.user_id=$${idx++} AND g.revoked_at IS NULL
+          AND g.valid_from<=now() AND (g.valid_until IS NULL OR g.valid_until>now())))`);
+    values.push(Array.from(rmOrgs),ctx.authUser.userId);
 
     if (params.mine) {
       conditions.push(`wi.assignee_user_id = $${idx++}`);
@@ -508,6 +521,9 @@ export async function getWorkItem(ctx: ActorContext, workItemId: string) {
       rmOrgs.has(row.org_unit_id) ||
       (operationalRoles.has(row.org_unit_id) && row.assignee_user_id === ctx.authUser.userId);
     if (!visible) throw new ApiError('NOT_FOUND', 'Объект не найден.');
+    const daily=await dailyMetadata(client,row.id);
+    if(daily&&!rmOrgs.has(row.org_unit_id)&&!operationalRoles.get(row.org_unit_id)?.has(daily.role_code))
+      throw new ApiError('NOT_FOUND','Объект не найден.');
     return loadCard(client, row);
   });
 }
@@ -531,6 +547,7 @@ export async function createWorkItem(
       if (typeof body.template_code !== 'string') {
         throw new ApiError('VALIDATION_ERROR', 'Неизвестный шаблон.', { issues: [{ path: 'template_code', issue: 'required' }] });
       }
+      if(body.template_code.startsWith('personal_daily_')) throw new ApiError('VALIDATION_ERROR','Откройте ежедневник через выбор роли и даты.');
       const template = await getTemplateByCode(client, body.template_code);
       if (!template) {
         throw new ApiError('VALIDATION_ERROR', 'Неизвестный шаблон.', { issues: [{ path: 'template_code', issue: 'unknown template_code' }] });
@@ -745,6 +762,8 @@ export async function startWorkItem(ctx: ActorContext, workItemId: string, idemK
       const startRolesHeld = (await currentOperationalRolesByOrg(client, ctx.authUser.userId)).get(workItem.org_unit_id) ?? new Set<string>();
       const isOwnExecutor = startRolesHeld.has(startOwnerRole) && workItem.assignee_user_id === ctx.authUser.userId;
       if (!isOwnExecutor) throw new ApiError('FORBIDDEN', 'Действие не разрешено.');
+      await assertDailyWindow(client,workItemId);
+      await liveFence(client,ctx);
 
       if (workItem.entity_version !== expectedVersion) {
         throw new ApiError('ENTITY_VERSION_CONFLICT', 'Версия сущности изменилась.', {
@@ -844,6 +863,8 @@ export async function patchWorkItemFields(
       if (!fieldOwnerRole || !rolesHeld.has(fieldOwnerRole)) {
         throw new ApiError('FORBIDDEN_FIELD', 'Действие с полем не разрешено.');
       }
+      await assertDailyWindow(client,workItemId);
+      await liveFence(client,ctx);
       const newValue = validateFieldValue(fieldDef, rawNewValue, 'changes[0].new_value');
 
       const field = await lockFieldByPath(client, workItemId, fieldPath);
@@ -919,9 +940,12 @@ export async function patchWorkItemFields(
 }
 
 // ---------- submitWorkItem ----------
-export async function submitWorkItem(ctx: ActorContext, workItemId: string, idemKey: string, body: { expected_entity_version: unknown }) {
+export async function submitWorkItem(ctx: ActorContext, workItemId: string, idemKey: string, body: { expected_entity_version: unknown; add_to_daily_log?:unknown; business_date?:unknown }) {
   requireIdempotencyKey(idemKey);
   const expectedVersion = requireVersion(body.expected_entity_version);
+  if(body.add_to_daily_log!==undefined&&typeof body.add_to_daily_log!=='boolean')
+    throw new ApiError('VALIDATION_ERROR','add_to_daily_log должен быть логическим значением.');
+  const linkedDate=body.add_to_daily_log?dailyDate(body.business_date):null;
 
   return withTransaction(async (client) => {
     return withIdempotency(client, ctx.authUser.userId, 'submitWorkItem', idemKey, workItemId, body, async () => {
@@ -936,6 +960,9 @@ export async function submitWorkItem(ctx: ActorContext, workItemId: string, idem
       const submitRolesHeld = (await currentOperationalRolesByOrg(client, ctx.authUser.userId)).get(workItem.org_unit_id) ?? new Set<string>();
       const isOwnExecutorSubmit = submitRolesHeld.has(submitOwnerRole) && workItem.assignee_user_id === ctx.authUser.userId;
       if (!isOwnExecutorSubmit) throw new ApiError('FORBIDDEN', 'Действие не разрешено.');
+      await liveFence(client,ctx);
+      const daily=await assertDailyWindow(client,workItemId);
+      if(daily&&linkedDate) throw new ApiError('VALIDATION_ERROR','Ежедневник нельзя вложить в другой ежедневник.');
 
       if (workItem.entity_version !== expectedVersion) {
         throw new ApiError('ENTITY_VERSION_CONFLICT', 'Версия сущности изменилась.', {
@@ -998,6 +1025,27 @@ export async function submitWorkItem(ctx: ActorContext, workItemId: string, idem
         ],
       );
       const submission = submissionRes.rows[0];
+      if(daily) {
+        await client.query(`INSERT INTO daily_submission_markers(submission_id,marker)
+          SELECT $1,CASE WHEN submitted_at<$2 THEN 'EARLY' WHEN submitted_at>$3 THEN 'LATE' ELSE 'ON_TIME' END
+          FROM submissions WHERE id=$1`,[submission.id,daily.base_open,daily.base_close]);
+        await client.query(`INSERT INTO daily_submission_links(daily_submission_id,task_submission_id)
+          SELECT $1,submission_id FROM daily_log_links WHERE daily_log_id=$2`,[submission.id,workItemId]);
+      }
+      if(linkedDate) {
+        const dailyId=await ensureDailyLog(client,ctx,workItem.org_unit_id,submitOwnerRole,linkedDate);
+        await assertDailyWindow(client,dailyId);
+        const dailyState=await client.query('SELECT status FROM work_items WHERE id=$1 FOR UPDATE',[dailyId]);
+        if(!['ASSIGNED','IN_PROGRESS'].includes(dailyState.rows[0].status))
+          throw new ApiError('INVALID_TRANSITION','Ежедневник уже отправлен или закрыт. Верните его на доработку либо снимите добавление в ежедневник.');
+        await client.query('INSERT INTO daily_log_links(daily_log_id,submission_id) VALUES($1,$2)',[dailyId,submission.id]);
+        const journal=await client.query('UPDATE work_items SET entity_version=entity_version+1,updated_at=now() WHERE id=$1 RETURNING entity_version',[dailyId]);
+        await writeAuditAndOutbox(client,{actorUserId:ctx.authUser.userId,actorRole:submitOwnerRole,orgUnitId:workItem.org_unit_id,
+          workItemId:dailyId,action:'DAILY_RESULT_LINKED',aggregateType:'work_item',aggregateId:dailyId,
+          aggregateVersion:journal.rows[0].entity_version,requestId:ctx.requestId,beforeState:null,
+          afterState:{task_id:workItemId,submission_id:submission.id,business_date:linkedDate},
+          resolution:'APPLIED',retentionClass:'WORK_ITEM_STANDARD'});
+      }
 
       const updatedWi = await client.query(
         `UPDATE work_items SET status = 'SUBMITTED', entity_version = entity_version + 1,
@@ -1018,7 +1066,7 @@ export async function submitWorkItem(ctx: ActorContext, workItemId: string, idem
         aggregateVersion: newRow.entity_version,
         requestId: ctx.requestId,
         beforeState: { status: workItem.status },
-        afterState: { status: 'SUBMITTED', submission_id: submission.id, revision: nextRevision },
+        afterState: { status: 'SUBMITTED', submission_id: submission.id, revision: nextRevision, daily_business_date:linkedDate },
         resolution: 'APPLIED',
         retentionClass: 'WORK_ITEM_STANDARD',
         ip: ctx.ip,
@@ -1323,6 +1371,9 @@ export async function getWorkItemHistory(ctx: ActorContext, workItemId: string, 
       rmOrgs.has(row.org_unit_id) ||
       (operationalRoles.has(row.org_unit_id) && row.assignee_user_id === ctx.authUser.userId);
     if (!visible) throw new ApiError('NOT_FOUND', 'Объект не найден.');
+    const daily=await dailyMetadata(client,row.id);
+    if(daily&&!rmOrgs.has(row.org_unit_id)&&!operationalRoles.get(row.org_unit_id)?.has(daily.role_code))
+      throw new ApiError('NOT_FOUND','Объект не найден.');
 
     let cursorVersion: number | null = null;
     let cursorEventId: string | null = null;

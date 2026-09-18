@@ -57,7 +57,7 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
           {def.min_value !== undefined && ` Минимум: ${def.min_value}.`}{def.max_value !== undefined && ` Максимум: ${def.max_value}.`} Отсутствие данных не равно нулю.</p>}
         {editable && <div className="task-field-footer">
           <button type="button" disabled={busy || !dirty || rows === null && def.type === 'repeatable_group'} onClick={() => onSave(def.field_path)}>Сохранить: {def.label}</button>
-          <span aria-live="polite">{dirty ? 'Не сохранено' : saved?.value !== null ? 'Сохранено на сервере' : 'Не заполнено'}</span>
+          <span aria-live="polite">{dirty ? busy ? 'Сохраняю…' : 'Не сохранено' : saved?.value != null ? 'Сохранено на сервере' : 'Не заполнено'}</span>
         </div>}
       </section>;
     })}

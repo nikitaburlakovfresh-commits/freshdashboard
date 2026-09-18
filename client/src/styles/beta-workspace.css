@@ -1,0 +1,25 @@
+.beta-workspace {overflow-wrap:anywhere}
+.beta-filters {display:flex;gap:16px;align-items:end;flex-wrap:wrap}
+.beta-filters label {display:flex;flex-direction:column;gap:8px;flex:1 1 190px;min-width:0;font-size:14px}
+.beta-filters input,.beta-filters select {width:100%;min-width:0;min-height:44px;padding:9px 12px;border:1px solid var(--fresh-border);border-radius:8px;background:var(--fresh-surface);color:var(--fresh-dark);font:inherit}
+.beta-filters .btn {min-height:44px}
+.beta-counters {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:20px 0}
+.beta-counters article {display:flex;flex-direction:column;gap:12px}
+.beta-counters strong {font-size:32px;line-height:1.2;font-variant-numeric:tabular-nums;color:var(--fresh-dark)}
+.beta-counters small,.beta-missing small {color:var(--fresh-text-muted);font-size:12px}
+.beta-missing {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.beta-missing>div {border-left:2px solid var(--fresh-border);padding-left:12px;display:flex;flex-direction:column;gap:12px}
+.beta-missing strong {font-size:18px}
+.beta-branches {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:16px}
+.beta-branch {border:1px solid var(--fresh-border);border-radius:12px;padding:20px;min-width:0}
+.beta-branch h3 {margin:0;font-size:16px}
+.beta-branch dl {display:flex;flex-wrap:wrap;gap:24px}
+.beta-branch dt {font-size:12px;color:var(--fresh-text-muted)}
+.beta-branch dd {margin:8px 0;font-size:24px;font-weight:650}
+.beta-result {border-top:1px solid var(--fresh-border);padding:16px 0}
+.beta-result p {white-space:pre-wrap}
+.beta-passport {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px}
+.beta-notice {padding:16px;border:1px solid var(--fresh-border);border-radius:12px;color:var(--fresh-text)}
+.beta-workspace details summary {cursor:pointer;min-height:44px;align-content:center;font-weight:600}
+.beta-workspace>.portal-panel {margin-bottom:20px}
+@media(max-width:760px) {.beta-counters,.beta-missing {grid-template-columns:repeat(2,minmax(0,1fr))}.beta-passport{grid-template-columns:1fr}.beta-filters label{flex-basis:100%}}

@@ -55,6 +55,9 @@ export interface Submission {
 }
 
 export interface WorkItem {
+  daily_log?: import('./dailyLogs').DailyMeta|null;
+  daily_links?: import('./dailyLogs').DailyLink[];
+  current_business_date?:string;
   id: string;
   org_unit_id: string;
   template_code: string;

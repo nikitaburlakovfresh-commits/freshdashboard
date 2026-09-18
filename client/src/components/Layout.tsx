@@ -39,7 +39,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem('fresh-theme', theme); } catch { /* Theme persistence is optional. */ }
   }, [theme]);
   const primaryRole = me?.grants?.some(g => g.role === 'SUPER_ADMIN') ? 'Администратор' : me?.grants?.some(g => g.role === 'REGIONAL_MANAGER') ? 'Постановщик' : 'Исполнитель';
-  const current = groups.flatMap(g => g.links).find(l => l.path === pathname || (l.path!=='/'&&pathname.startsWith(l.path+'/')))?.label ?? 'Карточка задачи';
+  const current = pathname.startsWith('/branches/') ? 'Карточка филиала' : groups.flatMap(g => g.links).find(l => l.path === pathname || (l.path!=='/'&&pathname.startsWith(l.path+'/')))?.label ?? 'Карточка задачи';
   const close = () => mobile.current?.close();
   const upload = () => { close(); navigate('/?import=1'); };
   const nav = <>
@@ -53,7 +53,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           !['/prepared-reports','/saved-network'].includes(link.path) || me?.grants.some(g=>g.role==='SUPER_ADMIN')).map(link => <NavLink key={link.path} to={link.path} end={link.path === '/'} onClick={close}
           className={({ isActive }) => `shell-nav-link${isActive ? ' active' : ''}`}>
           <Icon name={link.icon} /><span>{link.label}</span>
-          {link.future && <span className="shell-future" title="Навигационный каркас · следующий этап" aria-label="Следующий этап">○</span>}
+          {link.future && <span className="shell-future" title={link.path==='/diary'?'Рабочий beta-сценарий; полный каталог ещё в разработке':'Навигационный каркас · следующий этап'} aria-label={link.path==='/diary'?'Beta':'Следующий этап'}>{link.path==='/diary'?'β':'○'}</span>}
         </NavLink>)}
       </div>)}
       <div className="shell-nav-group shell-org">

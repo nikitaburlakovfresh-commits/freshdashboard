@@ -55,7 +55,7 @@ export function patchWorkItemFields(id: string, body: { changes: [{ field_path: 
   return apiFetch<WorkItem>(`/work-items/${id}/fields`, { method: 'PATCH', idempotent: true, body });
 }
 
-export function submitWorkItem(id: string, body: { expected_entity_version: number }) {
+export function submitWorkItem(id: string, body: { expected_entity_version: number; add_to_daily_log?:boolean;business_date?:string }) {
   return apiFetch<WorkItem>(`/work-items/${id}/submit`, { method: 'POST', idempotent: true, body });
 }
 

@@ -53,6 +53,7 @@ module.exports = async function globalSetup() {
     await client.query('TRUNCATE org_branch_activations,org_change_proposals, organization_editor_provisioning');
     await client.query('TRUNCATE access_change_proposals, access_administration_provisioning');
     await client.query('TRUNCATE user_enrollments');
+    await client.query('TRUNCATE daily_log_links,daily_submission_markers,daily_log_records,daily_log_policies CASCADE');
     await client.query("DELETE FROM role_permissions WHERE role_code='SUPER_ADMIN' AND permission_code<>'organization.directory.review'");
     await client.query(`DELETE FROM role_grants`);
     await client.query(`DELETE FROM app_users`);

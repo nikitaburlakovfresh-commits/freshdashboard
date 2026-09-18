@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link,useNavigate, useParams } from 'react-router-dom';
+import { moscowToday } from '../api/dailyLogs';
 import {
   getWorkItem,
   getWorkItemHistory,
@@ -44,6 +45,8 @@ export default function TaskDetailPage() {
   const [drafts, setDrafts] = useState<FieldDrafts>({});
   const [showReasonFor, setShowReasonFor] = useState<null | 'cancel' | 'rework' | 'reopen'>(null);
   const [reason, setReason] = useState('');
+  const [addToDaily,setAddToDaily]=useState(true);
+  const [dailyDate,setDailyDate]=useState(moscowToday);
   const [assigneeId, setAssigneeId] = useState('');
   const [assignees, setAssignees] = useState<Array<{id: string; full_name: string; login: string}>>([]);
 
@@ -54,6 +57,7 @@ export default function TaskDetailPage() {
     try {
       const [wi, hist] = await Promise.all([getWorkItem(id), getWorkItemHistory(id, { limit: 100 })]);
       setItem(wi);
+      setDailyDate(wi.current_business_date??moscowToday());
       setHistory(hist.items);
       setDrafts(mergeSavedFields({}, wi.fields));
     } catch (err: any) {
@@ -81,6 +85,16 @@ export default function TaskDetailPage() {
       && item.assignee_user_id === me?.user.id
     : false;
   const dirty = hasUnsavedFields(drafts);
+  // Personal diary autosaves one independently versioned field at a time.
+  // Empty required text remains visibly unsaved instead of generating failures.
+  useEffect(()=>{
+    if(!item?.daily_log?.can_fill||!isOwnExecutor||!['ASSIGNED','IN_PROGRESS'].includes(item.status)||actionBusy||error)return;
+    const entry=Object.entries(drafts).find(([,d])=>d.value!==d.baseValue&&d.value.trim().length>0);
+    if(!entry)return;
+    const [path,draft]=entry;
+    const timer=window.setTimeout(()=>{runAction(()=>patchWorkItemFields(item.id,{changes:[{field_path:path,expected_version:draft.version,new_value:draft.value}]}),path);},700);
+    return()=>window.clearTimeout(timer);
+  },[drafts,item?.id,item?.daily_log?.can_fill,item?.status,isOwnExecutor,actionBusy,error]);
   useEffect(() => {
     if (!dirty) return;
     const unload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
@@ -151,21 +165,35 @@ export default function TaskDetailPage() {
         <button disabled={actionBusy} onClick={() => { if (!dirty || window.confirm('Загрузить серверную версию и отбросить несохранённые поля?')) load(); }}>Загрузить актуальную версию</button>
       </div>}
 
+      {item.daily_log&&<section style={card}><h2 style={cardTitle}>Личная дневная запись · {item.daily_log.business_date}</h2>
+        <p>Роль {item.daily_log.role_code}. Основное хранилище: PostgreSQL. Синхронизация с Диском не требуется.</p>
+        <p>Окно заполнения: {new Date(item.daily_log.window_open).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} — {new Date(item.daily_log.window_close).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК.</p>
+        {!item.daily_log.can_fill&&<p>Окно закрыто: запись доступна для чтения, отправка и сохранение запрещены.</p>}
+        <Link to="/diary">Вернуться к ежедневникам →</Link>
+        {item.daily_links?.map(l=><article key={l.submission_id}><h3><Link to={`/tasks/${l.work_item_id}`}>{l.title}</Link> · сдача v{l.revision}</h3><p style={{whiteSpace:'pre-wrap'}}>{l.completion_summary}</p><small>Текущий статус задачи: {l.current_task_status}. Текст снимка неизменен.</small></article>)}
+      </section>}
+
       <section style={card}>
         <h2 style={cardTitle}>Результат выполнения</h2>
-        <TaskFields item={item} drafts={drafts} editable={isOwnExecutor && ['ASSIGNED','IN_PROGRESS'].includes(item.status)}
+        <TaskFields item={item} drafts={drafts} editable={isOwnExecutor && ['ASSIGNED','IN_PROGRESS'].includes(item.status) && item.daily_log?.can_fill!==false}
           busy={actionBusy}
-          onChange={(path,value) => setDrafts(current => ({...current,[path]:{...current[path],value}}))}
+          onChange={(path,value) => {setError(null);setDrafts(current => ({...current,[path]:{...current[path],value}}));}}
           onSave={path => {
             const draft = drafts[path];
             if (!draft) return;
             runAction(() => patchWorkItemFields(item.id, {changes:[{field_path:path,expected_version:draft.version,new_value:draft.value}]}), path);
           }}/>
         {dirty && <p role="status" style={{color:'var(--fresh-warning)',fontSize:13}}>Есть несохранённые поля. Сдача и смена статуса доступны после сохранения.</p>}
+        {item.daily_log&&<p style={{fontSize:13,color:'var(--fresh-text-muted)'}}>Непустые поля автоматически сохраняются через 0,7 секунды после ввода. При ошибке текст остаётся в форме: повторите сохранение или загрузите актуальную версию.</p>}
       </section>
 
       <section style={card}>
         <h2 style={cardTitle}>Действия</h2>
+        {isOwnExecutor&&!item.daily_log&&['RF','ROP','ROO'].includes(item.owner_role??'')&&['ASSIGNED','IN_PROGRESS'].includes(item.status)&&<div style={{marginBottom:16}}>
+          <label style={{display:'block',padding:'12px 0'}}><input type="checkbox" checked={addToDaily} onChange={e=>setAddToDaily(e.target.checked)}/> Добавить в мой ежедневник</label>
+          {addToDaily&&<label>Дата результата <input aria-label="Дата результата" type="date" value={dailyDate} onChange={e=>setDailyDate(e.target.value)}/></label>}
+          <p style={{fontSize:13,color:'var(--fresh-text-muted)'}}>Снимок отправленной версии, не отметка о приёмке. Если окно не настроено или ежедневник закрыт, сервер не выполнит отправку частично.</p>
+        </div>}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {isRm && item.status === 'DRAFT' && (
             <>
@@ -189,15 +217,16 @@ export default function TaskDetailPage() {
           )}
 
           {isOwnExecutor && item.status === 'ASSIGNED' && (
-            <button disabled={actionBusy || dirty} onClick={() => runAction(() => startWorkItem(item.id, { expected_entity_version: item.entity_version }))} style={primaryBtn(actionBusy)}>
+            <button disabled={actionBusy || dirty || item.daily_log?.can_fill===false} onClick={() => runAction(() => startWorkItem(item.id, { expected_entity_version: item.entity_version }))} style={primaryBtn(actionBusy)}>
               Начать работу
             </button>
           )}
 
           {isOwnExecutor && ['ASSIGNED', 'IN_PROGRESS'].includes(item.status) && !item.is_blocked && (
             <button
-              disabled={actionBusy || dirty || !requiredFieldsPresent(item.field_schema, item.fields)}
-              onClick={() => runAction(() => submitWorkItem(item.id, { expected_entity_version: item.entity_version }))}
+              disabled={actionBusy || dirty || item.daily_log?.can_fill===false || !requiredFieldsPresent(item.field_schema, item.fields)}
+              onClick={() => runAction(() => submitWorkItem(item.id, { expected_entity_version: item.entity_version,
+                ...(!item.daily_log&&['RF','ROP','ROO'].includes(item.owner_role??'')?{add_to_daily_log:addToDaily,business_date:dailyDate}:{}) }))}
               style={primaryBtn(actionBusy)}
               title={dirty ? 'Сначала сохраните изменения' : 'Сервер проверит все обязательные поля'}
             >

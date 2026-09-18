@@ -6,7 +6,7 @@ import Layout from './components/Layout';
 import TaskListPage from './pages/TaskListPage';
 import TaskDetailPage from './pages/TaskDetailPage';
 import NotificationsPage from './pages/NotificationsPage';
-import DashboardPage from './pages/DashboardPage';
+import OperationalPage from './pages/OperationalPage';
 import PortalModulePage from './pages/PortalModulePage';
 import OrganizationPage from './pages/OrganizationPage';
 import PreparedReportsPage from './pages/PreparedReportsPage';
@@ -41,7 +41,8 @@ export default function App() {
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<DashboardPage />} />
+        <Route path="/" element={<OperationalPage />} />
+        <Route path="/branches/:orgId" element={<OperationalPage />} />
         {['/analytics','/bdr','/kpi'].map(path=><Route key={path} path={path} element={<PortalModulePage/>}/>)}
         <Route path="/diary" element={<PersonalDayPage/>}/>
         <Route path="/modules" element={<ModuleReadinessPage/>}/>
