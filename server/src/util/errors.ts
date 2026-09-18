@@ -14,6 +14,7 @@ export type ErrorCode =
   | 'IDEMPOTENCY_KEY_REUSED'
   | 'IDEMPOTENCY_IN_PROGRESS'
   | 'SCHEMA_MISMATCH'
+  | 'DEVIATION_CONFLICT'
   | 'VALIDATION_ERROR'
   | 'INVALID_TRANSITION'
   | 'COMPLETION_REQUIRED'
@@ -40,6 +41,7 @@ const HTTP_STATUS_BY_CODE: Record<ErrorCode, number> = {
   IDEMPOTENCY_KEY_REUSED: 409,
   IDEMPOTENCY_IN_PROGRESS: 409,
   SCHEMA_MISMATCH: 409,
+  DEVIATION_CONFLICT: 409,
   VALIDATION_ERROR: 422,
   INVALID_TRANSITION: 422,
   COMPLETION_REQUIRED: 422,
@@ -59,6 +61,9 @@ export interface ErrorDetails {
   conflicts?: unknown[];
   issues?: { path: string; issue: string }[];
   retry_after_seconds?: number;
+  // Задача, уже поставленная по этому отклонению: даёт переход вместо дубля.
+  work_item_id?: string;
+  status?: string;
 }
 
 export class ApiError extends Error {

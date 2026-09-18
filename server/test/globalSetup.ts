@@ -48,7 +48,7 @@ module.exports = async function globalSetup() {
               idempotency_records, submissions, work_item_fields, work_items,
               sessions RESTART IDENTITY CASCADE`,
     );
-    await client.query('TRUNCATE report_fact_current,report_fact_snapshots,report_fact_publications,report_fact_previews,report_source_scans,report_fact_access,report_review_revisions,report_staging_access,report_staging_files,report_staging_batches');
+    await client.query('TRUNCATE metric_deviation_tasks,report_fact_current,report_fact_snapshots,report_fact_publications,report_fact_previews,report_source_scans,report_fact_access,report_review_revisions,report_staging_access,report_staging_files,report_staging_batches');
     await client.query('TRUNCATE administrator_bootstrap');
     await client.query('TRUNCATE fact_access_receipts,fact_access_previews');
     await client.query('TRUNCATE org_branch_activations,org_change_proposals, organization_editor_provisioning');

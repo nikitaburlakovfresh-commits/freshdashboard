@@ -7,7 +7,11 @@ import { uuid } from '../reporting/storage';
 import { evaluateRag, resolveThresholds, thresholdFor, type Rag } from './thresholds';
 
 const invalid=(s:string)=>new ApiError('VALIDATION_ERROR',s);
-const validDate=(v:unknown):v is string=>typeof v==='string'&&/^\d{4}-\d\d-\d\d$/.test(v)&&!Number.isNaN(Date.parse(v));
+const validDate=(v:unknown):v is string=>{
+  if(typeof v!=='string'||!/^\d{4}-\d\d-\d\d$/.test(v))return false;
+  const t=Date.parse(`${v}T00:00:00.000Z`);
+  return Number.isFinite(t)&&new Date(t).toISOString().slice(0,10)===v;
+};
 
 /**
  * Сетка филиалов ТЗ v2.12: только опубликованные показатели в пределах допусков
@@ -27,9 +31,13 @@ export async function branchOverview(auth:AuthedUser,query:any) {
       .flatMap(g=>g.metrics.map(metric=>({org:g.org_unit_id,metric})));
     if(!allowed.length)return {mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:q.start,period_end:q.end,
       metric_names:METRIC_NAMES,branches:[],thresholds_configured:false};
-    const rows=(await c.query(`SELECT s.org_unit_id,s.metric,s.value::text value,s.unit,s.revision,s.created_at,
-      n.display_name FROM report_fact_snapshots s
+    const rows=(await c.query(`SELECT s.id snapshot_id,s.org_unit_id,s.metric,s.value::text value,s.unit,
+      s.revision,s.created_at,n.display_name,d.id deviation_task_id,d.work_item_id,w.status task_status,
+      w.title task_title,w.assignee_user_id task_assignee_id
+      FROM report_fact_snapshots s
       JOIN report_fact_current p ON p.snapshot_id=s.id
+      LEFT JOIN metric_deviation_tasks d ON d.snapshot_id=s.id
+      LEFT JOIN work_items w ON w.id=d.work_item_id
       JOIN org_directory_name_history n ON n.org_unit_id=s.org_unit_id AND n.effective_to IS NULL
         AND n.effective_from<=(now() AT TIME ZONE 'Europe/Moscow')::date
       WHERE s.period_start=$1 AND s.period_end=$2
@@ -39,7 +47,8 @@ export async function branchOverview(auth:AuthedUser,query:any) {
     if(rows.length>2000)throw invalid('Слишком много строк: выберите один филиал.');
     const thresholds=await resolveThresholds(c,q.end);
     type MetricCell={metric:string;metric_name:string;value:number;unit:string;rag:Rag;basis:string|null;
-      basis_value:number|null;threshold_id:string|null;revision:number;published_at:string};
+      basis_value:number|null;threshold_id:string|null;revision:number;published_at:string;snapshot_id:string;
+      deviation_task:{id:string;work_item_id:string;status:string;title:string;assignee_user_id:string|null}|null};
     const byOrg=new Map<string,{org_unit_id:string;display_name:string;metrics:MetricCell[]}>();
     const planFor=new Map<string,number>();
     for(const r of rows)if(r.metric==='plan')planFor.set(r.org_unit_id,Number(r.value));
@@ -49,7 +58,9 @@ export async function branchOverview(auth:AuthedUser,query:any) {
       const {rag,basis_value}=evaluateRag(t,Number(r.value),planFor.get(r.org_unit_id)??null);
       entry.metrics.push({metric:r.metric,metric_name:(METRIC_NAMES as Record<string,string>)[r.metric]??r.metric,
         value:Number(r.value),unit:r.unit,rag,basis:t?.basis??null,basis_value,
-        threshold_id:t?.id??null,revision:r.revision,published_at:r.created_at});
+        threshold_id:t?.id??null,revision:r.revision,published_at:r.created_at,snapshot_id:r.snapshot_id,
+        deviation_task:r.deviation_task_id?{id:r.deviation_task_id,work_item_id:r.work_item_id,
+          status:r.task_status,title:r.task_title,assignee_user_id:r.task_assignee_id}:null});
       byOrg.set(r.org_unit_id,entry);
     }
     const branches=[...byOrg.values()].map(b=>{

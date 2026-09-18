@@ -1,5 +1,8 @@
 import React,{useEffect,useRef,useState} from 'react';
-import { readOverview,type Overview } from '../api/metrics';
+import { Link } from 'react-router-dom';
+import { readOverview,type MetricCell,type Overview } from '../api/metrics';
+import DeviationTaskModal from './DeviationTaskModal';
+import { canOpenTask } from './deviationTaskModel';
 import { formatValue,ragReason,RAG_LABELS } from './metricThresholdModel';
 import RagBadge,{ RagDot } from './RagBadge';
 import '../styles/branch-grid.css';
@@ -13,6 +16,8 @@ export default function BranchGrid({org}:{org?:string}) {
   const [start,setStart]=useState(''),[end,setEnd]=useState('');
   const [data,setData]=useState<Overview|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   const request=useRef(0);
+  const [pending,setPending]=useState<{branch:string;name:string;cell:MetricCell}|null>(null);
+  const [created,setCreated]=useState('');
   useEffect(()=>{request.current++;setData(null);setError('');setBusy(false);return()=>{request.current++;};},[org]);
   function clear(){request.current++;setData(null);setError('');setBusy(false);}
   async function load(e:React.FormEvent) {
@@ -20,6 +25,11 @@ export default function BranchGrid({org}:{org?:string}) {
     try{const r=await readOverview(start,end,org);if(ticket===request.current)setData(r);}
     catch(e:any){if(ticket===request.current)setError(e.message);}
     finally{if(ticket===request.current)setBusy(false);}
+  }
+  async function load2() {
+    const ticket=++request.current;
+    try{const r=await readOverview(start,end,org);if(ticket===request.current)setData(r);}
+    catch(e:any){if(ticket===request.current)setError(e.message);}
   }
   return <section className="portal-panel branch-grid-panel">
     <div className="portal-section-head">
@@ -51,6 +61,13 @@ export default function BranchGrid({org}:{org?:string}) {
             <dt><RagDot status={m.rag}/>{m.metric_name}</dt>
             <dd className="tabnum">{formatValue(m.value,m.unit)}</dd>
             <small title={ragReason(m)}>{RAG_LABELS[m.rag]} · v{m.revision}</small>
+            <div className="branch-metric-actions">
+              {canOpenTask(m)&&<button type="button" className="btn-link"
+                onClick={()=>{setCreated('');setPending({branch:b.org_unit_id,name:b.display_name,cell:m});}}>
+                Создать задачу по отклонению</button>}
+              {m.deviation_task&&<Link className="branch-task-link" to={`/tasks/${m.deviation_task.work_item_id}`}>
+                Задача поставлена · {m.deviation_task.status}</Link>}
+            </div>
           </div>)}
         </dl>
         {b.metrics_without_threshold.length>0&&<footer className="portal-muted">
@@ -58,5 +75,11 @@ export default function BranchGrid({org}:{org?:string}) {
         </footer>}
       </article>)}
     </div>}
+    {created&&<p role="status">Задача по отклонению создана.{' '}
+      <Link to={`/tasks/${created}`}>Открыть карточку задачи</Link> и назначить ответственного.</p>}
+    {pending&&data&&<DeviationTaskModal branch={pending.branch} branchName={pending.name}
+      period={{start:data.period_start,end:data.period_end}} cell={pending.cell}
+      onClose={()=>setPending(null)}
+      onCreated={id=>{setPending(null);setCreated(id);void load2();}}/>}
   </section>;
 }
