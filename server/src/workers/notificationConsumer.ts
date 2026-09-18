@@ -1,6 +1,8 @@
 import { pool } from '../db/pool';
 import { withTransaction } from '../db/pool';
 import { PoolClient } from 'pg';
+import { getTemplateById } from '../domain/workItemRepo';
+import { deriveTemplateOwnerRole } from '../domain/workItemService';
 
 const CONSUMER_NAME = 'in_app_v1';
 
@@ -39,17 +41,35 @@ async function resolveRecipients(
   actorId: string | null,
 ): Promise<string[]> {
   if (policy === 'NONE') return [];
-  const wi = await client.query('SELECT assignee_user_id, org_unit_id, created_by FROM work_items WHERE id = $1', [workItemId]);
+  const wi = await client.query('SELECT assignee_user_id, org_unit_id, created_by, template_version_id FROM work_items WHERE id = $1', [workItemId]);
   if (wi.rowCount === 0) return [];
-  const { assignee_user_id, org_unit_id } = wi.rows[0];
+  const { assignee_user_id, org_unit_id, template_version_id } = wi.rows[0];
 
   if (policy === 'ASSIGNEE') {
     if (!assignee_user_id || assignee_user_id === actorId) return [];
+    // Owner role is derived from the work item's own template
+    // (field_ownership_rules), same generalization as workItemService.ts
+    // (2026-09-18, "Авторизация по всем ролям индивидуальная") -- this was
+    // the one authorization surface left hardcoded to 'RF' after that
+    // change, found while auditing every role_code literal in server/src.
+    // A ROP/ROO-assigned item silently never notified its assignee on
+    // accept/rework/cancel/reopen until this fix.
+    const template = await getTemplateById(client, template_version_id);
+    if (!template) return [];
+    let ownerRole: string;
+    try {
+      ownerRole = deriveTemplateOwnerRole(template);
+    } catch {
+      // A multi-owner template fails deriveTemplateOwnerRole's invariant by
+      // design (see workItemService.ts); this background consumer must not
+      // wedge retrying it forever, so treat as no resolvable recipient.
+      return [];
+    }
     const active = await client.query(
       `SELECT 1 FROM app_users u JOIN role_grants rg ON rg.user_id = u.id
-       WHERE u.id = $1 AND u.is_active AND rg.role_code = 'RF' AND rg.org_unit_id = $2
+       WHERE u.id = $1 AND u.is_active AND rg.role_code = $2 AND rg.org_unit_id = $3
          AND rg.revoked_at IS NULL AND rg.valid_from <= now() AND (rg.valid_until IS NULL OR rg.valid_until > now())`,
-      [assignee_user_id, org_unit_id],
+      [assignee_user_id, ownerRole, org_unit_id],
     );
     return (active.rowCount ?? 0) > 0 ? [assignee_user_id] : [];
   }

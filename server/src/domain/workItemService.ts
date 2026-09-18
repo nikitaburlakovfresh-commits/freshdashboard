@@ -59,7 +59,7 @@ async function currentOperationalRolesByOrg(client: PoolClient, userId: string):
 // explicitly out of scope for this phase -- fail closed with a clear
 // VALIDATION_ERROR instead of silently picking one role, so that scenario
 // surfaces as a deliberate design decision later, not a silent bug now.
-function deriveTemplateOwnerRole(template: TemplateRow): string {
+export function deriveTemplateOwnerRole(template: TemplateRow): string {
   const roles = new Set(Object.values(template.field_ownership_rules));
   if (roles.size === 0) {
     throw new ApiError('VALIDATION_ERROR', 'Шаблон не определяет роль-владельца полей.');

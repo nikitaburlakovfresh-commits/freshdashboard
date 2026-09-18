@@ -66,7 +66,17 @@ export default function TaskDetailPage() {
 
   const grants = me?.grants ?? [];
   const isRm = item ? grants.some((g) => g.role === 'REGIONAL_MANAGER' && g.org_unit_id === item.org_unit_id) : false;
-  const isOwnRf = item ? grants.some((g) => g.role === 'RF' && g.org_unit_id === item.org_unit_id) && item.assignee_user_id === me?.user.id : false;
+  // Any non-REGIONAL_MANAGER operational role held at this org unit --
+  // not hardcoded to 'RF' (generalized 2026-09-18 to match the server's
+  // role-agnostic authorization; a ROP/ROO assignee's own item hid its
+  // fields/actions before this fix, even though the server already
+  // permitted them). The server remains authoritative on the exact
+  // required role per action; this only decides whether to render the
+  // executor controls at all.
+  const isOwnExecutor = item
+    ? grants.some((g) => g.role !== 'REGIONAL_MANAGER' && g.role !== 'SUPER_ADMIN' && g.org_unit_id === item.org_unit_id)
+      && item.assignee_user_id === me?.user.id
+    : false;
   const dirty = summaryDraft !== (item?.fields[0]?.value ?? '');
   useEffect(() => {
     if (!item || !isRm || item.status !== 'DRAFT') return;
@@ -124,7 +134,7 @@ export default function TaskDetailPage() {
 
       <section style={card}>
         <h2 style={cardTitle}>Результат выполнения</h2>
-        {isOwnRf && ['ASSIGNED', 'IN_PROGRESS'].includes(item.status) ? (
+        {isOwnExecutor && ['ASSIGNED', 'IN_PROGRESS'].includes(item.status) ? (
           <>
             <textarea
               value={summaryDraft}
@@ -185,13 +195,13 @@ export default function TaskDetailPage() {
             </>
           )}
 
-          {isOwnRf && item.status === 'ASSIGNED' && (
+          {isOwnExecutor && item.status === 'ASSIGNED' && (
             <button disabled={actionBusy} onClick={() => runAction(() => startWorkItem(item.id, { expected_entity_version: item.entity_version }))} style={primaryBtn(actionBusy)}>
               Начать работу
             </button>
           )}
 
-          {isOwnRf && ['ASSIGNED', 'IN_PROGRESS'].includes(item.status) && !item.is_blocked && (
+          {isOwnExecutor && ['ASSIGNED', 'IN_PROGRESS'].includes(item.status) && !item.is_blocked && (
             <button
               disabled={actionBusy || dirty || !item.fields[0]?.value?.trim()}
               onClick={() => runAction(() => submitWorkItem(item.id, { expected_entity_version: item.entity_version }))}
@@ -202,7 +212,7 @@ export default function TaskDetailPage() {
             </button>
           )}
 
-          {isRm && !isOwnRf && item.status === 'SUBMITTED' && item.current_submission && (
+          {isRm && !isOwnExecutor && item.status === 'SUBMITTED' && item.current_submission && (
             <>
               <button
                 disabled={actionBusy}
@@ -237,7 +247,7 @@ export default function TaskDetailPage() {
             </button>
           )}
 
-          {!isRm && !isOwnRf && (
+          {!isRm && !isOwnExecutor && (
             <span style={{ color: 'var(--fresh-text-muted)', fontSize: 13 }}>Нет доступных действий для вашей роли по этой задаче.</span>
           )}
         </div>

@@ -14,6 +14,7 @@
 import { pool, closePool } from '../src/db/pool';
 import { _resetForTests as resetRateLimits } from '../src/auth/rateLimit';
 import { app, login, authed, idemKey } from './helpers';
+import { drainNotificationsForTests } from '../src/workers/notificationConsumer';
 
 const ORG_A = '00000000-0000-4000-8000-00000000000a';
 
@@ -365,5 +366,31 @@ describe('TE-01..TE-03 templates beyond pilot_task_v1 (§13.13.1)', () => {
       [wi.id],
     );
     expect(audit.rows.every((r) => r.actor_role === 'ROP')).toBe(true);
+  });
+
+  test('TE-10 assigning a ROP-owned item notifies the ROP assignee (in-app consumer, not hardcoded to RF)', async () => {
+    const rmA = await login('rm_a');
+    const ropA = await login('rop_a');
+    const { rows: ropRows } = await pool.query("SELECT id FROM app_users WHERE login = 'rop_a'");
+
+    const created = await authed(rmA)
+      .post('/api/v1/work-items')
+      .set('Idempotency-Key', idemKey('rop-notif-create'))
+      .send({ org_unit_id: ORG_A, title: 'Задача РОП для уведомления', due_at: '2027-01-01T00:00:00Z', template_code: 'rop_task_v1' });
+    expect(created.status).toBe(201);
+    const wi = created.body;
+
+    const assign = await authed(rmA)
+      .post(`/api/v1/work-items/${wi.id}/assign`)
+      .set('Idempotency-Key', idemKey('rop-notif-assign'))
+      .send({ expected_entity_version: 1, assignee_user_id: ropRows[0].id });
+    expect(assign.status).toBe(200);
+
+    await drainNotificationsForTests();
+
+    const list = await authed(ropA).get('/api/v1/notifications?limit=50');
+    expect(list.status).toBe(200);
+    const forThisItem = list.body.items.filter((n: { work_item_id: string }) => n.work_item_id === wi.id);
+    expect(forThisItem.length).toBe(1);
   });
 });

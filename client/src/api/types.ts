@@ -13,8 +13,13 @@ interface GrantBase {
   valid_until: string | null;
   permissions: string[];
 }
+// role is any ORG_UNIT-scoped role code from the server's role catalog
+// (REGIONAL_MANAGER, RF, ROP, ROO, ...), not just RF -- generalized
+// 2026-09-18 alongside the server-side authorization generalization in
+// workItemService.ts/grants.ts. NETWORK scope stays SUPER_ADMIN-only
+// (unchanged, separate concern).
 export type Grant = GrantBase & (
-  { role:'REGIONAL_MANAGER' | 'RF'; scope_kind?:'ORG_UNIT'; org_unit_id:string } |
+  { role:string; scope_kind?:'ORG_UNIT'; org_unit_id:string } |
   { role:'SUPER_ADMIN'; scope_kind:'NETWORK'; org_unit_id:null }
 );
 
