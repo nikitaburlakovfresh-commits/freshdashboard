@@ -4,6 +4,7 @@ import { requireOrigin } from '../middleware/origin';
 import { enforceSessionRateLimit } from '../auth/rateLimit';
 import { accessDirectory,listAccessChanges,getAccessChange,commandAccessChange } from '../domain/accessChanges';
 import { createPersonalUser,manageInvitation } from '../domain/userEnrollment';
+import { factAccessDirectory,previewFactAccess,applyFactAccess } from '../reporting/factAccessAdmin';
 export const accessRouter=Router();
 accessRouter.use(requireSession);
 accessRouter.use((req,res,next)=>{
@@ -11,6 +12,13 @@ accessRouter.use((req,res,next)=>{
   try {enforceSessionRateLimit(req.authUser!.sessionId,req.method!=='GET');next();} catch(err){next(err);}
 });
 const wrap=(fn:(req:Request,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{fn(req,res).catch(next);};
+accessRouter.get('/metrics',wrap(async(req,res)=>{res.json(await factAccessDirectory(req.authUser!));}));
+accessRouter.post('/metrics/preview',requireOrigin,requireCsrf,wrap(async(req,res)=>{
+  res.json(await previewFactAccess(req.authUser!,req.body));
+}));
+accessRouter.post('/metrics/apply',requireOrigin,requireCsrf,wrap(async(req,res)=>{
+  res.json(await applyFactAccess(req.authUser!,req.body,req.ctx.requestId));
+}));
 accessRouter.post('/users',requireOrigin,requireCsrf,wrap(async(req,res)=>{
   res.status(201).json(await createPersonalUser(req.authUser!,req.body,req.header('Idempotency-Key'),req.ctx.requestId));
 }));

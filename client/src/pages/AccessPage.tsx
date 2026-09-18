@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { ApiError } from '../api/client';
 import { AccessDirectory,AccessProposal,AccessChange,getAccessDirectory,listAccessChanges,getAccessChange,
@@ -69,6 +70,8 @@ export default function AccessPage() {
       {notice&&<p role="status" className="access-notice">{notice}</p>}
       {busy&&<p role="status">Выполняется проверка сервера…</p>}
       {!data?<button className="btn" disabled={busy} onClick={()=>run(refresh)}>Повторить загрузку</button>:<>
+        <section className="portal-panel"><h2>Доступ к показателям</h2><p>Чтение и публикация метрик управляются отдельно от ролей и задач.</p>
+          <Link to="/access/metrics">Открыть допуски к показателям</Link></section>
         <UserEnrollment key={me?.user.id} data={data} permissions={permissions} onChange={refresh}/>
         <section className="portal-panel access-directory">
           <div className="org-section-heading"><h2>Сотрудники · {data.users.length}</h2>

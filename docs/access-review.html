@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FRESH Portal · Публикация показателей источников для beta</title>
+<title>FRESH Portal · Управление допусками к метрикам</title>
 <style>
 :root{font-family:Arial,sans-serif;color:#19212b;background:#f4f6fb;font-synthesis:none}*{box-sizing:border-box}
 body{margin:0}main{max-width:1240px;margin:auto;padding:40px 24px 64px}header{display:flex;gap:28px;align-items:start;justify-content:space-between;border-bottom:1px solid #dce2ee;padding-bottom:30px}
@@ -12,13 +12,21 @@ p{line-height:1.7;max-width:820px;color:#4c596c}small{font-size:12px;letter-spac
 a{color:#143cff;text-decoration:none}a:hover{text-decoration:underline}footer{margin-top:36px;font-size:13px;color:#596678}button{font:inherit}
 @media(max-width:700px){main{padding:24px 14px}header{display:block}.badge{display:inline-block}.grid{grid-template-columns:1fr}.mobile{padding:12px;gap:10px}}
 </style></head><body><main>
-<header><div><small>FRESH Portal · локальная проверка</small><h1>От проверочного отчёта<br>к опубликованным значениям</h1>
-<p>Beta публикации агрегатов: явный источник, период и филиал, подтверждение, серверные версии и отдельные права чтения. Готовность кода не подменяет установку и приёмку на боевых данных.</p></div>
+<header><div><small>FRESH Portal · локальная проверка</small><h1>Допуски к показателям<br>через админ-панель</h1>
+<p>Выдача и отзыв конкретных метрик существующего назначения: предварительная проверка, срок действия, подтверждение и история. Готовность кода не подменяет установку и приёмку на боевых данных.</p></div>
 <span class="badge">Не установлен на production</span></header>
 <div class="note"><strong>Это визуальный отчёт, не второй портал.</strong>
 <p>Здесь только снимки настоящего интерфейса с локальными синтетическими записями. Боевая база, пароли и сессии не подключены.
 Авторизация и команды проверены отдельно на same-origin стенде; встроенный предпросмотр не заменяет эту проверку.</p></div>
-<h2>Новый этап: публикация и чтение агрегатов</h2>
+<h2>Новый этап: управление допусками</h2>
+<p>Обычная выдача и отзыв выполняются в интерфейсе. Первоначальное включение отдельного административного права требует согласования и не происходит автоматически. Собственные права и роли здесь не меняются.</p>
+<div class="grid">
+<figure class="card"><a href="metric-access-qa/metric-admin-preview-light.png" target="_blank" rel="noopener"><img src="metric-access-qa/metric-admin-preview-light.png" alt="Подтверждение допуска к метрикам"></a><figcaption>Сотрудник, филиал, метрики, срок и основание до применения. Отмена не меняет права.</figcaption></figure>
+<figure class="card"><a href="metric-access-qa/metric-admin-history-light.png" target="_blank" rel="noopener"><img src="metric-access-qa/metric-admin-history-light.png" alt="История выдачи и отзыва допуска"></a><figcaption>История не исчезает после отзыва. Роли, задачи и финансовые значения остаются без изменений.</figcaption></figure>
+</div>
+<div class="mobile" style="margin-top:20px"><img src="metric-access-qa/metric-admin-confirm-mobile.png" alt="Подтверждение допуска на телефоне"><img src="metric-access-qa/metric-admin-mobile-dark.png" alt="Мобильная форма в тёмной теме"></div>
+<div class="note"><strong>358 серверных и 48 клиентских проверок пройдены.</strong><p>Включены 22 новых сценария управления допусками. Браузер: выдача, отмена, подтверждение, отзыв, история, запрет неуполномоченному пользователю, desktop/mobile и две темы. Production не изменён. До предложения деплоя остаются AV-окружение и проверка установки/отката накопленного выпуска.</p></div>
+<h2>Предыдущий этап: публикация и чтение агрегатов</h2>
 <p>Подтверждённые значения источника отделены от черновика. Предыдущая версия не удаляется; история доступна только в разрешённом филиале и по разрешённым метрикам. Формулы прибыли, доли рынка и полный Metric Engine не заменены копированием ячеек.</p>
 <div class="grid">
 <figure class="card"><a href="facts-qa/facts-preview-desktop.png" target="_blank" rel="noopener"><img src="facts-qa/facts-preview-desktop.png" alt="Подтверждение источников и состава публикации"></a><figcaption>Состав перед записью: точные значения, период и заменяемая версия. Все данные и положительные AV receipts в этом тесте синтетические.</figcaption></figure>

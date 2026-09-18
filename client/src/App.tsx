@@ -13,6 +13,7 @@ import PreparedReportsPage from './pages/PreparedReportsPage';
 import SavedNetworkPage,{SavedBranchPage} from './pages/SavedNetworkPage';
 import ReportReviewPage from './pages/ReportReviewPage';
 import AccessPage from './pages/AccessPage';
+import MetricAccessPage from './pages/MetricAccessPage';
 import ActivateAccountPage from './pages/ActivateAccountPage';
 import ModuleReadinessPage from './pages/ModuleReadinessPage';
 import PersonalDayPage from './pages/PersonalDayPage';
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/organization" element={<OrganizationPage />} />
         <Route path="/access" element={<AccessPage />} />
+        <Route path="/access/metrics" element={<MetricAccessPage />} />
         <Route path="/prepared-reports" element={<PreparedReportsPage />} />
         <Route path="/prepared-reports/:id/review" element={<ReportReviewPage />} />
         <Route path="/prepared-reports/:id/publish" element={<ReportPublicationPage />} />

@@ -1,0 +1,12 @@
+.metric-access fieldset{border:0;padding:0;min-width:0;margin:20px 0}
+.metric-access fieldset label,.metric-access .org-editor-fields>*{min-width:0}
+.metric-access select,.metric-access input,.metric-access textarea{max-width:100%;min-width:0}
+.metric-checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 20px}
+.metric-checks .fact-check{margin:4px 0;padding:8px 0;min-height:44px}
+.metric-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.metric-cards article{padding:16px;border:1px solid var(--fresh-border);border-radius:8px;overflow-wrap:anywhere}
+.metric-history{padding-left:20px}.metric-history li{padding:12px 0;border-bottom:1px solid var(--fresh-border)}
+.metric-history summary{cursor:pointer}.metric-preview{border-color:var(--fresh-blue)}
+.metric-access .btn.btn-primary{background:var(--fresh-blue);border-color:var(--fresh-blue);color:var(--fresh-white)}
+.metric-access .btn.btn-primary:hover:not(:disabled){background:var(--fresh-blue-hover);border-color:var(--fresh-blue-hover);color:var(--fresh-white)}
+@media(max-width:640px){.metric-cards,.metric-checks{grid-template-columns:minmax(0,1fr)}.metric-access .org-editor-actions{align-items:stretch}.metric-access .org-editor-actions .btn{width:100%}}
