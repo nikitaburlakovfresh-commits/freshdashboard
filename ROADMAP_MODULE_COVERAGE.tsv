@@ -1,6 +1,6 @@
 roadmap_stage	source_scope	module_group	current_status	next_acceptance
 0	TZ-v2.12 §45;FRESH_implementation_roadmap.md stage0	Baseline and traceability	Stage1 detailed matrix plus module plan;NOT full atomic requirement coverage	Enumerate remaining mandatory atomic requirements;record signed baseline and evidence
-1	§2;§3;§16D;§45.1	Organization and access	Partial read-only organization V1;real roles/grants/admin deferred	Approved structure/people;atomic scope changes;all-role direct-API isolation
+1	§2;§3;§16D;§45.1	Organization and access	Local canonical branch FK migration010 plus PRE_LAUNCH editor;role catalog and task-role support partial;no production activation	Approved structure/people;effective-dated assignment and lifecycle admin;full RBAC;see ORG_CANONICAL_SCOPE_V1.md
 2	§6;§7;§18.11;§22.6;§45.5	Data/source registry and server import	Local Excel only;server import not implemented	Persist probe→validate→commit;mapping revision and duplicate/order checks
 3	§8–10;§18.11.8;§45.2;§45.7	Metrics/plans/network dashboard	Local network comparison;no common server metric engine	Versioned metrics/plans/snapshots;aggregation controls by approved scope
 4	Monthly Focus §11.2;§22.4;§45.9	Monthly attention focuses	Two local comparisons and draft threshold only	1–5 slots;compute preview;approval;history;monthly activation/archive

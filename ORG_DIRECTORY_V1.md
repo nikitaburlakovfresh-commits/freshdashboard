@@ -1,5 +1,11 @@
 # Org Directory V1 — release boundary
 
+**Canonical scope addendum (local, 2026-09-18):** `ORG_CANONICAL_SCOPE_V1.md`
+and migration 010 supersede the A/B-only operational FK boundary below.
+Tasks, grants, audit and outbox now reference exact directory branch UUIDs.
+No real assignments or lifecycle activation are seeded; no production release
+is implied. The remaining V1 limitations are not declared completed.
+
 **Editor addendum:** `ORG_EDITOR_V1.md` supersedes earlier blanket write-denial
 statements for explicitly provisioned editors only. The directory identity,
 history and A/B task bridge remain the same model. Read-only RM/RF unchanged.

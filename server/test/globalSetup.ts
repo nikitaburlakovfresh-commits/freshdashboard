@@ -56,7 +56,10 @@ module.exports = async function globalSetup() {
     await client.query(`DELETE FROM app_users`);
     // Synthetic metadata only. No deployed database is reachable through the
     // local/name/version guard above. Immutable history is never disabled.
-    await client.query('TRUNCATE report_review_revisions,report_staging_files,report_staging_batches,org_directory_name_history, org_directory_affiliation_history, org_directory_units');
+    // Migration 010 makes the directory the FK target for task/access evidence.
+    // CASCADE is confined to this guarded local test database; all affected
+    // evidence/assignment tables are already reset above, never production.
+    await client.query('TRUNCATE report_review_revisions,report_staging_files,report_staging_batches,org_directory_name_history, org_directory_affiliation_history, org_directory_units CASCADE');
     await client.query(`INSERT INTO org_directory_units
       (id,code,kind,lifecycle_state,is_demo,demo_locked,effective_from,pilot_org_unit_id)
       SELECT id,code,'ORG_UNIT','ACTIVE',true,true,'2020-01-01',id FROM org_units`);

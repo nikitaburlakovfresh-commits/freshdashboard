@@ -1,5 +1,11 @@
 # Organization editor — bounded change-set release
 
+**Canonical scope addendum (local, 2026-09-18):** migration 010 and
+`ORG_CANONICAL_SCOPE_V1.md` remove the A/B-only task/grant FK dependency.
+This editor STILL creates PRE_LAUNCH only and grants no operational access.
+Activation and assignment administration remain separate work, with no
+automatic change to existing UUIDs, histories, permissions or grants.
+
 Implements the approved next slice of TZ v2.12 §§2/3/16D/45.1/45.2/45.9, not
 completion of the complete reorganization engine or approval of real mappings.
 

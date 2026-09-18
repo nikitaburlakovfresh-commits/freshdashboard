@@ -504,6 +504,16 @@ export async function createWorkItem(
         throw new ApiError('FORBIDDEN', 'Нет grant REGIONAL_MANAGER в указанном филиале.');
       }
 
+      // Use the same admission predicate as migration 010's DB trigger.
+      // Authorization comes first, so this does not disclose hidden branches.
+      // PRE_LAUNCH editor records never become operational just by existing.
+      const admission = await client.query('SELECT org_accepts_new_work($1) AS allowed', [body.org_unit_id]);
+      if (!admission.rows[0].allowed) {
+        throw new ApiError('VALIDATION_ERROR', 'Филиал пока не принимает новые задачи.', {
+          issues: [{ path: 'org_unit_id', issue: 'ORG_UNIT_NOT_OPERATIONAL' }],
+        });
+      }
+
       const inserted = await client.query(
         `INSERT INTO work_items (org_unit_id, template_version_id, title, due_at, created_by)
          VALUES ($1, $2, $3, $4, $5) RETURNING *`,

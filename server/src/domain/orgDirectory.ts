@@ -2,6 +2,8 @@ import { pool } from '../db/pool';
 import { AuthedUser } from '../auth/session';
 import { ApiError } from '../util/errors';
 
+// Legacy wire name retained for old clients; scope is now exact canonical
+// branch UUIDs, not limited to pilot A/B. No inheritance is introduced.
 export const DIRECTORY_SCOPE = 'CURRENT_EXACT_PILOT_GRANTS' as const;
 export const ADMIN_DIRECTORY_SCOPE = 'CURRENT_NETWORK_DIRECTORY_REVIEW' as const;
 
@@ -42,9 +44,9 @@ const accessCte = `
   ), allowed AS MATERIALIZED (
     SELECT d.id FROM org_directory_units d
     WHERE EXISTS(SELECT 1 FROM directory_admin)
-      OR (d.is_demo AND d.pilot_org_unit_id=d.id AND EXISTS (
+      OR (d.kind='ORG_UNIT' AND EXISTS (
         SELECT 1 FROM live_permissions g WHERE g.scope_kind='ORG_UNIT'
-          AND g.org_unit_id=d.pilot_org_unit_id AND g.permission_code='work_item.read'
+          AND g.org_unit_id=d.id AND g.permission_code='work_item.read'
       ))
   )`;
 
