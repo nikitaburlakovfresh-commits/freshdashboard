@@ -6,7 +6,7 @@ import { AuthProvider } from './auth/AuthContext';
 import App from './App';
 
 const rootEl = document.getElementById('root')!;
-try { document.documentElement.dataset.theme = localStorage.getItem('fresh-theme') === 'light' ? 'light' : 'dark'; } catch { /* Dark default when storage is unavailable. */ }
+try { document.documentElement.dataset.theme = localStorage.getItem('fresh-theme') === 'dark' ? 'dark' : 'light'; } catch { /* Светлая тема по умолчанию, как на действующем портале. */ }
 createRoot(rootEl).render(
   <React.StrictMode>
     <BrowserRouter>

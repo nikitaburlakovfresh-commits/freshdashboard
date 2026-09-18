@@ -15,6 +15,7 @@ const groups: { label: string; links: { path: string; label: string; icon: IconN
     { path: '/analytics', label: 'Продажи и склад', icon: 'chart', future: true },
   ] },
   { label: 'Управление результатом', links: [
+    { path: '/settings/thresholds', label: 'Пороги показателей', icon: 'target' },
     { path: '/kpi', label: 'KPI и MBO', icon: 'target', future: true },
     { path: '/bdr', label: 'БДР · план и факт', icon: 'wallet', future: true },
   ] },
@@ -32,7 +33,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const mobile = useRef<HTMLDialogElement>(null);
   const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem('fresh-theme') === 'light' ? 'light' : 'dark'; } catch { return 'dark'; }
+    try { return localStorage.getItem('fresh-theme') === 'dark' ? 'dark' : 'light'; } catch { return 'light'; }
   });
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
