@@ -24,6 +24,7 @@ export type IdempotentOperation =
   | 'userCreate'
   | 'accessChangeCreate' | 'accessChangePreview' | 'accessChangeApply'
   | 'reportReviewDraft'
+  | 'reportFactPublish'
   | 'orgChangeCreate' | 'orgChangeEdit' | 'orgChangePreview' | 'orgChangeApply'
   | 'createWorkItem'
   | 'assignWorkItem'

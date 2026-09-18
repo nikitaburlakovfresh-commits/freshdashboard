@@ -27,7 +27,7 @@ export interface OperationalOverview {
   business_date:string;current_business_date:string;server_time:string;
   branches:BranchSummary[];policies:DailyPolicy[];
   attention:{id:string;org_unit_id:string;title:string;status:string;due_at:string}[];
-  metric_state:'NOT_PUBLISHED';
+  metric_state:'SEPARATE_AUTHORIZED_QUERY';
 }
 export const getDay=(org:string,role:string,date:string)=>apiFetch<PersonalDay>('/daily-logs/day',{query:{org_unit_id:org,role,business_date:date}});
 export const openDay=(org:string,role:string,date:string)=>apiFetch<{id:string}>('/daily-logs/open',{method:'POST',body:{org_unit_id:org,role,business_date:date}});

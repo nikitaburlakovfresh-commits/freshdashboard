@@ -56,7 +56,7 @@ export async function operationalOverview(ctx:ActorContext,dateRaw:unknown,org?:
       FROM daily_log_policies WHERE org_unit_id=$1 ORDER BY role_code,version DESC`,[org])).rows:[];
     const clock=(await c.query("SELECT now() AS server_time,to_char(now() AT TIME ZONE 'Europe/Moscow','YYYY-MM-DD') AS day")).rows[0];
     return {business_date:date,current_business_date:clock.day,server_time:clock.server_time,
-      scope:'CURRENT_EXACT_GRANTS',task_basis:'CURRENT_STATE_ALL_DATES',metric_state:'NOT_PUBLISHED',
+      scope:'CURRENT_EXACT_GRANTS',task_basis:'CURRENT_STATE_ALL_DATES',metric_state:'SEPARATE_AUTHORIZED_QUERY',
       branches:branches.map(b=>({...b,can_manage:managers.includes(b.id),visibility:managers.includes(b.id)?'BRANCH':'PERSONAL',
         ...(stats.find(s=>s.org_unit_id===b.id)??{open_tasks:0,overdue_tasks:0,awaiting_review:0,completed_tasks:0,diary_drafts:0,diary_submitted:0,diary_accepted:0,diaries:[]})})),
       attention,policies};

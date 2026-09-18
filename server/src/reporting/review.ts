@@ -30,7 +30,7 @@ function draftPeriod(raw:any):DraftPeriod|null {
   try{validatePeriod(p);}catch{throw invalid('Некорректные даты предложения периода.');}
   return {start:p.start,end:p.end,planStart:p.planStart,planEnd:p.planEnd,basis:p.basis.trim()};
 }
-async function context(c:PoolClient,auth:AuthedUser,id:string) {
+export async function reviewContext(c:PoolClient,auth:AuthedUser,id:string) {
   const grant=await stagingAccess(c,auth);
   // Same ordering as organization editor: access → directory → aggregate.
   await c.query('LOCK TABLE org_directory_units,org_directory_name_history,org_directory_affiliation_history IN SHARE MODE');
@@ -71,11 +71,11 @@ async function context(c:PoolClient,auth:AuthedUser,id:string) {
   return {grant,b,reports,view};
 }
 export async function getReview(auth:AuthedUser,id:string) {
-  return withTransaction(async c=>(await context(c,auth,id)).view);
+  return withTransaction(async c=>(await reviewContext(c,auth,id)).view);
 }
 export async function saveReview(auth:AuthedUser,id:string,raw:unknown,key:string|undefined,requestId:string) {
   return withTransaction(async c=>{
-    const {view,b,grant}=await context(c,auth,id);
+    const {view,b,grant}=await reviewContext(c,auth,id);
     id=b.id;
     const body=object(raw,['expected_version','preview_hash','period','edits','reason']);
     if(!Number.isSafeInteger(body.expected_version) || body.expected_version<0 || typeof body.preview_hash!=='string' ||
@@ -126,7 +126,7 @@ export async function saveReview(auth:AuthedUser,id:string,raw:unknown,key:strin
 }
 export async function savedOverview(auth:AuthedUser,id:string):Promise<SavedOverview> {
   return withTransaction(async c=>{
-    const {b,reports,view}=await context(c,auth,id);
+    const {b,reports,view}=await reviewContext(c,auth,id);
     id=b.id;
     const files=(await c.query('SELECT id,display_name,content_hash,byte_size FROM report_staging_files WHERE batch_id=$1 ORDER BY id',[id])).rows;
     return {batch_id:id,network_id:b.network_id,mode:'PREVIEW',canonical_applied:false,commit_available:false,malware_scan:'NOT_SCANNED',

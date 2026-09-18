@@ -16,6 +16,7 @@ import AccessPage from './pages/AccessPage';
 import ActivateAccountPage from './pages/ActivateAccountPage';
 import ModuleReadinessPage from './pages/ModuleReadinessPage';
 import PersonalDayPage from './pages/PersonalDayPage';
+import ReportPublicationPage from './pages/ReportPublicationPage';
 
 export default function App() {
   const { me, loading } = useAuth();
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="/access" element={<AccessPage />} />
         <Route path="/prepared-reports" element={<PreparedReportsPage />} />
         <Route path="/prepared-reports/:id/review" element={<ReportReviewPage />} />
+        <Route path="/prepared-reports/:id/publish" element={<ReportPublicationPage />} />
         <Route path="/saved-network" element={<SavedNetworkPage />} />
         <Route path="/saved-network/:id" element={<SavedNetworkPage />} />
         <Route path="/saved-network/:id/branches/:itemId" element={<SavedBranchPage />} />

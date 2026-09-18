@@ -9,6 +9,7 @@ import { organizationRouter } from './routes/organization';
 import { reportBatchesRouter } from './routes/reportBatches';
 import { accessRouter } from './routes/access';
 import { dailyRouter } from './routes/dailyLogs';
+import { reportFactsRouter } from './routes/reportFacts';
 import { ApiError, errorBody } from './util/errors';
 
 export function createApp() {
@@ -36,6 +37,7 @@ export function createApp() {
   app.use('/api/v1/report-batches', reportBatchesRouter);
   app.use('/api/v1/access', accessRouter);
   app.use('/api/v1/daily-logs', dailyRouter);
+  app.use('/api/v1/report-facts', reportFactsRouter);
 
   app.get('/api/v1/healthz', (_req, res) => {
     res.status(200).json({ status: 'ok' });
@@ -87,7 +89,7 @@ export function createApp() {
       return;
     }
     // eslint-disable-next-line no-console
-    if(['/api/v1/report-batches','/api/v1/auth','/api/v1/access'].some(p=>req.path.startsWith(p))) {
+    if(['/api/v1/report-batches','/api/v1/report-facts','/api/v1/auth','/api/v1/access'].some(p=>req.path.startsWith(p))) {
       // DB/parser failures can contain private workbook values in diagnostics.
       console.error('Sensitive request failed', requestId);
     } else console.error('Unhandled error', err);

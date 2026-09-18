@@ -3,6 +3,7 @@ import { Link,useParams } from 'react-router-dom';
 import { getOverview,savePolicy,moscowToday,type OperationalOverview,type BranchSummary,type DailyPolicy } from '../api/dailyLogs';
 import StatusBadge from '../components/StatusBadge';
 import LocalBusinessData from '../components/LocalBusinessData';
+import PublishedFacts from '../components/PublishedFacts';
 import '../styles/portal.css';
 import '../styles/beta-workspace.css';
 const fields=[['open_tasks','Открытые задачи'],['overdue_tasks','Срок исполнения истёк'],['awaiting_review','На проверке'],['completed_tasks','Принятые задачи']] as const;
@@ -32,9 +33,7 @@ export default function OperationalPage() {
         <p>Область просмотра: {branch.visibility==='BRANCH'?'все доступные задачи и дневные записи филиала':'только ваши задачи и дневные записи, не итоги всего филиала'}.</p>
         <Link to="/organization">История структуры и назначений →</Link></section>}
       <div className="beta-counters">{totals.map(t=><article className="portal-panel" key={t.label}><span>{t.label}</span><strong>{t.count}</strong><small>По вашей области доступа</small></article>)}</div>
-      <section className="portal-panel"><div className="portal-section-head"><h2>Бизнес-показатели</h2><span className="portal-chip">Нет опубликованного среза</span></div>
-        <div className="beta-missing">{['Продажи','Маржа + КСО','Склад','Склад 45+'].map(n=><div key={n}><span>{n}</span><strong>Нет данных</strong><small>Период, источник и расчёт не утверждены</small></div>)}</div>
-        <p className="portal-muted">Отсутствие опубликованных показателей не равно нулю. Задачи и ежедневники не заменяют продажи, долю рынка или прибыль.</p></section>
+      <PublishedFacts org={orgId}/>
       <section className="portal-panel"><div className="portal-section-head"><div><h2>{orgId?'Ежедневники филиала':'Филиалы и ежедневники'} · {date}</h2><p className="portal-muted">Считаются только созданные записи. Процент дисциплины не рассчитывается без утверждённого расписания.</p></div></div>
         {!data.branches.length&&<p>Нет доступных филиалов на выбранную дату. Административный доступ к справочнику сам по себе не даёт доступа к бизнес-данным.</p>}
         <div className="beta-branches">{data.branches.map(b=><Branch key={b.id} branch={b} detailed={Boolean(orgId)}/>)}</div>

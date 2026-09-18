@@ -1,0 +1,15 @@
+.report-facts .fact-fieldset{min-width:0;border:1px solid var(--fresh-border)}
+.report-facts .btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;border:1px solid var(--fresh-border);border-radius:8px;background:var(--fresh-raised);color:var(--fresh-dark);font:600 14px var(--font-sans);cursor:pointer}
+.report-facts .btn:hover:not(:disabled){background:var(--fresh-info-bg);border-color:var(--fresh-link)}
+.report-facts .btn:disabled{opacity:.5;cursor:not-allowed}.report-facts .btn-primary{background:var(--fresh-blue);border-color:var(--fresh-blue);color:white}
+.fact-choice{display:grid;grid-template-columns:minmax(210px,1fr) minmax(260px,2fr);gap:18px;padding:16px 0;border-bottom:1px solid var(--fresh-border)}
+.fact-choice label,.fact-block{display:flex;flex-direction:column;gap:8px;min-width:0}
+.fact-choice textarea,.fact-block textarea{min-height:84px;resize:vertical}
+.fact-choice select,.fact-choice textarea,.fact-block textarea{font:inherit;padding:10px;border:1px solid var(--fresh-border);border-radius:6px;width:100%;min-width:0;max-width:100%;background:var(--fresh-surface);color:var(--fresh-dark)}
+.fact-block{margin:20px 0}.fact-check{display:flex!important;flex-direction:row!important;align-items:flex-start;gap:10px;margin:16px 0}
+.fact-check input{width:18px!important;min-height:18px!important;flex:none}
+.fact-list{display:grid;gap:12px;margin:16px 0}.fact-row{display:grid;grid-template-columns:1fr auto;gap:14px;padding:18px;background:var(--fresh-subtle);border:1px solid var(--fresh-border);border-radius:10px}
+.fact-row h3{margin:0 0 6px;font-size:17px}.fact-row small{display:block;color:var(--fresh-text-muted);margin-top:7px}
+.fact-value{text-align:right}.fact-value strong{display:block;font-size:28px;font-variant-numeric:tabular-nums}.fact-value span{font-size:13px;color:var(--fresh-text-muted)}
+.fact-row details{grid-column:1/-1;font-size:13px}.fact-row summary{cursor:pointer;color:var(--fresh-dark)}.fact-hash{overflow-wrap:anywhere}
+@media(max-width:640px){.fact-choice{grid-template-columns:minmax(0,1fr)}.fact-row{padding:12px;gap:8px}.fact-value strong{font-size:23px}.report-facts fieldset{padding:14px}.report-facts nav{flex-wrap:wrap}}

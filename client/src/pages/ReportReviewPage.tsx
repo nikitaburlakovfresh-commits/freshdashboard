@@ -66,10 +66,11 @@ function ReviewForm({view,reopen,deny}:{view:ReviewView;reopen:()=>void;deny:()=
   }
   const rows=view.rows.filter(r=>(kind==='all'||r.report_kind===kind)&&r.source_name.toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru'))&&(!onlyUnresolved||!selected[r.item_id]));
   return <>
-    <div className="saved-notice"><strong>Проверка ≠ согласование владельца</strong><span>Здесь можно предложить даты и существующие OrgUnit. Кнопки подтверждения бизнес-структуры или публикации нет.
-      AV NOT_SCANNED: оригиналы остаются в закрытом карантине.</span></div>
+    <div className="saved-notice"><strong>Проверка ≠ согласование владельца</strong><span>Здесь можно предложить даты и существующие OrgUnit. Публикация агрегатов выполняется отдельным шагом с собственными правами и проверками.
+      Оригиналы остаются в закрытом хранилище.</span></div>
     <nav className="saved-actions" aria-label="Сценарий подготовки"><Link className="btn" to="/prepared-reports">1. Исходники</Link>
-      <span className="portal-chip">2. Черновик · v{view.current.version}</span><Link className="btn" to={`/saved-network/${view.batch_id}`}>3. Сохранённый обзор сети →</Link></nav>
+      <span className="portal-chip">2. Черновик · v{view.current.version}</span><Link className="btn" to={`/saved-network/${view.batch_id}`}>3. Сохранённый обзор сети →</Link>
+      <Link className="btn" to={`/prepared-reports/${view.batch_id}/publish`}>4. Публикация агрегатов →</Link></nav>
     <form onSubmit={save}>
       <section className="portal-panel"><h2>Период отчёта</h2><p>Не определяется по дате загрузки, скриншоту или дате склада. Сохранённые исходные метаданные не перезаписываются.</p>
         <fieldset disabled={busy} className="org-editor-fields">

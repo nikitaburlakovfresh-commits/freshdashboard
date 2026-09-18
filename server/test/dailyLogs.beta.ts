@@ -123,7 +123,7 @@ test('overview exact scope, accepted diary not counted as task, null business KP
   const view=await authed(rm).get(`/api/v1/daily-logs/overview?business_date=${today}`);
   expect(view.status).toBe(200);
   expect(view.body.branches.map((b:any)=>b.id)).toEqual([A]);
-  expect(view.body.metric_state).toBe('NOT_PUBLISHED');
+  expect(view.body.metric_state).toBe('SEPARATE_AUTHORIZED_QUERY');
   expect(view.body.branches[0].diary_accepted).toBe(1);
   expect(view.body.branches[0].completed_tasks).toBe(0);
   expect(view.body.attention.every((t:any)=>!t.title.startsWith('Ежедневник'))).toBe(true);
