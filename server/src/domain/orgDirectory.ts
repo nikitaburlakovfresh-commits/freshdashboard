@@ -53,7 +53,7 @@ const accessCte = `
 export async function getDirectoryTree(auth: AuthedUser, asOf: string) {
   const result = await pool.query(`${accessCte},
     visible AS MATERIALIZED (
-      SELECT d.id,d.code,d.kind,d.type_code,d.lifecycle_state,d.is_demo,d.demo_locked,
+      SELECT d.id,d.code,d.kind,d.type_code,org_lifecycle_at(d.id,$3::date) lifecycle_state,d.is_demo,d.demo_locked,
              n.display_name,n.effective_from AS name_from,n.effective_to AS name_to,
              a.parent_id,a.business_model,a.effective_from AS affiliation_from,a.effective_to AS affiliation_to
       FROM allowed x JOIN org_directory_units d ON d.id=x.id
@@ -102,6 +102,10 @@ export async function getDirectoryHistory(auth: AuthedUser, id: string) {
   }
   const result = await pool.query(`${accessCte}
     SELECT d.id, EXISTS(SELECT 1 FROM directory_admin) AS admin_authorized,
+      jsonb_build_object('state',d.lifecycle_state,'effective_from',to_char(d.effective_from,'YYYY-MM-DD')) AS lifecycle_baseline,
+      (SELECT coalesce(jsonb_agg(jsonb_build_object('state','ACTIVE',
+        'effective_from',to_char(a.effective_from,'YYYY-MM-DD'),'recorded_at',a.recorded_at)
+        ORDER BY a.effective_from),'[]'::jsonb) FROM org_branch_activations a WHERE a.org_unit_id=d.id) AS lifecycle,
       (SELECT coalesce(jsonb_agg(jsonb_build_object(
         'display_name',n.display_name,'effective_from',to_char(n.effective_from,'YYYY-MM-DD'),
         'effective_to',to_char(n.effective_to,'YYYY-MM-DD')

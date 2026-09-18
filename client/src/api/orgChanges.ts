@@ -1,6 +1,6 @@
 import { apiFetch } from './client';
 export interface OrgChange {
-  operation:'ORG_UNIT_CREATE'|'ORG_UNIT_RENAME'|'ORG_UNIT_MOVE_TO_CLUSTER';
+  operation:'ORG_UNIT_CREATE'|'ORG_UNIT_RENAME'|'ORG_UNIT_MOVE_TO_CLUSTER'|'ORG_UNIT_ACTIVATE';
   target_id?:string;
   code?:string;
   kind?:string;

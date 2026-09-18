@@ -25,6 +25,8 @@ export interface DirectoryTree {
 }
 export interface DirectoryHistory {
   id: string;
+  lifecycle_baseline?: {state:DirectoryUnit['lifecycle_state'];effective_from:string};
+  lifecycle?: {state:DirectoryUnit['lifecycle_state'];effective_from:string;recorded_at:string}[];
   names: { display_name: string; effective_from: string; effective_to: string | null }[];
   affiliations: { parent_id: string | null; business_model: DirectoryUnit['business_model']; effective_from: string; effective_to: string | null }[];
 }

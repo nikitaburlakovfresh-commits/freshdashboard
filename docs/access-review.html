@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FRESH Portal · Проверка управления назначениями</title>
+<title>FRESH Portal · Проверка управления назначениями и запуска филиалов</title>
 <style>
 :root{font-family:Arial,sans-serif;color:#19212b;background:#f4f6fb;font-synthesis:none}*{box-sizing:border-box}
 body{margin:0}main{max-width:1240px;margin:auto;padding:40px 24px 64px}header{display:flex;gap:28px;align-items:start;justify-content:space-between;border-bottom:1px solid #dce2ee;padding-bottom:30px}
@@ -12,12 +12,21 @@ p{line-height:1.7;max-width:820px;color:#4c596c}small{font-size:12px;letter-spac
 a{color:#143cff;text-decoration:none}a:hover{text-decoration:underline}footer{margin-top:36px;font-size:13px;color:#596678}button{font:inherit}
 @media(max-width:700px){main{padding:24px 14px}header{display:block}.badge{display:inline-block}.grid{grid-template-columns:1fr}.mobile{padding:12px;gap:10px}}
 </style></head><body><main>
-<header><div><small>FRESH Portal · локальная проверка</small><h1>Пользователи<br>и назначения</h1>
-<p>Проверенный следующий срез: выдача и отзыв операционной роли на один филиал через сохранённый черновик, проверку последствий и явное подтверждение.</p></div>
+<header><div><small>FRESH Portal · локальная проверка</small><h1>Назначения<br>и запуск филиалов</h1>
+<p>Два отдельных действия: контролируемый запуск реального филиала и точечная выдача роли сотруднику. Каждое проходит сохранённый черновик, проверку последствий и явное подтверждение.</p></div>
 <span class="badge">Не установлен на production</span></header>
 <div class="note"><strong>Это визуальный отчёт, не второй портал.</strong>
 <p>Здесь только снимки настоящего интерфейса с локальными синтетическими записями. Боевая база, пароли и сессии не подключены.
 Авторизация и команды проверены отдельно на same-origin стенде; встроенный предпросмотр не заменяет эту проверку.</p></div>
+<h2>Контролируемая активация филиала</h2>
+<p>До запуска → Активен. Только текущая дата UTC, отдельное право и проверка структуры. Отмена подтверждения ничего не меняет. Активация не выдаёт роли и не публикует KPI.</p>
+<div class="grid">
+<figure class="card"><a href="activation-qa/desktop-preview.png" target="_blank" rel="noopener"><img src="activation-qa/desktop-preview.png" alt="Проверка активации синтетического филиала"></a><figcaption>Предварительная проверка и описание последствий. Ни одного автоматического назначения.</figcaption></figure>
+<figure class="card"><a href="activation-qa/desktop-confirm.png" target="_blank" rel="noopener"><img src="activation-qa/desktop-confirm.png" alt="Подтверждение запуска конкретного учебного филиала"></a><figcaption>Название филиала, дата и предупреждение перед применением.</figcaption></figure>
+<figure class="card"><a href="activation-qa/desktop-light-applied.png" target="_blank" rel="noopener"><img loading="lazy" src="activation-qa/desktop-light-applied.png" alt="Неизменяемое применённое предложение"></a><figcaption>Применённая версия не редактируется и не применяется повторно.</figcaption></figure>
+<figure class="card"><a href="activation-qa/card-after.png" target="_blank" rel="noopener"><img loading="lazy" src="activation-qa/card-after.png" alt="Исходный статус и история запуска филиала"></a><figcaption>Исходный PRE_LAUNCH сохранён. Записаны дата и фактический момент перехода в ACTIVE.</figcaption></figure>
+</div>
+<div class="mobile" style="margin-top:20px"><img loading="lazy" src="activation-qa/mobile-light-form.png" alt="Мобильная форма запуска, светлая тема"><img loading="lazy" src="activation-qa/mobile-dark-form.png" alt="Мобильная форма запуска, тёмная тема"></div>
 <h2>Полный цикл управления доступом</h2>
 <div class="grid">
 <figure class="card"><a href="access-qa/desktop-dark-form.png" target="_blank" rel="noopener"><img src="access-qa/desktop-dark-form.png" alt="Форма выдачи роли на синтетический филиал"></a><figcaption>Сотрудник, роль, филиал, срок действия и основание. Сохранение не выдаёт права.</figcaption></figure>
@@ -29,9 +38,9 @@ a{color:#143cff;text-decoration:none}a:hover{text-decoration:underline}footer{ma
 <figure class="card"><a href="access-qa/desktop-light-top.png" target="_blank" rel="noopener"><img loading="lazy" src="access-qa/desktop-light-top.png" alt="Справочник синтетических сотрудников со статусами назначений"></a><figcaption>Светлая тема. Отозванная роль остаётся в истории сотрудника.</figcaption></figure>
 <div class="mobile" style="margin-top:20px"><img loading="lazy" src="access-qa/mobile-light-top.png" alt="Мобильный справочник, светлая тема"><img loading="lazy" src="access-qa/mobile-dark-form.png" alt="Мобильная форма назначения, тёмная тема"></div>
 <h2>Что проверено и что ещё впереди</h2>
-<p>251 серверная проверка и 43 клиентских теста проходят. В браузере пройдены выдача, отзыв, повторное открытие черновика, отмена подтверждения,
+<p>270 серверных проверок и 43 клиентских теста проходят. В браузере проверены запуск филиала и его история; для модуля назначений ранее пройдены выдача, отзыв, повторное открытие черновика, отмена подтверждения,
 отказ при пересечении и запрет доступа RF. На ширине 1440 и 390 пикселей горизонтального переполнения не обнаружено.</p>
-<p>Создание пользователей, активация реальных филиалов, назначения на дивизионы, замещения и публикация KPI не входят в этот выпуск.
+<p>Создание пользователей, приостановка и закрытие филиалов, назначения на дивизионы, замещения и публикация KPI пока не реализованы в этих срезах.
 Первые реальные филиалы, сотрудники, источники и периоды должны быть согласованы отдельно.</p>
-<footer>Только синтетические данные · Миграция 011 не выдаёт административные права автоматически · Снимки открываются в полном размере</footer>
+<footer>Только синтетические данные · Миграции 011–012 не выдают административные права автоматически · Production не обновлялся · Снимки открываются в полном размере</footer>
 </main></body></html>

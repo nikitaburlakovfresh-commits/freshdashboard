@@ -11,6 +11,7 @@ import { writeAuditAndOutbox } from './auditOutbox';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const operationPermissions: Record<string,string> = {
   ORG_UNIT_CREATE:'org_unit.create',ORG_UNIT_RENAME:'org_unit.rename',ORG_UNIT_MOVE_TO_CLUSTER:'org_unit.move',
+  ORG_UNIT_ACTIVATE:'org_unit.activate',
 };
 type Change = Record<string, any>;
 type Proposal = Record<string, any>;
@@ -45,7 +46,7 @@ function object(raw:unknown,keys:string[]):Record<string,any> {
 }
 function changeSchema(raw:unknown):Change {
   const c=object(raw,['operation','target_id','code','kind','display_name','parent_id','type_code','business_model','effective_from','reason']);
-  if(!Object.prototype.hasOwnProperty.call(operationPermissions,c.operation)) throw invalid('Поддерживаются только создание, переименование и перенос справочника.');
+  if(!Object.prototype.hasOwnProperty.call(operationPermissions,c.operation)) throw invalid('Операция справочника не поддерживается.');
   for(const [k,v] of Object.entries(c)) {
     if(v!==null && typeof v!=='string') throw invalid(`Поле ${k}: требуется строка.`);
     if(typeof v==='string' && v.length>500) throw invalid(`Поле ${k}: превышена длина.`);
@@ -54,7 +55,8 @@ function changeSchema(raw:unknown):Change {
   if(c.operation==='ORG_UNIT_CREATE' && c.target_id!==undefined) throw invalid('UUID новой единицы назначается сервером.');
   const allowed=c.operation==='ORG_UNIT_CREATE'
     ? ['operation','code','kind','display_name','parent_id','type_code','business_model','effective_from','reason']
-    : ['operation','target_id','effective_from','reason',c.operation==='ORG_UNIT_RENAME'?'display_name':'parent_id'];
+    : ['operation','target_id','effective_from','reason',
+      ...(c.operation==='ORG_UNIT_ACTIVATE'?[]:[c.operation==='ORG_UNIT_RENAME'?'display_name':'parent_id'])];
   if(Object.keys(c).some(k=>!allowed.includes(k))) throw invalid('Эти поля недоступны для выбранного изменения.');
   return c;
 }
@@ -72,7 +74,8 @@ function publicProposal(p:Proposal) {
   return result;
 }
 async function directorySnapshot(client:PoolClient,id:string) {
-  const r=await client.query(`SELECT d.id,d.code,d.kind,d.type_code,d.lifecycle_state,d.is_demo,d.demo_locked,
+  const r=await client.query(`SELECT d.id,d.code,d.kind,d.type_code,
+    org_lifecycle_at(d.id,(now() AT TIME ZONE 'UTC')::date) lifecycle_state,d.is_demo,d.demo_locked,
     d.pilot_org_unit_id,to_char(d.effective_from,'YYYY-MM-DD') effective_from,to_char(d.effective_to,'YYYY-MM-DD') effective_to,
     (SELECT jsonb_agg(jsonb_build_object('display_name',n.display_name,'effective_from',to_char(n.effective_from,'YYYY-MM-DD'),
       'effective_to',to_char(n.effective_to,'YYYY-MM-DD')) ORDER BY n.effective_from) FROM org_directory_name_history n WHERE n.org_unit_id=d.id) names,
@@ -87,10 +90,13 @@ async function validate(client:PoolClient,p:Proposal) {
   let date:string|undefined;
   try { if(!c.effective_from) throw Error(); date=parseDirectoryDate(c.effective_from); }
   catch { issue('effective_from','Требуется существующая дата YYYY-MM-DD.'); }
-  const today=(await client.query("SELECT to_char(CURRENT_DATE,'YYYY-MM-DD') today")).rows[0].today;
+  const today=(await client.query("SELECT to_char(now() AT TIME ZONE 'UTC','YYYY-MM-DD') today")).rows[0].today;
   if(date && date<today) issue('effective_from','Изменения задним числом не входят в этот этап.');
   if(!c.reason?.trim()) issue('reason','Укажите основание изменения.');
-  if(c.operation!=='ORG_UNIT_MOVE_TO_CLUSTER' && (!c.display_name?.trim() || c.display_name.length>200)) issue('display_name','Укажите название длиной до 200 символов.');
+  const activation=c.operation==='ORG_UNIT_ACTIVATE';
+  if(['ORG_UNIT_CREATE','ORG_UNIT_RENAME'].includes(c.operation) && (!c.display_name?.trim() || c.display_name.length>200)) issue('display_name','Укажите название длиной до 200 символов.');
+  if(activation && date!==today) issue('effective_from','В этом выпуске активация возможна только текущей датой UTC, без отложенного или обратного запуска.');
+  if(activation && (c.reason?.trim().length ?? 0)<10) issue('reason','Для активации требуется основание от 10 символов.');
   const before=await directorySnapshot(client,p.target_id);
   let kind=c.kind, parentId=c.parent_id;
   if(c.operation==='ORG_UNIT_CREATE') {
@@ -108,7 +114,16 @@ async function validate(client:PoolClient,p:Proposal) {
       const originated=await client.query("SELECT 1 FROM org_change_proposals WHERE target_id=$1 AND status='APPLIED' AND change->>'operation'='ORG_UNIT_CREATE'",[p.target_id]);
       if(before.is_demo || before.demo_locked || before.pilot_org_unit_id || before.lifecycle_state!=='PRE_LAUNCH' || !originated.rowCount)
         issue('target_id','Изменять можно только созданные редактором единицы до запуска. Пилот A/B и импорт защищены.');
-      if(c.operation==='ORG_UNIT_RENAME') {
+      if(activation) {
+        if(kind!=='ORG_UNIT' || before.effective_to || (date && before.effective_from>date))
+          issue('target_id','Активировать можно только существующий реальный филиал с открытым интервалом.');
+        const name=before.names?.find((n:any)=>date && n.effective_from<=date && (!n.effective_to || date<n.effective_to));
+        const affiliation=before.affiliations?.find((a:any)=>date && a.effective_from<=date && (!a.effective_to || date<a.effective_to));
+        if(!name) issue('target_id','Нет действующего названия филиала.');
+        // Do not turn a scheduled reorganization into an implicit launch policy.
+        if(!affiliation || affiliation.effective_to) issue('parent_id','Требуется текущая открытая принадлежность без запланированной смены.');
+        parentId=affiliation?.parent_id;
+      } else if(c.operation==='ORG_UNIT_RENAME') {
         const last=before.names?.at(-1);
         if(!last || last.effective_to || (date && date<=last.effective_from)) issue('effective_from','Новая дата должна быть позже начала последнего открытого имени; пересечение запрещено.');
         if(last?.display_name===c.display_name?.trim()) issue('display_name','Название не изменилось.');
@@ -157,11 +172,14 @@ async function validate(client:PoolClient,p:Proposal) {
     SELECT count(*)::int n FROM children`,[p.target_id])).rows[0].n : 0;
   return {valid:issues.length===0,issues,target_id:p.target_id,operation:c.operation,
     effective_from:c.effective_from ?? null,before,
-    proposed:{...c,target_id:p.target_id,...(c.operation==='ORG_UNIT_CREATE'?{lifecycle_state:'PRE_LAUNCH'}:{})},
-    affected:{directory_units:c.operation==='ORG_UNIT_CREATE'?1:0,name_history:c.operation==='ORG_UNIT_MOVE_TO_CLUSTER'?0:1,
-      affiliation_history:c.operation==='ORG_UNIT_RENAME'?0:1,descendant_units:descendants,
+    proposed:{...c,target_id:p.target_id,...(c.operation==='ORG_UNIT_CREATE'?{lifecycle_state:'PRE_LAUNCH'}:activation?{lifecycle_state:'ACTIVE'}:{})},
+    affected:{directory_units:c.operation==='ORG_UNIT_CREATE'?1:0,name_history:['ORG_UNIT_CREATE','ORG_UNIT_RENAME'].includes(c.operation)?1:0,
+      affiliation_history:['ORG_UNIT_CREATE','ORG_UNIT_MOVE_TO_CLUSTER'].includes(c.operation)?1:0,
+      lifecycle_history:activation?1:0,descendant_units:descendants,
       work_items:0,role_grants:0,historical_access_grants:0,financial_records:0},
-    warning:'Только справочник. Задачи, роли, импорт, метрики, финансы и запуск не изменяются. Применение необратимо; исправление — новым предложением.'};
+    warning:activation
+      ? 'Филиал станет активным после применения. Новые задачи станут допустимы только при наличии отдельных прав. Роли не выдаются, задачи и рассылки не создаются, показатели не публикуются. Прямой откат активации, PAUSED и CLOSED в этот выпуск не входят.'
+      : 'Только справочник. Задачи, роли, импорт, метрики, финансы и запуск не изменяются. Применение необратимо; исправление — новым предложением.'};
 }
 
 export async function listOrgChanges(auth:AuthedUser) {
@@ -186,7 +204,7 @@ export async function commandOrgChange(auth:AuthedUser,action:'create'|'edit'|'p
     const permissions=await access(client,auth,`organization.change.${phase}`);
     // Prevent all external directory writers racing validation, and serialize
     // graph mutations before acquiring proposal locks (consistent lock order).
-    await client.query('LOCK TABLE org_directory_units, org_directory_name_history, org_directory_affiliation_history, org_change_proposals IN SHARE ROW EXCLUSIVE MODE');
+    await client.query('LOCK TABLE org_directory_units, org_directory_name_history, org_directory_affiliation_history, org_change_proposals, org_branch_activations IN SHARE ROW EXCLUSIVE MODE');
     let p=id ? await load(client,id) : null;
     if(p) checkOperation(permissions,p.change);
     const body=object(raw,action==='create'?['change']:action==='edit'?['change','expected_version']:action==='preview'?['expected_version']:['expected_version','preview_token']);
@@ -233,6 +251,9 @@ export async function commandOrgChange(auth:AuthedUser,action:'create'|'edit'|'p
         await client.query('UPDATE org_directory_name_history SET effective_to=$2 WHERE org_unit_id=$1 AND effective_to IS NULL',[target,date]);
         await client.query(`INSERT INTO org_directory_name_history(org_unit_id,display_name,effective_from,change_reason)
           VALUES($1,$2,$3,$4)`,[target,c.display_name.trim(),date,c.reason.trim()]);
+      } else if(c.operation==='ORG_UNIT_ACTIVATE') {
+        await client.query(`INSERT INTO org_branch_activations(org_unit_id,proposal_id,effective_from,actor_user_id,reason)
+          VALUES($1,$2,$3,$4,$5)`,[target,id,date,auth.userId,c.reason.trim()]);
       } else {
         const old=(await client.query('SELECT * FROM org_directory_affiliation_history WHERE org_unit_id=$1 AND effective_to IS NULL',[target])).rows[0];
         await client.query('UPDATE org_directory_affiliation_history SET effective_to=$2 WHERE org_unit_id=$1 AND effective_to IS NULL',[target,date]);

@@ -126,11 +126,15 @@ export default function OrganizationPage() {
             <div><dt>Имя в срезе</dt><dd>{interval(unit.name_effective_from, unit.name_effective_to)}</dd></div>
             <div><dt>Принадлежность в срезе</dt><dd>{interval(unit.affiliation_effective_from, unit.affiliation_effective_to)}</dd></div>
           </dl>
-          <div className="org-history"><h3>История названий и принадлежности</h3>
+          <div className="org-history"><h3>История названий, принадлежности и запуска</h3>
             <p className="org-small portal-muted">Интервалы полуоткрытые: начальная дата включена, конечная — нет. История не даёт архивных прав к задачам, финансам или людям.</p>
             {historyBusy && <p role="status">Загружаем историю…</p>}
             {historyError && <p className="org-error" role="alert">{historyError}</p>}
-            {history && <>
+            {history && history.id===unit.id && <>
+              {history.lifecycle_baseline && <><h4>Статус и запуск</h4>
+                <p>Исходный статус: {states[history.lifecycle_baseline.state]} с {history.lifecycle_baseline.effective_from}.</p>
+                {history.lifecycle?.length ? <ol>{history.lifecycle.map(row=><li key={row.recorded_at}><strong>{states[row.state]} с {row.effective_from}</strong><small>Применено {new Date(row.recorded_at).toLocaleString('ru-RU')}</small></li>)}</ol> : <p>Переходов после исходного статуса нет.</p>}
+              </>}
               <h4>Названия</h4><ol>{history.names.map(row => <li key={row.effective_from}><strong>{row.display_name}</strong><small>{interval(row.effective_from, row.effective_to)}</small></li>)}</ol>
               <h4>Принадлежность</h4><ol>{history.affiliations.map(row => <li key={row.effective_from}><strong>{row.parent_id ? tree.items.find(item => item.id === row.parent_id)?.display_name ?? 'Родитель вне текущего среза' : 'Родитель не подтверждён или скрыт'}</strong>
                 <span>{row.business_model ? models[row.business_model] : 'Бизнес-модель не подтверждена'}</span><small>{interval(row.effective_from, row.effective_to)}</small></li>)}</ol>
@@ -142,7 +146,7 @@ export default function OrganizationPage() {
     <section className="portal-panel org-admin" aria-label="Административное согласование">
       <div><div className="portal-eyebrow">АДМИНИСТРАТИВНЫЙ ОБЗОР</div><h2>{tree?.admin_review.authorized ? 'Доступ администратора: справочник' : 'Административное чтение требует отдельного назначения'}</h2>
         <p>{tree?.admin_review.authorized ? 'SUPER_ADMIN · Владелец платформы. Действующее право: organization.directory.review — метаданные и история справочника сети. Оно не открывает задачи, финансы, кадровые данные или чужие уведомления.' : 'Пилотные RM/RF не получают сетевой доступ через название должности. Сервер проверяет действующее назначение, scope и permission при каждом запросе.'}</p>
-        <p>{canEdit?'Редактор выше выполняет только явно проверенные изменения справочника.':'Без отдельного права редактора запись заблокирована.'} Выдача ролей, запуск филиалов, активация архивных учётных записей и импорт не включены.</p>
+        <p>{canEdit?'Редактор выше выполняет только явно проверенные изменения. Активация филиала требует отдельного права org_unit.activate.':'Без отдельного права редактора запись заблокирована.'} Назначения выполняются отдельно в разделе пользователей. Активация архивных учётных записей и публикация импорта здесь не выполняются.</p>
         <p className="org-small portal-muted">По ТЗ COMDIR должен соответствовать COMMERCIAL_DIRECTOR, а не REGIONAL_MANAGER. Этот реестр ролей и нормализация ещё не включены; каталог и согласование назначений — следующий этап.</p>
       </div><button className="btn btn-secondary" onClick={checkAdmin} disabled={adminBusy}>{adminBusy ? 'Проверка…' : 'Проверить полномочия'}</button>
       {adminResult && <p className="org-admin-result" role="status">{adminResult}</p>}

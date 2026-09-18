@@ -78,7 +78,8 @@ async function validate(client:PoolClient,p:Proposal,auth:AuthedUser) {
   const role=roleCode?(await client.query(`SELECT r.code,r.display_name,r.scope_kind,
     ARRAY(SELECT permission_code FROM role_permissions WHERE role_code=r.code ORDER BY permission_code) permissions
     FROM roles r WHERE r.code=$1`,[roleCode])).rows[0]:null;
-  const branch=orgId?(await client.query(`SELECT id,code,kind,lifecycle_state,is_demo,demo_locked,
+  const branch=orgId?(await client.query(`SELECT id,code,kind,
+    org_lifecycle_at(id,(now() AT TIME ZONE 'UTC')::date) lifecycle_state,is_demo,demo_locked,
     to_char(effective_from,'YYYY-MM-DD') effective_from,to_char(effective_to,'YYYY-MM-DD') effective_to
     FROM org_directory_units WHERE id=$1`,[orgId])).rows[0]:null;
   if(!user||user.user_kind!=='INDIVIDUAL'||user.password_last_shared_indicator) issues.push('Требуется существующая личная учётная запись.');
@@ -120,7 +121,7 @@ export async function accessDirectory(auth:AuthedUser) {
     // Fail explicitly rather than present an incomplete scope as complete.
     const users=(await client.query(`SELECT ${userColumns} FROM app_users ORDER BY login LIMIT 1001`)).rows;
     const grants=(await client.query('SELECT * FROM role_grants ORDER BY created_at DESC,id LIMIT 5001')).rows;
-    const branches=(await client.query(`SELECT id,code,lifecycle_state FROM org_directory_units
+    const branches=(await client.query(`SELECT id,code,org_lifecycle_at(id,(now() AT TIME ZONE 'UTC')::date) lifecycle_state FROM org_directory_units
       WHERE kind='ORG_UNIT' AND NOT is_demo AND NOT demo_locked ORDER BY code LIMIT 1001`)).rows;
     if(users.length>1000||grants.length>5000||branches.length>1000) throw invalid('Справочник превышает размер этого выпуска. Нужна серверная пагинация.');
     const roles=(await client.query(`SELECT r.code,r.display_name,

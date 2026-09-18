@@ -50,7 +50,7 @@ module.exports = async function globalSetup() {
     );
     await client.query('TRUNCATE report_review_revisions,report_staging_access,report_staging_files,report_staging_batches');
     await client.query('TRUNCATE administrator_bootstrap');
-    await client.query('TRUNCATE org_change_proposals, organization_editor_provisioning');
+    await client.query('TRUNCATE org_branch_activations,org_change_proposals, organization_editor_provisioning');
     await client.query('TRUNCATE access_change_proposals, access_administration_provisioning');
     await client.query("DELETE FROM role_permissions WHERE role_code='SUPER_ADMIN' AND permission_code<>'organization.directory.review'");
     await client.query(`DELETE FROM role_grants`);

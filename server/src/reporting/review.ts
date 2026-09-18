@@ -51,10 +51,10 @@ async function context(c:PoolClient,auth:AuthedUser,id:string) {
     WHERE NOT d.is_demo AND NOT d.demo_locked AND d.effective_to IS NULL
       AND d.effective_from<=(clock_timestamp() AT TIME ZONE 'Europe/Moscow')::date
       AND a.effective_to IS NULL AND a.effective_from<=(clock_timestamp() AT TIME ZONE 'Europe/Moscow')::date)
-    SELECT d.id,d.code,d.lifecycle_state,n.display_name FROM tree t JOIN org_directory_units d ON d.id=t.id
+    SELECT d.id,d.code,org_lifecycle_at(d.id,(now() AT TIME ZONE 'UTC')::date) lifecycle_state,n.display_name FROM tree t JOIN org_directory_units d ON d.id=t.id
     JOIN org_directory_name_history n ON n.org_unit_id=d.id AND n.effective_to IS NULL
       AND n.effective_from<=(clock_timestamp() AT TIME ZONE 'Europe/Moscow')::date
-    WHERE d.kind='ORG_UNIT' AND d.lifecycle_state<>'CLOSED' ORDER BY d.code`,[b.network_id])).rows;
+    WHERE d.kind='ORG_UNIT' AND org_lifecycle_at(d.id,(now() AT TIME ZONE 'UTC')::date)<>'CLOSED' ORDER BY d.code`,[b.network_id])).rows;
   const revisions=(await c.query(`SELECT version,period,mappings,revision_hash,created_at,reason
     FROM report_review_revisions WHERE batch_id=$1 ORDER BY version DESC LIMIT 20`,[id])).rows
     .map(r=>({...r,version:Number(r.version)})) as ReviewRevision[];
