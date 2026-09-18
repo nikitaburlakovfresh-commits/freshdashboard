@@ -7,12 +7,14 @@ import { getStagingCapabilities,listStagingBatches,getStagingBatch,uploadStaging
 import { METRIC_NAMES,REPORT_NAMES,sourceAddress,type ImportPeriod,type ReportKind } from '../imports/reportModel';
 import { periodMetadata,checkStagingFiles,stagingStatus,periodLabel,blockerLabel } from '../components/reportStagingModel';
 import Icon from '../components/Icon';
+import ReportIntakeNotice, { useReportIntakeEnabled } from '../components/ReportIntakeNotice';
 import '../styles/organization.css';
 import '../styles/report-staging.css';
 
 const number=(v:number|null|undefined)=>v==null?'Нет данных':v.toLocaleString('ru-RU',{maximumFractionDigits:2});
 export default function PreparedReportsPage() {
   const {me}=useAuth();
+  const intake=useReportIntakeEnabled();
   const [cap,setCap]=useState<StagingCapabilities|null>(null),[batches,setBatches]=useState<StagingBatch[]>([]);
   const [selected,setSelected]=useState<StagingBatch|null>(null),[network,setNetwork]=useState('');
   const [files,setFiles]=useState<File[]>([]),[confirmed,setConfirmed]=useState(false);
@@ -74,6 +76,7 @@ export default function PreparedReportsPage() {
       <p><Link to="/saved-network">Открыть серверный обзор сети · PREVIEW</Link> — карточки из сохранённого пакета.
         <Link to="/"> Локальный дашборд</Link> остаётся отдельным; его цифры не перезаписываются.</p>
       <p>Ручная загрузка — тестовый и резервный канал. Облачная доставка QLIK по расписанию будет подключена отдельно.</p></div></section>
+    <ReportIntakeNotice/>
     <div className="reports-feedback" aria-live="polite">{error && <p className="org-error" role="alert">{error}</p>}{notice && <p>{notice}</p>}
       {busy && <p role="status">Выполняется запрос к серверу…</p>}</div>
     <div className="org-editor-actions"><button className="btn" onClick={refresh} disabled={busy}>Обновить доступ и список</button></div>
@@ -95,7 +98,7 @@ export default function PreparedReportsPage() {
             <label className="org-editor-wide">Основание подтверждения периода<textarea maxLength={500} minLength={10} required value={confirmation} onChange={e=>setConfirmation(e.target.value)} /></label>
           </>}
         </fieldset><p className="org-small">Период не выводится из имени файла, даты загрузки или даты склада. Филиалы не привязываются автоматически.</p>
-        <button className="btn reports-primary" disabled={busy || !network || !files.length} type="submit">Сохранить и проверить на сервере</button></form>
+        <button className="btn reports-primary" disabled={!intake || busy || !network || !files.length} type="submit">Сохранить и проверить на сервере</button></form>
       </section>
       <section className="portal-panel"><div className="portal-eyebrow">02 / СОХРАНЁННЫЕ ПАКЕТЫ</div><h2>Последние пакеты <span className="reports-count">{batches.length}</span></h2>
         {!batches.length?<p className="org-empty">Здесь появятся закрытые пакеты после загрузки. Они сохранятся после обновления страницы.</p>:
@@ -113,7 +116,7 @@ export default function PreparedReportsPage() {
         </dl>
         <h3>Происхождение</h3><ul className="reports-provenance">{selected.files?.map(f=><li key={f.id}><strong>{f.display_name}</strong>
           <span>{number(f.byte_size)} байт · SHA-256 {f.content_hash}</span><small>Закрытый оригинал · скачивание заблокировано до антивирусной проверки</small></li>)}</ul>
-        {selected.status==='QUARANTINE' && <button className="btn" disabled={busy} onClick={probe}>Проверить сохранённые оригиналы</button>}
+        {selected.status==='QUARANTINE' && <button className="btn" disabled={!intake || busy} onClick={probe}>Проверить сохранённые оригиналы</button>}
         {preview && <>
           <div className="reports-blockers"><strong>Почему пакет ещё не опубликован</strong><ul>{preview.blockers.map(code=><li key={code}>{blockerLabel(code)}</li>)}</ul>
             {preview.error && <p className="org-error">{preview.error}</p>}</div>

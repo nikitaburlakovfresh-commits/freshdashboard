@@ -10,6 +10,7 @@
     "db:migrate": "ts-node scripts/migrate.ts",
     "db:seed": "ts-node scripts/seed.ts",
     "test": "jest --runInBand --detectOpenHandles",
+    "test:beta-gate": "jest --runInBand --detectOpenHandles --testMatch '**/test/betaIntakeGate.release.ts'",
     "test:org-scope": "jest --runInBand --detectOpenHandles --testMatch '**/test/canonicalOrg.scope.ts'"
   },
   "dependencies": {

@@ -173,7 +173,7 @@ test.each(['capability revoked','capability expired','grant revoked','grant expi
     if(kind==='grant revoked')await pool.query('UPDATE role_grants SET revoked_at=now() WHERE id=$1',[grant]);
     if(kind==='grant expired')await pool.query(`UPDATE role_grants SET valid_from=now()-interval '2 days',valid_until=now()-interval '1 day' WHERE id=$1`,[grant]);
     if(kind==='directory permission removed')await pool.query(`DELETE FROM role_permissions WHERE role_code='SUPER_ADMIN' AND permission_code='organization.directory.review'`);
-    if(kind==='session expired')await pool.query(`UPDATE sessions SET expires_at=now()-interval '1 second' WHERE user_id=$1`,[admin.userId]);
+    if(kind==='session expired')await pool.query(`UPDATE sessions SET created_at=now()-interval '2 hours',last_seen_at=now()-interval '2 hours',expires_at=now()-interval '1 second' WHERE user_id=$1`,[admin.userId]);
     try {
       for(const url of paths)expect([401,403]).toContain((await authed(admin).get(url)).status);
       expect([401,403]).toContain((await save(lastCommand,lastKey)).status);

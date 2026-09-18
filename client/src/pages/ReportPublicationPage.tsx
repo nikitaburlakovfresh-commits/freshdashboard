@@ -3,6 +3,7 @@ import { Link,useParams } from 'react-router-dom';
 import { getPublication,scanPublication,previewFacts,publishFacts,type PublicationState,type FactPreview,type FactChoice } from '../api/reportFacts';
 import { METRIC_NAMES,REPORT_NAMES,type MetricKey,type ReportKind } from '../imports/reportModel';
 import { FactRows } from '../components/PublishedFacts';
+import ReportIntakeNotice, { useReportIntakeEnabled } from '../components/ReportIntakeNotice';
 import '../styles/portal.css';
 import '../styles/beta-workspace.css';
 import '../styles/report-facts.css';
@@ -12,6 +13,7 @@ export default function ReportPublicationPage() {
   return <PublicationForm key={id} id={id}/>;
 }
 function PublicationForm({id}:{id:string}) {
+  const intake=useReportIntakeEnabled();
   const [state,setState]=useState<PublicationState|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   const [choices,setChoices]=useState<Partial<Record<MetricKey,{source:ReportKind;methodology:string}>>>({});
   const [reason,setReason]=useState(''),[confirmed,setConfirmed]=useState(false),[preview,setPreview]=useState<FactPreview|null>(null),[receipt,setReceipt]=useState('');
@@ -50,13 +52,14 @@ function PublicationForm({id}:{id:string}) {
     <header className="portal-heading"><div><span className="portal-eyebrow">ПУБЛИКАЦИЯ · BETA</span><h1>Из проверки в рабочие данные</h1>
       <p>Отдельное подтверждение периода, филиалов и источника каждой метрики. Сохранённый черновик сам по себе ничего не публикует.</p></div></header>
     <nav className="beta-filters"><Link className="btn" to={`/prepared-reports/${id}/review`}>← Период и привязки</Link><Link className="btn" to="/">Обзор сети</Link></nav>
+    <ReportIntakeNotice/>
     {error&&<p className="portal-panel" role="alert">{error}</p>}{receipt&&<p className="portal-panel" role="status">{receipt}</p>}
     {!state&&!error&&<p role="status">Проверяю доступ…</p>}
     {state&&<>
       <section className="portal-panel"><h2>Готовность источников</h2>
         <p>{state.can_publish?'Отдельное право публикации активно.':'Публикация закрыта: нужен отдельный допуск с перечнем метрик. Административный доступ не расширяется автоматически.'}</p>
         {state.files.map(f=><p key={f.id}>{f.name}: <strong>{f.result==='CLEAN'&&f.current?'Антивирус: чисто, проверка действует':f.result==='INFECTED'?'Антивирус: опасный файл':'Нужна антивирусная проверка'}</strong></p>)}
-        <button className="btn" disabled={busy||!state.can_publish} onClick={()=>{edit();void action(async()=>{
+        <button className="btn" disabled={!intake||busy||!state.can_publish} onClick={()=>{edit();void action(async()=>{
           await scanPublication(id);const s=await getPublication(id);if(active.current)setState(s);
         });}}>Проверить оригиналы антивирусом</button>
         <p className="portal-muted">Без чистой проверки не старше 24 часов публикация блокируется. Ошибка нового сканирования не продлевает прежний результат. Файлы не уходят во внешний сервис и не открываются для скачивания.</p>
@@ -79,13 +82,13 @@ function PublicationForm({id}:{id:string}) {
         <label className="fact-block">Основание публикации и выбора источников<textarea aria-label="Основание публикации" required minLength={16} maxLength={500} value={reason} onChange={e=>{edit();setReason(e.target.value);}}/></label>
         <label className="fact-check"><input type="checkbox" required checked={confirmed} onChange={e=>{edit();setConfirmed(e.target.checked);}}/>
           Подтверждаю период, UUID-привязки, единицы и выбранные источники. Это агрегаты отчёта, не полный расчёт KPI.</label>
-        <button className="btn" disabled={!Object.keys(choices).length||!confirmed}>Проверить состав публикации</button>
+        <button className="btn" disabled={!intake||!Object.keys(choices).length||!confirmed}>Проверить состав публикации</button>
       </fieldset></form>
       {preview&&<section className="portal-panel"><h2>{preview.can_commit?'Проверьте значения перед публикацией':'Публикация заблокирована'}</h2>
         {preview.blockers.length>0&&<ul role="alert">{preview.blockers.map((b,i)=><li key={i}>{b}</li>)}</ul>}
         {preview.can_commit&&<p>Проверка действует до {new Date(preview.expires_at!).toLocaleTimeString('ru-RU',{timeZone:'Europe/Moscow'})} МСК. Перед записью сервер повторит все проверки.</p>}
         <FactRows rows={preview.rows} preview/>
-        <button className="btn btn-primary" disabled={busy||!preview.can_commit} onClick={publish}>Подтвердить публикацию</button>
+        <button className="btn btn-primary" disabled={!intake||busy||!preview.can_commit} onClick={publish}>Подтвердить публикацию</button>
       </section>}
       <section className="portal-panel"><h2>История публикаций пакета</h2>{!state.publications.length&&<p>Этот пакет ещё не публиковался.</p>}
         {state.publications.map(p=><p key={p.id}>{new Date(p.created_at).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК · черновик v{p.review_version} · {p.id}</p>)}

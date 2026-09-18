@@ -9,6 +9,7 @@ import { getEffectiveGrants } from '../domain/grants';
 import { writeAuditAndOutbox } from '../domain/auditOutbox';
 import { acceptInvitation } from '../domain/userEnrollment';
 import { sha256 } from '../util/crypto';
+import { featureFlags } from '../middleware/featureGate';
 
 export const authRouter = Router();
 export const meRouter = Router();
@@ -148,6 +149,9 @@ meRouter.get(
       const sessRes = await client.query('SELECT expires_at FROM sessions WHERE id = $1', [req.authUser!.sessionId]);
       res.status(200).json({
         user: userRes.rows[0],
+        // BETA-01. Признак ограниченного выпуска. Запрет обеспечивается
+        // сервером; интерфейс лишь отображает состояние.
+        features: featureFlags(),
         csrf_token: req.authUser!.csrfToken,
         expires_at: new Date(sessRes.rows[0].expires_at).toISOString().replace(/\.\d{3}Z$/, 'Z'),
         grants: grants.map((g) => ({

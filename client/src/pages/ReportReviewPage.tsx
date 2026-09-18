@@ -5,6 +5,7 @@ import { ApiError } from '../api/client';
 import { getReportReview,saveReportReview,type ReviewView,type DraftPeriod } from '../api/reportReview';
 import { REPORT_NAMES } from '../imports/reportModel';
 import { reviewCommand,mappingLabel } from '../components/savedReportModel';
+import ReportIntakeNotice, { useReportIntakeEnabled } from '../components/ReportIntakeNotice';
 import '../styles/organization.css';
 import '../styles/report-staging.css';
 import '../styles/saved-network.css';
@@ -28,6 +29,7 @@ export default function ReportReviewPage() {
   </div>;
 }
 function ReviewForm({view,reopen,deny}:{view:ReviewView;reopen:()=>void;deny:()=>void}) {
+  const intake=useReportIntakeEnabled();
   const [periodEnabled,setPeriodEnabled]=useState(!!view.current.period);
   const [period,setPeriod]=useState<DraftPeriod>(view.current.period ?? {start:'',end:'',planStart:'',planEnd:'',basis:''});
   const [selected,setSelected]=useState<Record<string,string>>(()=>Object.fromEntries(view.rows.map(r=>[r.item_id,r.org_unit_id??''])));
@@ -109,7 +111,8 @@ function ReviewForm({view,reopen,deny}:{view:ReviewView;reopen:()=>void;deny:()=
           placeholder="Что проверено и что предлагается уточнить" onChange={e=>{setReason(e.target.value);change();}}/></label>
         <div aria-live="polite">{error&&<p className="org-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
           <p>{busy?'Сохранение на сервере…':dirty?'Есть несохранённые изменения. Обзор использует только последнюю серверную версию.':view.current.version?`Серверная версия ${view.current.version} · DRAFT · не опубликована`:'Черновик ещё не сохранён.'}</p></div>
-        <div className="saved-actions"><button className="btn reports-primary" disabled={busy||!dirty} type="submit">Сохранить черновик на сервере</button>
+        <ReportIntakeNotice/>
+        <div className="saved-actions"><button className="btn reports-primary" disabled={!intake||busy||!dirty} type="submit">Сохранить черновик на сервере</button>
           <button className="btn" type="button" disabled={busy} onClick={()=>{if(!dirty||window.confirm('Отбросить несохранённые изменения и открыть серверную версию?'))reopen();}}>Открыть сохранённую версию</button></div>
         <details className="saved-provenance"><summary>История черновика · последние {view.history.length} версий</summary>
           {!view.history.length?<p>Изменений пока нет.</p>:view.history.map(h=><p key={h.version}><strong>v{h.version}</strong> · {new Date(h.created_at).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК<br/>

@@ -30,6 +30,14 @@ export const config = {
     process.env.ALLOWED_ORIGIN ??
     (process.env.NODE_ENV === 'test' ? 'http://localhost:5173' : ''),
   seedFixturePassword: process.env.SEED_FIXTURE_PASSWORD ?? '',
+  // BETA-01. Ограниченный первый выпуск может работать без антивирусного
+  // контура: приём новых отчётов и публикация показателей отключаются на
+  // сервере, а не скрытием кнопок. Чтение ранее опубликованных значений,
+  // задачи и ежедневники продолжают работать. Значение по умолчанию не
+  // ослабляет текущее поведение.
+  reportIntakeEnabled: !['false', '0', 'off', 'no'].includes(
+    (process.env.REPORT_INTAKE_ENABLED ?? 'true').trim().toLowerCase(),
+  ),
 };
 
 if (!config.sessionHmacSecret || !config.csrfHmacSecret || !config.allowedOrigin) {

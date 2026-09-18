@@ -8,6 +8,7 @@ import { readUpload } from '../reporting/multipart';
 import { capabilities, listBatches, detail, uploadBatch, probeBatch, downloadSource } from '../reporting/service';
 import { ApiError } from '../util/errors';
 import { getReview,saveReview,savedOverview,savedBranch } from '../reporting/review';
+import { requireReportIntake } from '../middleware/featureGate';
 
 export const reportBatchesRouter=Router();
 const wrap=(fn:(req:Request,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{
@@ -32,7 +33,7 @@ reportBatchesRouter.get('/capabilities',wrap(async(req,res)=>{res.json(await cap
 reportBatchesRouter.get('/',wrap(async(req,res)=>{res.json(await listBatches(req.authUser!));}));
 reportBatchesRouter.get('/:id',wrap(async(req,res)=>{res.json(await detail(req.authUser!,req.params.id));}));
 reportBatchesRouter.get('/:id/review',wrap(async(req,res)=>{res.json(await getReview(req.authUser!,req.params.id));}));
-reportBatchesRouter.post('/:id/review',requireOrigin,requireCsrf,wrap(async(req,res)=>{
+reportBatchesRouter.post('/:id/review',requireOrigin,requireCsrf,requireReportIntake,wrap(async(req,res)=>{
   res.json(await saveReview(req.authUser!,req.params.id,req.body,req.get('Idempotency-Key'),req.ctx.requestId));
 }));
 reportBatchesRouter.get('/:id/overview',wrap(async(req,res)=>{res.json(await savedOverview(req.authUser!,req.params.id));}));
@@ -40,7 +41,7 @@ reportBatchesRouter.get('/:id/branches/:itemId',wrap(async(req,res)=>{
   res.json(await savedBranch(req.authUser!,req.params.id,req.params.itemId));
 }));
 let receiving=false;
-reportBatchesRouter.post('/',requireOrigin,requireCsrf,wrap(async(req,res)=>{
+reportBatchesRouter.post('/',requireOrigin,requireCsrf,requireReportIntake,wrap(async(req,res)=>{
   if(receiving) throw new ApiError('TEMPORARILY_UNAVAILABLE','Другая загрузка выполняется. Повторите позже.',{retry_after_seconds:5});
   receiving=true;
   try {
@@ -48,7 +49,7 @@ reportBatchesRouter.post('/',requireOrigin,requireCsrf,wrap(async(req,res)=>{
     res.status(200).json(await uploadBatch(req.authUser!,upload.metadata,upload.files,req.ctx.requestId));
   } finally {receiving=false;}
 }));
-reportBatchesRouter.post('/:id/probe',requireOrigin,requireCsrf,wrap(async(req,res)=>{
+reportBatchesRouter.post('/:id/probe',requireOrigin,requireCsrf,requireReportIntake,wrap(async(req,res)=>{
   res.json(await probeBatch(req.authUser!,req.params.id,req.body,req.ctx.requestId));
 }));
 reportBatchesRouter.get('/:id/files/:fileId/download',wrap(async(req,res)=>{
