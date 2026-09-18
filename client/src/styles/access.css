@@ -8,7 +8,12 @@
 .access-notice { background: var(--fresh-info-bg); border-left: 3px solid var(--fresh-blue); padding: 14px 18px; border-radius: 8px; font-size: 13px; line-height: 1.7; }
 .access-permissions { font-size: 12px; line-height: 1.8; padding-left: 20px; }
 .access-page .org-apply-dialog .btn { color: var(--fresh-text); }
+.readiness-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; margin:20px 0; }
+.readiness-grid .portal-panel { margin:0; }
+.readiness-grid .portal-chip { display:inline-block; margin-bottom:10px; font-size:12px; }
+.readiness-grid p { font-size:14px; line-height:1.75; }
 @media(max-width:640px) {
+  .readiness-grid { grid-template-columns:1fr; }
   .access-users article { grid-template-columns: 1fr; }
   .access-page .org-section-heading { flex-wrap: wrap; }
   .access-page .portal-heading h1 { font-size: 24px; }

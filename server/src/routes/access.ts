@@ -3,6 +3,7 @@ import { requireSession,requireCsrf } from '../auth/session';
 import { requireOrigin } from '../middleware/origin';
 import { enforceSessionRateLimit } from '../auth/rateLimit';
 import { accessDirectory,listAccessChanges,getAccessChange,commandAccessChange } from '../domain/accessChanges';
+import { createPersonalUser,manageInvitation } from '../domain/userEnrollment';
 export const accessRouter=Router();
 accessRouter.use(requireSession);
 accessRouter.use((req,res,next)=>{
@@ -10,6 +11,12 @@ accessRouter.use((req,res,next)=>{
   try {enforceSessionRateLimit(req.authUser!.sessionId,req.method!=='GET');next();} catch(err){next(err);}
 });
 const wrap=(fn:(req:Request,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{fn(req,res).catch(next);};
+accessRouter.post('/users',requireOrigin,requireCsrf,wrap(async(req,res)=>{
+  res.status(201).json(await createPersonalUser(req.authUser!,req.body,req.header('Idempotency-Key'),req.ctx.requestId));
+}));
+for(const action of ['issue','revoke'] as const) accessRouter.post(`/users/:id/enrollment/${action}`,requireOrigin,requireCsrf,wrap(async(req,res)=>{
+  res.json(await manageInvitation(req.authUser!,req.params.id,action,req.body,req.ctx.requestId));
+}));
 accessRouter.get('/directory',wrap(async(req,res)=>{res.json(await accessDirectory(req.authUser!));}));
 accessRouter.get('/proposals',wrap(async(req,res)=>{res.json(await listAccessChanges(req.authUser!));}));
 accessRouter.get('/proposals/:id',wrap(async(req,res)=>{res.json(await getAccessChange(req.authUser!,req.params.id));}));

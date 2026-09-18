@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate,useLocation } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
 import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
@@ -13,9 +13,13 @@ import PreparedReportsPage from './pages/PreparedReportsPage';
 import SavedNetworkPage,{SavedBranchPage} from './pages/SavedNetworkPage';
 import ReportReviewPage from './pages/ReportReviewPage';
 import AccessPage from './pages/AccessPage';
+import ActivateAccountPage from './pages/ActivateAccountPage';
+import ModuleReadinessPage from './pages/ModuleReadinessPage';
 
 export default function App() {
   const { me, loading } = useAuth();
+  const {pathname}=useLocation();
+  if(pathname==='/activate-account')return <ActivateAccountPage/>;
 
   if (loading) {
     return (
@@ -37,7 +41,8 @@ export default function App() {
     <Layout>
       <Routes>
         <Route path="/" element={<DashboardPage />} />
-        {['/analytics','/bdr','/kpi','/diary','/modules'].map(path=><Route key={path} path={path} element={<PortalModulePage/>}/>)}
+        {['/analytics','/bdr','/kpi','/diary'].map(path=><Route key={path} path={path} element={<PortalModulePage/>}/>)}
+        <Route path="/modules" element={<ModuleReadinessPage/>}/>
         <Route path="/tasks" element={<TaskListPage />} />
         <Route path="/tasks/:id" element={<TaskDetailPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />

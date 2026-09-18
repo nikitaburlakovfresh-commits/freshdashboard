@@ -22,7 +22,7 @@ const groups: { label: string; links: { path: string; label: string; icon: IconN
     { path: '/tasks', label: 'Задачи', icon: 'check' },
     { path: '/diary', label: 'Ежедневник', icon: 'calendar', future: true },
     { path: '/notifications', label: 'Уведомления', icon: 'bell' },
-    { path: '/modules', label: 'Все модули ТЗ', icon: 'layers', future: true },
+    { path: '/modules', label: 'Готовность модулей', icon: 'layers' },
   ] },
 ];
 

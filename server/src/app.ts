@@ -85,9 +85,9 @@ export function createApp() {
       return;
     }
     // eslint-disable-next-line no-console
-    if(req.path.startsWith('/api/v1/report-batches')) {
+    if(['/api/v1/report-batches','/api/v1/auth','/api/v1/access'].some(p=>req.path.startsWith(p))) {
       // DB/parser failures can contain private workbook values in diagnostics.
-      console.error('Report staging request failed', requestId);
+      console.error('Sensitive request failed', requestId);
     } else console.error('Unhandled error', err);
     const apiErr = new ApiError('TEMPORARILY_UNAVAILABLE', 'Сервис временно недоступен.', { retry_after_seconds: 5 });
     res.status(503).json(errorBody(apiErr, requestId));

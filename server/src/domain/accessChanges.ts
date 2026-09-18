@@ -18,7 +18,7 @@ const safePermissions=new Set(['work_item.read','work_item.create','work_item.as
   'work_item.fields.write','work_item.submit','work_item.accept','work_item.rework','work_item.cancel',
   'work_item.reopen','work_item.history.read','notification.read']);
 
-async function authorize(client:PoolClient,auth:AuthedUser,phase:string) {
+export async function authorizeNetworkPermissions(client:PoolClient,auth:AuthedUser,required:string[]) {
   // One consistent lock order; no SHARE -> write lock upgrade between admins.
   await client.query('LOCK TABLE app_users, sessions, role_grants, roles, role_permissions IN SHARE ROW EXCLUSIVE MODE');
   const rows=await client.query(`SELECT DISTINCT rp.permission_code FROM app_users u
@@ -32,9 +32,11 @@ async function authorize(client:PoolClient,auth:AuthedUser,phase:string) {
       AND g.scope_kind='NETWORK' AND g.org_unit_id IS NULL AND g.revoked_at IS NULL
       AND g.valid_from<=now() AND (g.valid_until IS NULL OR g.valid_until>now())`,[auth.userId,auth.sessionId]);
   const permissions=new Set(rows.rows.map(r=>r.permission_code));
-  if(!permissions.has('access.directory.read') || (phase!=='read' &&
-    (!permissions.has(`access.change.${phase}`)||!permissions.has('user.assign_role'))))
+  if(required.some(p=>!permissions.has(p)))
     throw new ApiError('FORBIDDEN','Требуются явные права управления назначениями с областью NETWORK.');
+}
+async function authorize(client:PoolClient,auth:AuthedUser,phase:string) {
+  await authorizeNetworkPermissions(client,auth,['access.directory.read',...(phase==='read'?[]:[`access.change.${phase}`,'user.assign_role'])]);
 }
 function object(raw:unknown,keys:string[]):Record<string,any> {
   if(!raw||typeof raw!=='object'||Array.isArray(raw)||Object.keys(raw).some(k=>!keys.includes(k)))
@@ -119,7 +121,11 @@ export async function accessDirectory(auth:AuthedUser) {
   return withTransaction(async client=>{
     await authorize(client,auth,'read');
     // Fail explicitly rather than present an incomplete scope as complete.
-    const users=(await client.query(`SELECT ${userColumns} FROM app_users ORDER BY login LIMIT 1001`)).rows;
+    const users=(await client.query(`SELECT ${userColumns},primary_email,
+      (SELECT jsonb_build_object('version',e.version,'expires_at',e.expires_at,
+        'completed_at',e.completed_at,'has_invitation',e.token_digest IS NOT NULL)
+        FROM user_enrollments e WHERE e.user_id=app_users.id) enrollment
+      FROM app_users ORDER BY login LIMIT 1001`)).rows;
     const grants=(await client.query('SELECT * FROM role_grants ORDER BY created_at DESC,id LIMIT 5001')).rows;
     const branches=(await client.query(`SELECT id,code,org_lifecycle_at(id,(now() AT TIME ZONE 'UTC')::date) lifecycle_state FROM org_directory_units
       WHERE kind='ORG_UNIT' AND NOT is_demo AND NOT demo_locked ORDER BY code LIMIT 1001`)).rows;

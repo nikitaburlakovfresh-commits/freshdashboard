@@ -6,6 +6,8 @@ import { AccessDirectory,AccessProposal,AccessChange,getAccessDirectory,listAcce
 import { accessPermissions,canApplyAccess } from '../components/accessChangeModel';
 import '../styles/organization.css';
 import '../styles/access.css';
+import '../styles/enrollment.css';
+import UserEnrollment from '../components/UserEnrollment';
 
 const date=(s:string|null)=>s?new Date(s).toLocaleString('ru-RU'):'Без окончания';
 const status={DRAFT:'Черновик',PREVIEW:'Проверено',APPLIED:'Применено'};
@@ -60,19 +62,21 @@ export default function AccessPage() {
     <header className="portal-heading"><div><span className="portal-eyebrow">Администрирование · точечный доступ</span>
       <h1>Пользователи и назначения</h1><p>Личные учётные записи, права на филиал и история изменений.</p></div></header>
     <section className="org-scope"><div><strong>Один филиал. Явное подтверждение.</strong>
-      <p>Черновик → проверка последствий → применение. Здесь не создаются пользователи, не активируются филиалы и не выдаются сетевые права.
+      <p>Черновик → проверка последствий → применение. Личные пользователи создаются отдельно, без прав. Здесь не активируются филиалы и не выдаются сетевые права.
         Назначения на дивизион, замещение и SUPPORTING пока не поддерживаются.</p></div></section>
     {!read?<section className="portal-panel"><h2>Нет права управления доступом</h2><p>Название роли администратора само по себе не даёт это право. Нужна отдельная одобренная настройка.</p></section>:<>
       {error&&<div className="portal-panel org-error" role="alert">{error}</div>}
       {notice&&<p role="status" className="access-notice">{notice}</p>}
       {busy&&<p role="status">Выполняется проверка сервера…</p>}
       {!data?<button className="btn" disabled={busy} onClick={()=>run(refresh)}>Повторить загрузку</button>:<>
+        <UserEnrollment key={me?.user.id} data={data} permissions={permissions} onChange={refresh}/>
         <section className="portal-panel access-directory">
           <div className="org-section-heading"><h2>Сотрудники · {data.users.length}</h2>
             <button className="btn" disabled={busy} onClick={()=>run(refresh)}>Обновить справочник</button></div>
           <div className="org-toolbar"><label className="org-search">Поиск сотрудника<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="ФИО или логин"/></label></div>
           <div className="access-users">{visibleUsers.map(u=><article key={u.id}>
-            <div><strong>{u.full_name}</strong><small>{u.login} · {u.is_active?'Активен':'Неактивен'}{!u.personal?' · Не личный доступ':''}</small></div>
+            <div><strong>{u.full_name}</strong><small>{u.login} · {u.is_active?'Активен':u.enrollment&&!u.enrollment.completed_at?'Ожидает первого входа':'Неактивен'}{!u.personal?' · Не личный доступ':''}</small>
+              {u.primary_email&&<small>{u.primary_email}</small>}</div>
             <ul>{data.grants.filter(g=>g.user_id===u.id).map(g=><li key={g.id}>
               <span>{g.role_code} · {g.scope_kind==='NETWORK'?'Вся сеть':branches.get(g.org_unit_id??'')??'Пилот / защищённый филиал'}</span>
               <small>{g.revoked_at?`Отозвано ${date(g.revoked_at)}`:

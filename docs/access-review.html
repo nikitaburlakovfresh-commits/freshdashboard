@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FRESH Portal · Проверка управления назначениями и запуска филиалов</title>
+<title>FRESH Portal · Личные пользователи, назначения и запуск филиалов</title>
 <style>
 :root{font-family:Arial,sans-serif;color:#19212b;background:#f4f6fb;font-synthesis:none}*{box-sizing:border-box}
 body{margin:0}main{max-width:1240px;margin:auto;padding:40px 24px 64px}header{display:flex;gap:28px;align-items:start;justify-content:space-between;border-bottom:1px solid #dce2ee;padding-bottom:30px}
@@ -12,12 +12,24 @@ p{line-height:1.7;max-width:820px;color:#4c596c}small{font-size:12px;letter-spac
 a{color:#143cff;text-decoration:none}a:hover{text-decoration:underline}footer{margin-top:36px;font-size:13px;color:#596678}button{font:inherit}
 @media(max-width:700px){main{padding:24px 14px}header{display:block}.badge{display:inline-block}.grid{grid-template-columns:1fr}.mobile{padding:12px;gap:10px}}
 </style></head><body><main>
-<header><div><small>FRESH Portal · локальная проверка</small><h1>Назначения<br>и запуск филиалов</h1>
-<p>Два отдельных действия: контролируемый запуск реального филиала и точечная выдача роли сотруднику. Каждое проходит сохранённый черновик, проверку последствий и явное подтверждение.</p></div>
+<header><div><small>FRESH Portal · локальная проверка</small><h1>Личный вход<br>и управляемый доступ</h1>
+<p>Создание личной записи, одноразовый первый вход, отдельное назначение роли и контролируемый запуск филиала. Готовность кода не подменяет установку и приёмку на боевых данных.</p></div>
 <span class="badge">Не установлен на production</span></header>
 <div class="note"><strong>Это визуальный отчёт, не второй портал.</strong>
 <p>Здесь только снимки настоящего интерфейса с локальными синтетическими записями. Боевая база, пароли и сессии не подключены.
 Авторизация и команды проверены отдельно на same-origin стенде; встроенный предпросмотр не заменяет эту проверку.</p></div>
+<h2>Личные пользователи и первый вход</h2>
+<p>Новая запись создаётся без ролей. Приглашение действует 72 часа, показывается один раз и может быть отозвано. Автоматической отправки нет. После установки пароля сотрудник входит обычным способом; права назначаются отдельно.</p>
+<div class="grid">
+<figure class="card"><a href="enrollment-qa/desktop-admin-light.png" target="_blank" rel="noopener"><img src="enrollment-qa/desktop-admin-light.png" alt="Создание личного пользователя на локальном стенде"></a><figcaption>ФИО, логин, личная рабочая почта и основание. Только синтетические сотрудники.</figcaption></figure>
+<figure class="card"><a href="enrollment-qa/desktop-create-confirm.png" target="_blank" rel="noopener"><img src="enrollment-qa/desktop-create-confirm.png" alt="Подтверждение создания пользователя"></a><figcaption>Явное подтверждение. Отмена не создаёт запись.</figcaption></figure>
+<figure class="card"><a href="enrollment-qa/desktop-issued-masked.png" target="_blank" rel="noopener"><img loading="lazy" src="enrollment-qa/desktop-issued-masked.png" alt="Одноразовое приглашение с замаскированным секретом"></a><figcaption>Секрет скрыт на снимке. В базе сохраняется только его хеш.</figcaption></figure>
+<figure class="card"><a href="enrollment-qa/desktop-first-password-light.png" target="_blank" rel="noopener"><img loading="lazy" src="enrollment-qa/desktop-first-password-light.png" alt="Установка личного пароля"></a><figcaption>Первый вход без автоматической выдачи ролей и без создания сессии.</figcaption></figure>
+</div>
+<div class="mobile" style="margin-top:20px"><img loading="lazy" src="enrollment-qa/mobile-first-password-dark.png" alt="Первый пароль на мобильном экране в тёмной теме"><img loading="lazy" src="enrollment-qa/mobile-completed.png" alt="Подтверждение установки личного пароля"></div>
+<h2>Готовность модулей без ложных обещаний</h2>
+<p>Карта разделяет частично реализованные возможности и будущую работу. Отметка «в разработке» снимается после завершения нужного сценария, проверок, установки и приёмки, а не по числу закрытых технических задач. Карта не является автоматическим монитором production.</p>
+<figure class="card"><a href="enrollment-qa/desktop-readiness-light.png" target="_blank" rel="noopener"><img loading="lazy" src="enrollment-qa/desktop-readiness-light.png" alt="Карта готовности модулей портала"></a><figcaption>11 групп возможностей с явно обозначенными ограничениями.</figcaption></figure>
 <h2>Контролируемая активация филиала</h2>
 <p>До запуска → Активен. Только текущая дата UTC, отдельное право и проверка структуры. Отмена подтверждения ничего не меняет. Активация не выдаёт роли и не публикует KPI.</p>
 <div class="grid">
@@ -38,9 +50,9 @@ a{color:#143cff;text-decoration:none}a:hover{text-decoration:underline}footer{ma
 <figure class="card"><a href="access-qa/desktop-light-top.png" target="_blank" rel="noopener"><img loading="lazy" src="access-qa/desktop-light-top.png" alt="Справочник синтетических сотрудников со статусами назначений"></a><figcaption>Светлая тема. Отозванная роль остаётся в истории сотрудника.</figcaption></figure>
 <div class="mobile" style="margin-top:20px"><img loading="lazy" src="access-qa/mobile-light-top.png" alt="Мобильный справочник, светлая тема"><img loading="lazy" src="access-qa/mobile-dark-form.png" alt="Мобильная форма назначения, тёмная тема"></div>
 <h2>Что проверено и что ещё впереди</h2>
-<p>270 серверных проверок и 43 клиентских теста проходят. В браузере проверены запуск филиала и его история; для модуля назначений ранее пройдены выдача, отзыв, повторное открытие черновика, отмена подтверждения,
+<p>290 серверных проверок и 43 клиентских теста проходят. Первый вход, перевыпуск, отзыв и открытие новой ссылки в той же вкладке проверены в браузере. Серверный сценарий проходит от подключения РМ/РФ и назначения ролей до завершения задачи с запретом чужого филиала. Для модуля назначений ранее пройдены выдача, отзыв, повторное открытие черновика, отмена подтверждения,
 отказ при пересечении и запрет доступа RF. На ширине 1440 и 390 пикселей горизонтального переполнения не обнаружено.</p>
-<p>Создание пользователей, приостановка и закрытие филиалов, назначения на дивизионы, замещения и публикация KPI пока не реализованы в этих срезах.
+<p>Полноценные ежедневники, автоматическая доставка приглашений, приостановка и закрытие филиалов, назначения на дивизионы, замещения и публикация KPI пока не реализованы в этих срезах.
 Первые реальные филиалы, сотрудники, источники и периоды должны быть согласованы отдельно.</p>
-<footer>Только синтетические данные · Миграции 011–012 не выдают административные права автоматически · Production не обновлялся · Снимки открываются в полном размере</footer>
+<footer>Только синтетические данные · Миграции 011–013 не выдают административные права автоматически · Production не обновлялся · Снимки открываются в полном размере</footer>
 </main></body></html>

@@ -6,11 +6,17 @@ export interface AccessGrant {
   valid_from:string;valid_until:string|null;revoked_at:string|null;grant_version:number;
 }
 export interface AccessDirectory {
-  users:{id:string;login:string;full_name:string;is_active:boolean;personal:boolean}[];
+  users:{id:string;login:string;full_name:string;primary_email:string|null;is_active:boolean;personal:boolean;
+    enrollment:Enrollment|null}[];
   grants:AccessGrant[];
   roles:{code:string;display_name:string;permissions:string[]}[];
   branches:{id:string;code:string;lifecycle_state:string}[];
 }
+export interface Enrollment {version:number;expires_at:string|null;completed_at:string|null;has_invitation:boolean}
+export interface NewPersonalUser {login:string;full_name:string;primary_email:string;reason:string}
+export const createPersonalUser=(body:NewPersonalUser)=>apiFetch<{id:string;login:string}>('/access/users',{method:'POST',idempotent:true,body});
+export const manageEnrollment=(id:string,action:'issue'|'revoke',expected_version:number,reason:string)=>
+  apiFetch<{token?:string;enrollment:Enrollment}>(`/access/users/${id}/enrollment/${action}`,{method:'POST',body:{expected_version,reason}});
 export interface AccessProposal {
   id:string;target_id:string;version:number;status:'DRAFT'|'PREVIEW'|'APPLIED';change:AccessChange;
   preview_token:string|null;preview_actor:string|null;preview_expires_at:string|null;updated_at:string;

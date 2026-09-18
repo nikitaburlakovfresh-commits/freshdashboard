@@ -21,6 +21,7 @@ function advisoryLockKey(actorId: string, operation: string, key: string): [numb
 }
 
 export type IdempotentOperation =
+  | 'userCreate'
   | 'accessChangeCreate' | 'accessChangePreview' | 'accessChangeApply'
   | 'reportReviewDraft'
   | 'orgChangeCreate' | 'orgChangeEdit' | 'orgChangePreview' | 'orgChangeApply'

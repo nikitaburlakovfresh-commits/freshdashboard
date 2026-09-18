@@ -7,15 +7,23 @@ import { verifyPassword } from '../auth/password';
 import { enforceLoginRateLimit, enforceSessionRateLimit } from '../auth/rateLimit';
 import { getEffectiveGrants } from '../domain/grants';
 import { writeAuditAndOutbox } from '../domain/auditOutbox';
+import { acceptInvitation } from '../domain/userEnrollment';
+import { sha256 } from '../util/crypto';
 
 export const authRouter = Router();
 export const meRouter = Router();
+authRouter.use((_req,res,next)=>{res.setHeader('Cache-Control','no-store');res.setHeader('Referrer-Policy','no-referrer');next();});
 
 function wrap(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>) {
   return (req: Request, res: Response, next: NextFunction) => {
     fn(req, res, next).catch(next);
   };
 }
+authRouter.post('/enrollment/accept',requireOrigin,wrap(async(req,res)=>{
+  // No session bootstrap, no user enumeration and no raw bearer in limit keys.
+  enforceLoginRateLimit('enrollment:'+sha256(String(req.body?.token??'').slice(0,128)).toString('hex'),req.ip??null);
+  res.json(await acceptInvitation(req.body,req.ctx.requestId));
+}));
 
 // POST /auth/login — contract §Auth. Uniform INVALID_CREDENTIALS for
 // wrong/unknown/disabled login; exact-Origin required; no CSRF header at
