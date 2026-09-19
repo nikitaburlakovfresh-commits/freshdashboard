@@ -9,6 +9,7 @@ import { beginIdempotent,completeIdempotent } from '../domain/idempotency';
 import { writeAuditAndOutbox } from '../domain/auditOutbox';
 import { reviewContext,sourceItemId } from './review';
 import { factAccess,publisher } from './factAccess';
+import { isServiceActor } from '../domain/serviceActor';
 import { readSource,uuid } from './storage';
 import { scanSource,SourceScanResult } from './scanner';
 import { reconcile,validDate,REPORT_KINDS,REPORT_SPECS,type ReportKind } from './shared/reportModel';
@@ -98,6 +99,9 @@ export async function scanBatch(auth:AuthedUser,id:string,raw:any,requestId:stri
 async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
   const context=await reviewContext(c,auth,id);
   const access=await publisher(c,auth);
+  // Канал происхождения не подменяется: публикация сервисным контуром
+  // помечается как SERVICE_INTAKE, ручная — как FORM_UI.
+  const channel=await isServiceActor(c,auth.userId)?'SERVICE_INTAKE':'FORM_UI';
   await c.query('LOCK TABLE report_source_scans IN SHARE MODE');
   const {view,reports}=context,period=view.current.period;
   if(b.review_version!==view.current.version)throw conflict();
@@ -165,7 +169,7 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
       rows.push({org_unit_id:org,branch:view.candidates.find(x=>x.id===org)!.display_name,metric:choice.metric,
         period_start:start,period_end:end,value,unit:METRICS[choice.metric].unit,
         previous_id:previous?.id??null,previous_value:previous?.value??null,revision:(previous?.revision??0)+1,
-        provenance:{kind:'APPROVED_SOURCE_AGGREGATE',channel:'FORM_UI',producer:'QLIK',batch_id:context.b.id,
+        provenance:{kind:'APPROVED_SOURCE_AGGREGATE',channel,producer:'QLIK',batch_id:context.b.id,
           file_id:sourceFile.id,file_hash:sourceFile.content_hash,scan_id:sourceFile.scan_id??null,
           scan_status:sourceFile.result??'NOT_SCANNED',scan_mode:config.reportScanMode,
           report_kind:report.kind,sheet:report.sheet,address:report.columns[choice.metric]!+row.row,

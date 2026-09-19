@@ -6,6 +6,7 @@ import { ApiError } from '../util/errors';
 import { canonicalJsonHash } from '../util/crypto';
 import { beginIdempotent, completeIdempotent } from './idempotency';
 import { writeAuditAndOutbox } from './auditOutbox';
+import { isServiceActor, serviceAuthorization } from './serviceActor';
 
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const invalid=(message:string)=>new ApiError('VALIDATION_ERROR',message);
@@ -18,7 +19,27 @@ const safePermissions=new Set(['work_item.read','work_item.create','work_item.as
   'work_item.fields.write','work_item.submit','work_item.accept','work_item.rework','work_item.cancel',
   'work_item.reopen','work_item.history.read','notification.read']);
 
+// Сервисному субъекту доступен только закрытый перечень настроек канона
+// (пороги, модель балла, фокусы) — по явному разрешению владельца продукта.
+// Управление людьми, ролями и назначениями сервисному контуру недоступно и
+// остаётся за живым администратором с действующей сессией.
+const serviceConfigurable=new Set(['metric.threshold.manage','metric.scoring.manage','metric.focus.manage']);
+
 export async function authorizeNetworkPermissions(client:PoolClient,auth:AuthedUser,required:string[]) {
+  if(await isServiceActor(client,auth.userId)) {
+    if(!required.length||required.some(p=>!serviceConfigurable.has(p)))
+      throw new ApiError('FORBIDDEN','Сервисному контуру доступна только настройка порогов, модели балла и фокусов.');
+    const service=await serviceAuthorization(client,auth.userId,'CONFIGURE');
+    if(!service) throw new ApiError('FORBIDDEN','Сервисному субъекту не выдана действующая возможность CONFIGURE.');
+    const rows=await client.query(`SELECT DISTINCT rp.permission_code FROM role_grants g
+      JOIN roles r ON r.code=g.role_code AND r.scope_kind=g.scope_kind
+      JOIN role_permissions rp ON rp.role_code=r.code
+      WHERE g.id=$1`,[service.grantId]);
+    const granted=new Set(rows.rows.map(r=>r.permission_code));
+    if(required.some(p=>!granted.has(p)))
+      throw new ApiError('FORBIDDEN','У гранта сервисного субъекта нет требуемого права настройки.');
+    return;
+  }
   // One consistent lock order; no SHARE -> write lock upgrade between admins.
   await client.query('LOCK TABLE app_users, sessions, role_grants, roles, role_permissions IN SHARE ROW EXCLUSIVE MODE');
   const rows=await client.query(`SELECT DISTINCT rp.permission_code FROM app_users u
