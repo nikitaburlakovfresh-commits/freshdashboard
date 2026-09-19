@@ -5,6 +5,8 @@ import { METRIC_NAMES } from '../reporting/shared/reportModel';
 import { ApiError } from '../util/errors';
 import { uuid } from '../reporting/storage';
 import { evaluateRag, resolveThresholds, thresholdFor, type Rag } from './thresholds';
+import { computeBranchScore, monthProgress, resolveScoringModel } from './scoring';
+import { resolveFocusConfiguration } from './focus';
 
 const invalid=(s:string)=>new ApiError('VALIDATION_ERROR',s);
 const validDate=(v:unknown):v is string=>{
@@ -30,7 +32,10 @@ export async function branchOverview(auth:AuthedUser,query:any) {
     const allowed=grants.filter(g=>!q.org||g.org_unit_id===q.org)
       .flatMap(g=>g.metrics.map(metric=>({org:g.org_unit_id,metric})));
     if(!allowed.length)return {mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:q.start,period_end:q.end,
-      metric_names:METRIC_NAMES,branches:[],thresholds_configured:false};
+      metric_names:METRIC_NAMES,branches:[],thresholds_configured:false,
+      scoring:{configured:false,model_id:null,month_progress:null},
+      network:{branches_with_score:0,average_score:null,green:0,amber:0,red:0,without_score:0},
+      focus:{month:`${q.end.slice(0,7)}-01`,configured:false,slots:[]}};
     const rows=(await c.query(`SELECT s.id snapshot_id,s.org_unit_id,s.metric,s.value::text value,s.unit,
       s.revision,s.created_at,n.display_name,d.id deviation_task_id,d.work_item_id,w.status task_status,
       w.title task_title,w.assignee_user_id task_assignee_id
@@ -63,14 +68,35 @@ export async function branchOverview(auth:AuthedUser,query:any) {
           status:r.task_status,title:r.task_title,assignee_user_id:r.task_assignee_id}:null});
       byOrg.set(r.org_unit_id,entry);
     }
+    // Модель балла и фокусы месяца берутся из настроек портала на дату среза.
+    const model=await resolveScoringModel(c,q.end);
+    const focus=await resolveFocusConfiguration(c,q.end);
     const branches=[...byOrg.values()].map(b=>{
       const worst:Rag=b.metrics.some(m=>m.rag==='RED')?'RED'
         :b.metrics.some(m=>m.rag==='AMBER')?'AMBER'
           :b.metrics.some(m=>m.rag==='GREEN')?'GREEN':'NONE';
-      return {...b,rag:worst,metrics_without_threshold:b.metrics.filter(m=>!m.threshold_id).map(m=>m.metric)};
+      const values=new Map<string,number>(b.metrics.map(m=>[m.metric,m.value]));
+      const score=computeBranchScore(model,values,q.end);
+      return {...b,rag:worst,metrics_without_threshold:b.metrics.filter(m=>!m.threshold_id).map(m=>m.metric),
+        score:score.score,score_rag:score.rag,score_components:score.components,score_reasons:score.reasons};
     });
+    const scored=branches.filter(b=>b.score!==null);
+    const count=(rag:Rag)=>scored.filter(b=>b.score_rag===rag).length;
     return {mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:q.start,period_end:q.end,
       metric_names:METRIC_NAMES,branches,thresholds_configured:thresholds.length>0,
+      scoring:{configured:!!model,model_id:model?.id??null,
+        month_progress:model?monthProgress(q.end):null},
+      // Средний балл сети считается только по филиалам с определённым баллом.
+      network:{branches_with_score:scored.length,
+        average_score:scored.length?scored.reduce((s,b)=>s+(b.score as number),0)/scored.length:null,
+        green:count('GREEN'),amber:count('AMBER'),red:count('RED'),
+        without_score:branches.length-scored.length},
+      focus:{month:`${q.end.slice(0,7)}-01`,configured:!!focus,
+        configuration_id:focus?.id??null,
+        // Факт фокуса не выводится из агрегатов до объявления соответствия
+        // кода фокуса опубликованному показателю: подмена источника недопустима.
+        slots:(focus?.slots??[]).map(s=>({...s,fact:null,
+          fact_basis:'NOT_MAPPED_TO_PUBLISHED_METRIC' as const}))},
       aggregation:'NONE',freshness:'NOT_EVALUATED'};
   });
 }

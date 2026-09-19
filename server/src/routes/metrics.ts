@@ -4,6 +4,8 @@ import { requireOrigin } from '../middleware/origin';
 import { enforceSessionRateLimit } from '../auth/rateLimit';
 import { branchOverview } from '../metrics/overview';
 import { listThresholds,setThreshold } from '../metrics/thresholds';
+import { listScoringModels,setScoringModel } from '../metrics/scoring';
+import { listFocusCatalog,setFocusConfiguration } from '../metrics/focus';
 import { divisionDeviationSummary } from '../metrics/divisionSummary';
 import { createDeviationTask,listDeviationTasks,myDeviationTasks } from '../metrics/deviationTasks';
 import { branchCard } from '../metrics/branchCard';
@@ -29,6 +31,12 @@ metricsRouter.get('/notification-policies',wrap(async(req,res)=>{
 metricsRouter.post('/notification-policies',requireOrigin,requireCsrf,wrap(async(req,res)=>{
   const r=await setNotificationPolicy(req.authUser!,actorCtx(req),req.body,req.header('Idempotency-Key')??'');
   res.status(r.status).json(r.body);}));
+metricsRouter.get('/scoring',wrap(async(req,res)=>{res.json(await listScoringModels(req.authUser!,req.query));}));
+metricsRouter.post('/scoring',requireOrigin,requireCsrf,
+  wrap(async(req,res)=>{res.status(201).json(await setScoringModel(req.authUser!,req.body,req.ctx.requestId));}));
+metricsRouter.get('/focus',wrap(async(req,res)=>{res.json(await listFocusCatalog(req.authUser!,req.query));}));
+metricsRouter.post('/focus',requireOrigin,requireCsrf,
+  wrap(async(req,res)=>{res.status(201).json(await setFocusConfiguration(req.authUser!,req.body,req.ctx.requestId));}));
 metricsRouter.get('/thresholds',wrap(async(req,res)=>{res.json(await listThresholds(req.authUser!,req.query));}));
 metricsRouter.post('/thresholds',requireOrigin,requireCsrf,
   wrap(async(req,res)=>{res.status(201).json(await setThreshold(req.authUser!,req.body,req.ctx.requestId));}));
