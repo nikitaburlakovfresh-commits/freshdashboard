@@ -15,6 +15,7 @@ import ReportReviewPage from './pages/ReportReviewPage';
 import AccessPage from './pages/AccessPage';
 import MetricThresholdsPage from './pages/MetricThresholdsPage';
 import NotificationSettingsPage from './pages/NotificationSettingsPage';
+import DivisionSummaryPage from './pages/DivisionSummaryPage';
 import BranchCardPage from './pages/BranchCardPage';
 import MyDeviationTasksPage from './pages/MyDeviationTasksPage';
 import MetricAccessPage from './pages/MetricAccessPage';
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="/organization" element={<OrganizationPage />} />
         <Route path="/access" element={<AccessPage />} />
         <Route path="/access/metrics" element={<MetricAccessPage />} />
+        <Route path="/division-summary" element={<DivisionSummaryPage />} />
         <Route path="/settings/thresholds" element={<MetricThresholdsPage />} />
         <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
         <Route path="/branch-card/:id" element={<BranchCardPage />} />

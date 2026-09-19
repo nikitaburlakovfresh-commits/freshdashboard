@@ -116,6 +116,40 @@ export const saveNotificationPolicy=(event_type:string,policy:NotificationPolicy
     policy_before?:NotificationPolicy}>('/metrics/notification-policies',
     {method:'POST',body:{event_type,policy,reason},idempotent:true});
 
+export interface DivisionBranchRow {
+  org_unit_id:string; display_name:string; division_id:string|null; division_name:string|null;
+  regional_manager_user_id:string|null; regional_manager_name:string|null;
+  metrics_accessible:number; metrics_published:string[]; metrics_missing:string[];
+  metrics_without_threshold:string[]; red:string[]; amber:string[]; rag:'RED'|'AMBER'|'GREEN'|'NONE';
+  deviations_with_task:number; deviations_without_task:number;
+  tasks_open:number; tasks_overdue:number; tasks_due_soon:number;
+}
+export interface DivisionManagerRow {
+  user_id:string|null; full_name:string|null; is_vacant:boolean; branches_total:number;
+  red:number; amber:number; deviations_without_task:number; tasks_open:number; tasks_overdue:number;
+  branch_ids:string[];
+}
+export interface DivisionSummaryRow {
+  division_id:string|null; division_name:string; branches_total:number;
+  branches_with_data:number; branches_without_data:number;
+  red:number; amber:number; green:number; unknown:number;
+  deviations_total:number; deviations_without_task:number;
+  tasks_open:number; tasks_overdue:number; tasks_due_soon:number;
+  metrics_without_threshold:string[];
+  by_metric:Record<string,{red:number;amber:number;without_task:number}>;
+  managers:DivisionManagerRow[]; branches:DivisionBranchRow[];
+}
+export interface DivisionSummary {
+  mode:string; period_start:string; period_end:string; metric_names:Record<string,string>;
+  due_soon_hours:number; thresholds_configured:boolean;
+  totals:{divisions:number;branches:number;branches_without_data:number;red:number;amber:number;
+    deviations_without_task:number;tasks_open:number;tasks_overdue:number;tasks_due_soon:number};
+  divisions:DivisionSummaryRow[];
+}
+export const readDivisionSummary=(start:string,end:string,division?:string)=>
+  apiFetch<DivisionSummary>('/metrics/divisions/deviations',{query:{start,end,division}});
+
+export { focusOrder,managerLabel,missingLabel } from '../components/divisionSummaryModel';
 export { POLICY_LABELS,EVENT_LABELS,settingHint,settingValueValid,reasonValid } from '../components/portalSettingsModel';
 export { DUE_LABELS,dueTone,basisLabel } from '../components/myDeviationTasksModel';
 export { OUTCOME_LABELS,outcomeTone,deltaLabel } from '../components/deviationOutcomeModel';

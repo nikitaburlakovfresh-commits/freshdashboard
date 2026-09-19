@@ -15,6 +15,7 @@ const groups: { label: string; links: { path: string; label: string; icon: IconN
     { path: '/analytics', label: 'Продажи и склад', icon: 'chart', future: true },
   ] },
   { label: 'Управление результатом', links: [
+    { path: '/division-summary', label: 'Сводка по дивизионам', icon: 'chart' },
     { path: '/settings/thresholds', label: 'Пороги показателей', icon: 'target' },
     { path: '/settings/notifications', label: 'Уведомления и сроки', icon: 'target' },
     { path: '/kpi', label: 'KPI и MBO', icon: 'target', future: true },
