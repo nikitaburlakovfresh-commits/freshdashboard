@@ -3,6 +3,11 @@ import { ApiError } from '../util/errors';
 import { config } from '../config';
 import { MAX_FILE_BYTES } from './storage';
 
+// clamscan загружает полный набор сигнатур в память на каждый запуск: на
+// боевом сервере это ~35 секунд на один файл. Таймаут держит запас, но не
+// бесконечен — незавершённая проверка по-прежнему не даёт вердикта CLEAN.
+const SCAN_TIMEOUT_MS=180000;
+
 export type SourceScanResult='CLEAN'|'INFECTED'|'NOT_SCANNED';
 
 // Fixed executable, stdin only, no shell, no caller-supplied flags or paths.
@@ -12,7 +17,7 @@ function run(args:string[],input?:Buffer):Promise<{code:number|null;output:strin
     const child=spawn('/usr/bin/clamscan',args,{stdio:['pipe','pipe','pipe'],env:{...process.env,LC_ALL:'C',TZ:'UTC'}});
     let output='',length=0,settled=false;
     const fail=()=>{if(!settled){settled=true;clearTimeout(timer);child.kill('SIGKILL');reject(new ApiError('TEMPORARILY_UNAVAILABLE','Антивирус недоступен или проверка не завершена. Новый результат проверки не получен.'));}};
-    const timer=setTimeout(fail,30000);
+    const timer=setTimeout(fail,SCAN_TIMEOUT_MS);
     child.on('error',fail);child.stdin.on('error',()=>{});
     for(const stream of [child.stdout,child.stderr])stream.on('data',(b:Buffer)=>{
       length+=b.length;if(length>8192)fail();else output+=b.toString();

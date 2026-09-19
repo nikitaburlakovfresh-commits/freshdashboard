@@ -23,12 +23,16 @@ const safePermissions=new Set(['work_item.read','work_item.create','work_item.as
 // (пороги, модель балла, фокусы) — по явному разрешению владельца продукта.
 // Управление людьми, ролями и назначениями сервисному контуру недоступно и
 // остаётся за живым администратором с действующей сессией.
-const serviceConfigurable=new Set(['metric.threshold.manage','metric.scoring.manage','metric.focus.manage']);
+// Названия филиалов в источниках добавлены в сервисную настройку по явному
+// решению владельца продукта 19.09.2026 для разового наполнения справочника;
+// возможность отзывается вместе с субъектом, управление людьми недоступно.
+const serviceConfigurable=new Set(['metric.threshold.manage','metric.scoring.manage','metric.focus.manage',
+  'report.source_naming.manage']);
 
 export async function authorizeNetworkPermissions(client:PoolClient,auth:AuthedUser,required:string[]) {
   if(await isServiceActor(client,auth.userId)) {
     if(!required.length||required.some(p=>!serviceConfigurable.has(p)))
-      throw new ApiError('FORBIDDEN','Сервисному контуру доступна только настройка порогов, модели балла и фокусов.');
+      throw new ApiError('FORBIDDEN','Сервисному контуру доступна только настройка порогов, модели балла, фокусов и названий филиалов в отчётах.');
     const service=await serviceAuthorization(client,auth.userId,'CONFIGURE');
     if(!service) throw new ApiError('FORBIDDEN','Сервисному субъекту не выдана действующая возможность CONFIGURE.');
     const rows=await client.query(`SELECT DISTINCT rp.permission_code FROM role_grants g

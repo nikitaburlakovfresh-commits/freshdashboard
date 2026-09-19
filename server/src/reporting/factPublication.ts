@@ -3,6 +3,8 @@ import type { PoolClient } from 'pg';
 import type { AuthedUser } from '../auth/session';
 import { withTransaction } from '../db/pool';
 import { config } from '../config';
+import { resolveSourceExclusions } from '../domain/sourceNaming';
+import { normalizeBranchName } from '../domain/branchNameMatch';
 import { ApiError } from '../util/errors';
 import { canonicalJsonHash } from '../util/crypto';
 import { beginIdempotent,completeIdempotent } from '../domain/idempotency';
@@ -106,7 +108,7 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
   const {view,reports}=context,period=view.current.period;
   if(b.review_version!==view.current.version)throw conflict();
   if(b.choices.some(x=>!access.metrics.includes(x.metric)))throw new ApiError('FORBIDDEN','Выбрана метрика вне разрешения публикации.');
-  const blockers:string[]=[],rows:any[]=[];
+  const blockers:string[]=[],withheld:string[]=[],rows:any[]=[];
   if(!period)blockers.push('Нет сохранённого предложения периода для подтверждения.');
   const sourceFiles=await files(c,context.b.id);
   for(const f of sourceFiles) {
@@ -120,6 +122,11 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
       ? `Оригинал «${f.display_name}»: нужна отметка проверки источника не старше 24 часов.`
       : `Оригинал «${f.display_name}»: нужна чистая антивирусная проверка не старше 24 часов.`);
   }
+  // Названия, исключённые из приёма решением с основанием (например закрытый
+  // филиал или объект вне сети), не считаются пробелом привязки: строка не
+  // публикуется и не блокирует публикацию остальных филиалов.
+  const exclusions=await resolveSourceExclusions(c,context.b.network_id,
+    period?.end??period?.start??new Date().toISOString().slice(0,10));
   const allTargets=new Set<string>();
   for(const choice of b.choices) {
     const report=reports.find(r=>r.kind===choice.source);
@@ -141,6 +148,7 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
       :PLAN_PERIOD_METRICS.includes(choice.metric)?period?.planEnd:period?.end;
     if(!start||!end||!validDate(start)||!validDate(end)||start>end){blockers.push(`${METRIC_NAMES[choice.metric]}: не подтверждён период/дата среза.`);continue;}
     for(const row of report.branches) {
+      if(exclusions.has(normalizeBranchName(row.name)))continue;
       const item=sourceItemId(context.b.id,report.kind,row.row),mapping=view.rows.find(m=>m.item_id===item);
       if(!mapping?.org_unit_id||mapping.status!=='PROPOSED'){blockers.push(`Строка ${report.kind}:${row.row}: нет допустимой UUID-привязки.`);continue;}
       const org=mapping.org_unit_id;
@@ -160,7 +168,11 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
         ) SELECT 1 FROM ancestry WHERE id=$4 AND parent_id IS NULL`,[org,start,end,context.b.network_id]);
       if(!historical.rowCount){blockers.push(`Строка ${report.kind}:${row.row}: историческая структура не покрывает весь период.`);continue;}
       const value=row.values[choice.metric];
-      if(value==null||!Number.isFinite(value)){blockers.push(`Строка ${report.kind}:${row.row}: нет числового значения, ноль не подставляется.`);continue;}
+      // Пропуск значения — не ноль и не повод остановить весь пакет: показатель
+      // для этого филиала просто не публикуется, а пропуск фиксируется явно.
+      if(value==null||!Number.isFinite(value)){
+        withheld.push(`${METRIC_NAMES[choice.metric]} · ${row.name}: значение отсутствует в источнике, показатель не публикуется.`);
+        continue;}
       const key=`${org}:${choice.metric}:${start}:${end}`;
       if(allTargets.has(key)){blockers.push('Повторная метрика филиала в одном периоде.');continue;}allTargets.add(key);
       const previous=(await c.query(`SELECT s.id,s.revision,s.value FROM report_fact_current p
@@ -180,7 +192,9 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
     }
   }
   rows.sort((a,b)=>`${a.org_unit_id}:${a.metric}`.localeCompare(`${b.org_unit_id}:${b.metric}`));
-  return {context,access,data:{rows,blockers:[...new Set(blockers)],review_hash:view.current.revision_hash}};
+  if(!rows.length)blockers.push('Ни одна строка не прошла проверку: публиковать нечего.');
+  return {context,access,data:{rows,blockers:[...new Set(blockers)],withheld:[...new Set(withheld)],
+    review_hash:view.current.revision_hash}};
 }
 export async function previewPublication(auth:AuthedUser,id:string,raw:any) {
   const b=command(raw);
