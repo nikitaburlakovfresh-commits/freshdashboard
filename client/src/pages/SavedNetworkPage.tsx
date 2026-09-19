@@ -29,10 +29,11 @@ function State({error,busy,reload}:{error:string;busy:boolean;reload:()=>void}) 
   return <div className="saved-state" aria-live="polite">{busy?<p role="status">Читаю сохранённый пакет…</p>:error?
     <><p role="alert">{error}</p><p>Для закрытого предпросмотра нужно действующее право подготовки отчётов. Чужие пакеты недоступны.</p><button className="btn" onClick={reload}>Проверить снова</button></>:null}</div>;
 }
-export function MetricCards({report,row,keys}:{report:Report|SavedBranch['report'];row:ReportRow;keys:MetricKey[]}) {
+export function MetricCards({report,row,keys}:{report:Report|SavedBranch['report'];row:ReportRow|null;keys:MetricKey[]}) {
+  // Итог может отсутствовать в источнике: это не ноль и не выполнение.
   return <div className="saved-metrics">{keys.map(key=><article className="saved-metric" key={key}>
-    <span>{METRIC_NAMES[key]}</span><strong>{reportNumber(row.values[key])} {row.values[key]!=null&&<small>{metricUnit(key)}</small>}</strong>
-    <small>{report.columns[key]?`${report.sheet}!${report.columns[key]}${row.row}`:'Нет в этом источнике'}</small>
+    <span>{METRIC_NAMES[key]}</span><strong>{row?reportNumber(row.values[key]):'—'} {row&&row.values[key]!=null&&<small>{metricUnit(key)}</small>}</strong>
+    <small>{row&&report.columns[key]?`${report.sheet}!${report.columns[key]}${row.row}`:'Нет в этом источнике'}</small>
   </article>)}</div>;
 }
 function PreviewNotice() {

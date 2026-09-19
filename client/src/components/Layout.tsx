@@ -8,6 +8,7 @@ import { accessPermissions } from './accessChangeModel';
 const groups: { label: string; links: { path: string; label: string; icon: IconName; future?: boolean }[] }[] = [
   { label: 'Обзор', links: [
     { path: '/', label: 'Вся сеть', icon: 'grid' },
+    { path: '/network-overview', label: 'Обзор сети · балл и фокусы', icon: 'chart' },
     { path: '/saved-network', label: 'Обзор сети · PREVIEW', icon: 'chart' },
     { path: '/organization', label: 'Структура и доступ', icon: 'network' },
     { path: '/access', label: 'Пользователи и назначения', icon: 'network' },
@@ -17,6 +18,8 @@ const groups: { label: string; links: { path: string; label: string; icon: IconN
   { label: 'Управление результатом', links: [
     { path: '/division-summary', label: 'Сводка по дивизионам', icon: 'chart' },
     { path: '/settings/thresholds', label: 'Пороги показателей', icon: 'target' },
+    { path: '/settings/scoring', label: 'Модель балла филиала', icon: 'target' },
+    { path: '/settings/focus', label: 'Фокусы внимания месяца', icon: 'target' },
     { path: '/settings/notifications', label: 'Уведомления и сроки', icon: 'target' },
     { path: '/kpi', label: 'KPI и MBO', icon: 'target', future: true },
     { path: '/bdr', label: 'БДР · план и факт', icon: 'wallet', future: true },

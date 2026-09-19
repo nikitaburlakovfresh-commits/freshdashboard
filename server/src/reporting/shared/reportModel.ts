@@ -254,7 +254,7 @@ export function parseReport(rows: unknown[][], kind: ReportKind, file: string, s
 export function selectRow(report: Report | undefined, key: string): ReportRow | undefined {
   return key === '' ? report?.total ?? undefined : report?.branches.find(r => r.key === key);
 }
-export function sourceAddress(report: Report | undefined, row: ReportRow | undefined, metric: MetricKey): string {
+export function sourceAddress(report: Report | undefined | null, row: ReportRow | undefined | null, metric: MetricKey): string {
   const column = report?.columns[metric];
   return report && row && column ? `${report.sheet}!${column}${row.row}` : 'Нет ячейки в источнике';
 }

@@ -58,7 +58,6 @@ test('IMPORT-03 applies hierarchy through draft, preview and apply; history and 
   ]), 'SYNTHETIC_IMPORT_APPROVAL', false);
   expect(result.mode).toBe('APPLIED');
   expect([result.created, result.rejected, result.already_present]).toEqual([4, 0, 0]);
-  expect(result.activation).toBe('NOT_PERFORMED');
   const rows = (await pool.query(`SELECT u.code,u.kind,u.lifecycle_state,n.display_name,n.effective_from name_from,
     p.code parent_code,a.business_model FROM org_directory_units u
     JOIN org_directory_name_history n ON n.org_unit_id=u.id
@@ -87,4 +86,25 @@ test('IMPORT-04 replay is idempotent and never rewrites an existing unit', async
   expect([result.created, result.already_present]).toEqual([0, 3]);
   expect((await pool.query('SELECT id,code FROM org_directory_units WHERE code=ANY($1) ORDER BY code', [[B1, B2, C, D]])).rows).toEqual(before);
   expect((await pool.query('SELECT count(*)::int n FROM org_directory_name_history WHERE display_name=$1', ['Попытка переименования при повторе'])).rows[0].n).toBe(0);
+});
+
+test('IMPORT-05 rename and activation run through the same stages; activation needs its own permission', async () => {
+  const { provisionBranchActivation } = await import('../src/domain/branchActivationProvisioning');
+  const renameOnly = { network_code: N, reason, units: [], renames: [{ code: C, display_name: 'Зона РМ Синтетическая переименованная' }] };
+  expect((await importOrgDirectory(renameOnly as any, 'SYNTHETIC_IMPORT_APPROVAL', false)).renamed).toBe(1);
+  expect((await importOrgDirectory(renameOnly as any, 'SYNTHETIC_IMPORT_APPROVAL', false)).outcomes[0].status).toBe('UNCHANGED');
+  // Activation is refused while the separate permission is absent.
+  const activate = { network_code: N, reason, units: [], activations: [{ code: B1, reason: 'Синтетический явный запуск филиала' }] };
+  await expect(importOrgDirectory(activate as any, 'SYNTHETIC_IMPORT_APPROVAL', false)).rejects.toThrow();
+  expect((await provisionBranchActivation('org_import_test', 'SYNTHETIC_IMPORT_TEST_APPROVAL')).status).toBe('PROVISIONED');
+  expect((await provisionBranchActivation('org_import_test', 'SYNTHETIC_IMPORT_TEST_APPROVAL')).status).toBe('ALREADY_PROVISIONED');
+  const done = await importOrgDirectory(activate as any, 'SYNTHETIC_IMPORT_APPROVAL', false);
+  expect([done.activated, done.rejected]).toEqual([1, 0]);
+  expect((await importOrgDirectory(activate as any, 'SYNTHETIC_IMPORT_APPROVAL', false)).outcomes[0].status).toBe('ALREADY_ACTIVE');
+  const st = (await pool.query(`SELECT org_lifecycle_at(id,(now() AT TIME ZONE 'UTC')::date) s FROM org_directory_units WHERE code=$1`, [B1])).rows[0].s;
+  expect(st).toBe('ACTIVE');
+  // A short activation reason is refused without touching the branch.
+  const bad = await importOrgDirectory({ network_code: N, reason, units: [], activations: [{ code: B2, reason: 'коротко' }] } as any, 'SYNTHETIC_IMPORT_APPROVAL', false);
+  expect(bad.rejected).toBe(1);
+  expect((await pool.query(`SELECT org_lifecycle_at(id,(now() AT TIME ZONE 'UTC')::date) s FROM org_directory_units WHERE code=$1`, [B2])).rows[0].s).toBe('PRE_LAUNCH');
 });

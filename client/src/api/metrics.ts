@@ -21,11 +21,22 @@ export interface DeviationTaskRow {
 export interface BranchCard {
   org_unit_id:string; display_name:string; rag:Rag;
   metrics:MetricCell[]; metrics_without_threshold:string[];
+  /** Балл филиала: null, когда данных или модели нет. Это не ноль. */
+  score:number|null; score_rag:Rag;
+  score_components:ScoreComponent[]; score_reasons:string[];
 }
 export interface Overview {
   mode:string; period_start:string; period_end:string;
   branches:BranchCard[]; thresholds_configured:boolean;
   metric_names:Record<string,string>;
+  scoring:{configured:boolean;model_id:string|null;month_progress:number|null};
+  network:{branches_with_score:number;average_score:number|null;
+    green:number;amber:number;red:number;without_score:number};
+  focus:{month:string;configured:boolean;configuration_id?:string|null;
+    slots:{slot:number;metric_code:string;label:string;
+      direction:'HIGHER_IS_BETTER'|'LOWER_IS_BETTER';format:'COUNT'|'PCT'|'RUB'|'RUB_MLN';
+      plan:number|null;requires_vin_level:boolean;requires_daily_logs:boolean;
+      fact:number|null;fact_basis:string}[]};
 }
 export interface ThresholdRow {
   id:string; metric:string; scope_kind:'NETWORK'|'ORG_UNIT'; org_unit_id:string|null; display_name:string|null;
@@ -165,3 +176,78 @@ export { POLICY_LABELS,EVENT_LABELS,settingHint,settingValueValid,reasonValid } 
 export { DUE_LABELS,dueTone,basisLabel } from '../components/myDeviationTasksModel';
 export { OUTCOME_LABELS,outcomeTone,deltaLabel } from '../components/deviationOutcomeModel';
 export { RAG_LABELS,UNIT_LABELS,formatValue,ragReason,thresholdOrderValid } from '../components/metricThresholdModel';
+
+/* ── Балл филиала, светофор и фокусы месяца (шаг C) ─────────────────────────
+   Клиент ничего не досчитывает: балл, статус, основания и средний балл сети
+   приходят с сервера по модели, настроенной внутри портала. */
+export type Evaluation='RUN_RATE'|'RATIO_X100'|'CONVERSION_BANDS';
+export type RuleRole='ORDINARY'|'REVENUE'|'TURNOVER_STOP';
+export interface ScoreComponent {
+  metric:string; metric_name:string; weight:number; evaluation:Evaluation; rule_role:RuleRole;
+  fact:number|null; plan:number|null; score:number|null;
+  missing:'FACT_NOT_PUBLISHED'|'PLAN_NOT_PUBLISHED'|'PLAN_NOT_POSITIVE'|null;
+}
+export interface ScoringWeight {
+  metric:string; weight:number; evaluation:Evaluation; plan_metric:string|null; rule_role:RuleRole;
+}
+export const SCORING_MODEL_FIELDS=['score_cap','red_score_below','red_revenue_runrate_below',
+  'red_weak_metric_below','red_weak_metric_count','stop_turnover_below','green_score_above',
+  'green_revenue_above','green_turnover_above','green_no_metric_below','conversion_green_from',
+  'conversion_green_score','conversion_amber_from','conversion_amber_score','conversion_red_score'] as const;
+export type ScoringModelField=typeof SCORING_MODEL_FIELDS[number];
+export const SCORING_FIELD_LABELS:Record<ScoringModelField,string>={
+  score_cap:'Ограничение балла компонента',
+  red_score_below:'Красный: балл ниже',
+  red_revenue_runrate_below:'Красный: run-rate выручки ниже',
+  red_weak_metric_below:'Красный: показатель слабее',
+  red_weak_metric_count:'Красный: слабых показателей от',
+  stop_turnover_below:'Стоп-фактор: оборачиваемость ниже',
+  green_score_above:'Зелёный: балл выше',
+  green_revenue_above:'Зелёный: выручка выше',
+  green_turnover_above:'Зелёный: оборачиваемость выше',
+  green_no_metric_below:'Зелёный: ни одного показателя ниже',
+  conversion_green_from:'Конверсия: зелёная полоса от, %',
+  conversion_green_score:'Конверсия: балл зелёной полосы',
+  conversion_amber_from:'Конверсия: жёлтая полоса от, %',
+  conversion_amber_score:'Конверсия: балл жёлтой полосы',
+  conversion_red_score:'Конверсия: балл красной полосы',
+};
+export const EVALUATION_LABELS:Record<Evaluation,string>={
+  RUN_RATE:'Run-rate к плану',RATIO_X100:'Коэффициент ×100',CONVERSION_BANDS:'Полосы конверсии'};
+export const RULE_ROLE_LABELS:Record<RuleRole,string>={
+  ORDINARY:'Обычный показатель',REVENUE:'Выручка (правила светофора)',TURNOVER_STOP:'Оборачиваемость (стоп-фактор)'};
+export const COMPONENT_MISSING_LABELS:Record<string,string>={
+  FACT_NOT_PUBLISHED:'Факт не опубликован',PLAN_NOT_PUBLISHED:'План не опубликован',
+  PLAN_NOT_POSITIVE:'План не положителен'};
+export interface ScoringModelRow extends Record<ScoringModelField,string> {
+  id:string; effective_from:string; effective_to:string|null; reason:string; created_at:string;
+  weights:(ScoringWeight&{model_id:string;weight:string})[];
+}
+export type ScoringModelCommand=Record<ScoringModelField,number>&{
+  weights:ScoringWeight[]; effective_from:string; reason:string};
+export const readScoringModels=(history=false)=>
+  apiFetch<{items:ScoringModelRow[];metric_names:Record<string,string>;history:boolean}>('/metrics/scoring',
+    {query:{history:history?'true':undefined}});
+export const saveScoringModel=(body:ScoringModelCommand)=>
+  apiFetch<{id:string;previous_id:string|null;audit_id:string;effective_from:string}>('/metrics/scoring',
+    {method:'POST',body});
+
+export interface FocusCatalogRow {
+  code:string; label:string; direction:'HIGHER_IS_BETTER'|'LOWER_IS_BETTER';
+  format:'COUNT'|'PCT'|'RUB'|'RUB_MLN'; default_plan:string|null;
+  requires_vin_level:boolean; requires_daily_logs:boolean;
+}
+export interface FocusConfigurationRow {
+  id:string; month:string; effective_from:string; effective_to:string|null; reason:string; created_at:string;
+  slots:{slot:number;metric_code:string;plan:string|number|null}[];
+}
+export interface FocusCommand {
+  month:string; effective_from:string; reason:string;
+  slots:{slot:number;metric_code:string;plan:number|null}[];
+}
+export const readFocusCatalog=(month?:string,history=false)=>
+  apiFetch<{slot_count:number;catalog:FocusCatalogRow[];configurations:FocusConfigurationRow[];history:boolean}>(
+    '/metrics/focus',{query:{month,history:history?'true':undefined}});
+export const saveFocusConfiguration=(body:FocusCommand)=>
+  apiFetch<{id:string;previous_id:string|null;audit_id:string;month:string;effective_from:string}>('/metrics/focus',
+    {method:'POST',body});

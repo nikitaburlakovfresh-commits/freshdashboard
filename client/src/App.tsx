@@ -23,6 +23,9 @@ import ActivateAccountPage from './pages/ActivateAccountPage';
 import ModuleReadinessPage from './pages/ModuleReadinessPage';
 import PersonalDayPage from './pages/PersonalDayPage';
 import ReportPublicationPage from './pages/ReportPublicationPage';
+import NetworkScorePage from './pages/NetworkScorePage';
+import ScoringModelPage from './pages/ScoringModelPage';
+import FocusConfigPage from './pages/FocusConfigPage';
 
 export default function App() {
   const { me, loading } = useAuth();
@@ -60,6 +63,9 @@ export default function App() {
         <Route path="/access" element={<AccessPage />} />
         <Route path="/access/metrics" element={<MetricAccessPage />} />
         <Route path="/division-summary" element={<DivisionSummaryPage />} />
+        <Route path="/network-overview" element={<NetworkScorePage />} />
+        <Route path="/settings/scoring" element={<ScoringModelPage />} />
+        <Route path="/settings/focus" element={<FocusConfigPage />} />
         <Route path="/settings/thresholds" element={<MetricThresholdsPage />} />
         <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
         <Route path="/branch-card/:id" element={<BranchCardPage />} />
