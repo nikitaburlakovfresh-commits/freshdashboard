@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import Logo from './Logo';
 import Icon, { type IconName } from './Icon';
-import { accessPermissions } from './accessChangeModel';
+import { canSeeNavLink, navPermissions } from './navAccess';
 
 const groups: { label: string; links: { path: string; label: string; icon: IconName; future?: boolean }[] }[] = [
   { label: 'Обзор', links: [
@@ -45,6 +45,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     document.documentElement.dataset.theme = theme;
     try { localStorage.setItem('fresh-theme', theme); } catch { /* Theme persistence is optional. */ }
   }, [theme]);
+  const permissions = navPermissions(me?.grants ?? []);
   const primaryRole = me?.grants?.some(g => g.role === 'SUPER_ADMIN') ? 'Администратор' : me?.grants?.some(g => g.role === 'REGIONAL_MANAGER') ? 'Постановщик' : 'Исполнитель';
   const current = pathname.startsWith('/branches/')||pathname.startsWith('/branch-card/') ? 'Карточка филиала' : groups.flatMap(g => g.links).find(l => l.path === pathname || (l.path!=='/'&&pathname.startsWith(l.path+'/')))?.label ?? 'Карточка задачи';
   const close = () => mobile.current?.close();
@@ -54,24 +55,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <Logo /><span>ПОРТАЛ УПРАВЛЕНИЯ СЕТЬЮ</span>
     </NavLink>
     <nav className="shell-nav" aria-label="Основная навигация">
-      {groups.map(group => <div className="shell-nav-group" key={group.label}>
+      {groups.map(group => ({...group, links: group.links.filter(link=>canSeeNavLink(link, me?.grants??[], permissions))}))
+        .filter(group=>group.links.length>0).map(group => <div className="shell-nav-group" key={group.label}>
         <div className="shell-nav-label">{group.label}</div>
-        {group.links.filter(link=>link.path==='/access'?accessPermissions(me?.grants??[]).has('access.directory.read'):
-          !['/prepared-reports','/saved-network'].includes(link.path) || me?.grants.some(g=>g.role==='SUPER_ADMIN')).map(link => <NavLink key={link.path} to={link.path} end={link.path === '/'} onClick={close}
+        {group.links.map(link => <NavLink key={link.path} to={link.path} end={link.path === '/'} onClick={close}
           className={({ isActive }) => `shell-nav-link${isActive ? ' active' : ''}`}>
           <Icon name={link.icon} /><span>{link.label}</span>
           {link.future && <span className="shell-future" title={link.path==='/diary'?'Рабочий beta-сценарий; полный каталог ещё в разработке':'Навигационный каркас · следующий этап'} aria-label={link.path==='/diary'?'Beta':'Следующий этап'}>{link.path==='/diary'?'β':'○'}</span>}
         </NavLink>)}
       </div>)}
-      <div className="shell-nav-group shell-org">
+      {canSeeNavLink({path:'/organization'}, me?.grants??[], permissions) && <div className="shell-nav-group shell-org">
         <div className="shell-nav-label">Оргструктура сети</div>
         <NavLink className="shell-org-line" to="/organization" onClick={close}><Icon name="network" /><span>Открыть справочник</span></NavLink>
         <p>История и текущий доступ<br />Без автоматических назначений</p>
-      </div>
+      </div>}
     </nav>
     <div className="shell-sidebar-bottom">
-      <button className="shell-upload" onClick={upload}><Icon name="upload" /><span>Загрузить QLIK-отчёты</span></button>
-      <span className="shell-local-note">Excel · только в памяти страницы</span>
+      {canSeeNavLink({path:'/prepared-reports'}, me?.grants??[], permissions) && <>
+        <button className="shell-upload" onClick={upload}><Icon name="upload" /><span>Загрузить QLIK-отчёты</span></button>
+        <span className="shell-local-note">Excel · только в памяти страницы</span>
+      </>}
       <div className="shell-account"><span className="shell-avatar">{me?.user.full_name?.slice(0, 1) ?? 'F'}</span>
         <div><strong>{me?.user.full_name}</strong><span>{primaryRole} · пилот R1</span></div>
         <button className="shell-icon-button" onClick={() => logout()} aria-label="Выйти" title="Выйти"><Icon name="logout" /></button>
