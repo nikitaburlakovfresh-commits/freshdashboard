@@ -47,6 +47,25 @@ export const saveThreshold=(body:ThresholdCommand)=>
   apiFetch<{id:string;previous_id:string|null;audit_id:string;effective_from:string}>('/metrics/thresholds',
     {method:'POST',body});
 
+export type Outcome='NO_PUBLISHED_VALUE'|'NOT_REPUBLISHED'|'STATUS_IMPROVED'|'STATUS_WORSENED'
+  |'STATUS_UNKNOWN'|'UNCHANGED'|'VALUE_IMPROVED'|'VALUE_WORSENED';
+export interface DeviationHistoryRow {
+  id:string; work_item_id:string; metric:string; metric_name:string; period_start:string; period_end:string;
+  rag_at_creation:'RED'|'AMBER'; observed_value:number; basis:string; basis_value:number; unit:'COUNT'|'RUB'|null;
+  reason:string; created_at:string; task:{title:string;status:string;assignee_user_id:string|null;due_at:string};
+  current_value:number|null; current_revision:number|null; outcome:Outcome; delta:number|null;
+  rag_now:Rag|null; task_closed?:boolean;
+}
+export interface BranchCardData {
+  mode:string; period_start:string; period_end:string;
+  branch:{org_unit_id:string;code:string;display_name:string;lifecycle_state:string};
+  metrics:(Omit<MetricCell,'deviation_task'>&{direction:'HIGHER_IS_BETTER'|'LOWER_IS_BETTER'|null})[];
+  metrics_without_threshold:string[]; deviations:DeviationHistoryRow[];
+  metric_names:Record<string,string>; thresholds_configured:boolean;
+}
+export const readBranchCard=(org:string,start:string,end:string)=>
+  apiFetch<BranchCardData>(`/metrics/branches/${org}`,{query:{start,end}});
+
 export const createDeviationTask=(body:DeviationTaskCommand)=>
   apiFetch<{deviation_task_id:string;work_item_id:string;rag:string;assigned:boolean}>(
     '/metrics/deviation-tasks',{method:'POST',body,idempotent:true});
@@ -54,4 +73,5 @@ export const readDeviationTasks=(start:string,end:string,org?:string)=>
   apiFetch<{items:DeviationTaskRow[];metric_names:Record<string,string>}>('/metrics/deviation-tasks',
     {query:{start,end,org}});
 
+export { OUTCOME_LABELS,outcomeTone,deltaLabel } from '../components/deviationOutcomeModel';
 export { RAG_LABELS,UNIT_LABELS,formatValue,ragReason,thresholdOrderValid } from '../components/metricThresholdModel';
