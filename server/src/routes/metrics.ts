@@ -11,6 +11,7 @@ import { createDeviationTask,listDeviationTasks,myDeviationTasks } from '../metr
 import { branchCard } from '../metrics/branchCard';
 import { listNotificationPolicies,setNotificationPolicy } from '../settings/notificationPolicies';
 import { listPortalSettings,setPortalSetting } from '../settings/portalSettings';
+import { listSourceNaming,setSourceAlias,excludeSourceName,revokeSourceExclusion } from '../domain/sourceNaming';
 import { ApiError } from '../util/errors';
 export const metricsRouter=Router();
 const wrap=(f:(req:Request,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{f(req,res).catch(next);};
@@ -40,6 +41,14 @@ metricsRouter.post('/focus',requireOrigin,requireCsrf,
 metricsRouter.get('/thresholds',wrap(async(req,res)=>{res.json(await listThresholds(req.authUser!,req.query));}));
 metricsRouter.post('/thresholds',requireOrigin,requireCsrf,
   wrap(async(req,res)=>{res.status(201).json(await setThreshold(req.authUser!,req.body,req.ctx.requestId));}));
+
+metricsRouter.get('/source-naming',wrap(async(req,res)=>{res.json(await listSourceNaming(req.authUser!,req.query));}));
+metricsRouter.post('/source-naming/aliases',requireOrigin,requireCsrf,
+  wrap(async(req,res)=>{res.status(201).json(await setSourceAlias(req.authUser!,req.body,req.ctx.requestId));}));
+metricsRouter.post('/source-naming/exclusions',requireOrigin,requireCsrf,
+  wrap(async(req,res)=>{res.status(201).json(await excludeSourceName(req.authUser!,req.body,req.ctx.requestId));}));
+metricsRouter.post('/source-naming/exclusions/:id/revoke',requireOrigin,requireCsrf,
+  wrap(async(req,res)=>{res.json(await revokeSourceExclusion(req.authUser!,req.params.id,req.body,req.ctx.requestId));}));
 
 const actorCtx=(req:Request)=>({authUser:req.authUser!,requestId:req.ctx.requestId,
   ip:req.ip??null,userAgent:req.header('user-agent')??null});

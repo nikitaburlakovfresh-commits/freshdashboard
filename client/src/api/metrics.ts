@@ -251,3 +251,23 @@ export const readFocusCatalog=(month?:string,history=false)=>
 export const saveFocusConfiguration=(body:FocusCommand)=>
   apiFetch<{id:string;previous_id:string|null;audit_id:string;month:string;effective_from:string}>('/metrics/focus',
     {method:'POST',body});
+
+export interface SourceAliasRow {
+  id:string; org_unit_id:string; source_name:string; source_name_norm:string;
+  effective_from:string; effective_to:string|null; reason:string; display_name:string|null; code:string;
+}
+export interface SourceExclusionRow {
+  id:string; source_name:string; source_name_norm:string; effective_from:string;
+  revoked_at:string|null; reason:string;
+}
+export const readSourceNaming=(history=false)=>
+  apiFetch<{aliases:SourceAliasRow[];exclusions:SourceExclusionRow[];history:boolean}>('/metrics/source-naming',
+    {query:{history:history?'true':undefined}});
+export const saveSourceAlias=(body:{org_unit_id:string;source_name:string;effective_from:string;reason:string})=>
+  apiFetch<{id:string;previous_id:string|null;effective_from:string}>('/metrics/source-naming/aliases',
+    {method:'POST',body});
+export const saveSourceExclusion=(body:{network_id:string;source_name:string;effective_from:string;reason:string})=>
+  apiFetch<{id:string;source_name:string}>('/metrics/source-naming/exclusions',{method:'POST',body});
+export const revokeSourceExclusion=(id:string,reason:string)=>
+  apiFetch<{id:string;revoked:boolean}>(`/metrics/source-naming/exclusions/${id}/revoke`,
+    {method:'POST',body:{reason}});

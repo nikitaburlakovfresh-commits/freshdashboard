@@ -1,37 +1,63 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import Logo from './Logo';
 import Icon, { type IconName } from './Icon';
-import { canSeeNavLink, navPermissions } from './navAccess';
+import { canSeeNavLink, navPermissions, type NavLinkDef } from './navAccess';
 
-const groups: { label: string; links: { path: string; label: string; icon: IconName; future?: boolean }[] }[] = [
-  { label: 'Обзор', links: [
-    { path: '/', label: 'Вся сеть', icon: 'grid' },
-    { path: '/network-overview', label: 'Обзор сети · балл и фокусы', icon: 'chart' },
-    { path: '/saved-network', label: 'Обзор сети · PREVIEW', icon: 'chart' },
-    { path: '/organization', label: 'Структура и доступ', icon: 'network' },
-    { path: '/access', label: 'Пользователи и назначения', icon: 'network' },
-    { path: '/prepared-reports', label: 'Подготовленные отчёты', icon: 'upload' },
-    { path: '/analytics', label: 'Продажи и склад', icon: 'chart', future: true },
+type NavGroup = { label: string; links: NavLinkDef<IconName>[] };
+
+/**
+ * Рабочий контур: только то, чем ежедневно пользуются коммерческий директор,
+ * дивизиональный руководитель, региональный менеджер и роли филиала.
+ * Раздел попадает сюда исключительно с явным признаком work: true.
+ */
+const workGroups: NavGroup[] = [
+  { label: 'Результат сети', links: [
+    { path: '/', label: 'Вся сеть', icon: 'grid', work: true },
+    { path: '/network-overview', label: 'Обзор сети · балл и фокусы', icon: 'chart', work: true },
+    { path: '/division-summary', label: 'Сводка по дивизионам', icon: 'chart', work: true },
   ] },
-  { label: 'Управление результатом', links: [
-    { path: '/division-summary', label: 'Сводка по дивизионам', icon: 'chart' },
+  { label: 'Моя работа', links: [
+    { path: '/tasks', label: 'Задачи', icon: 'check', work: true },
+    { path: '/my-deviations', label: 'Мои задачи по отклонениям', icon: 'target', work: true },
+    { path: '/diary', label: 'Ежедневник', icon: 'calendar', work: true, future: true },
+    { path: '/notifications', label: 'Уведомления', icon: 'bell', work: true },
+  ] },
+];
+
+/**
+ * Администрирование портала. Здесь всё, что нужно для настройки, а не для
+ * ежедневной работы руководителя: приём данных, правила расчёта, доступы,
+ * оргструктура и служебные разделы. Любой новый раздел без work: true
+ * попадает сюда по умолчанию, поэтому рабочее меню не разрастается само.
+ */
+const adminGroups: NavGroup[] = [
+  { label: 'Данные и отчёты', links: [
+    { path: '/prepared-reports', label: 'Приём отчётов QLIK', icon: 'upload' },
+    { path: '/saved-network', label: 'Предпросмотр публикации', icon: 'chart' },
+  ] },
+  { label: 'Правила расчёта', links: [
     { path: '/settings/thresholds', label: 'Пороги показателей', icon: 'target' },
+    { path: '/settings/source-naming', label: 'Названия филиалов в отчётах', icon: 'layers' },
     { path: '/settings/scoring', label: 'Модель балла филиала', icon: 'target' },
     { path: '/settings/focus', label: 'Фокусы внимания месяца', icon: 'target' },
     { path: '/settings/notifications', label: 'Уведомления и сроки', icon: 'target' },
+  ] },
+  { label: 'Доступ и структура', links: [
+    { path: '/organization', label: 'Оргструктура сети', icon: 'network' },
+    { path: '/access', label: 'Пользователи и назначения', icon: 'network' },
+  ] },
+  { label: 'Служебное', links: [
+    { path: '/modules', label: 'Готовность модулей', icon: 'layers' },
+    { path: '/analytics', label: 'Продажи и склад', icon: 'chart', future: true },
     { path: '/kpi', label: 'KPI и MBO', icon: 'target', future: true },
     { path: '/bdr', label: 'БДР · план и факт', icon: 'wallet', future: true },
   ] },
-  { label: 'Операционная работа', links: [
-    { path: '/tasks', label: 'Задачи', icon: 'check' },
-    { path: '/my-deviations', label: 'Мои задачи по отклонениям', icon: 'target' },
-    { path: '/diary', label: 'Ежедневник', icon: 'calendar', future: true },
-    { path: '/notifications', label: 'Уведомления', icon: 'bell' },
-    { path: '/modules', label: 'Готовность модулей', icon: 'layers' },
-  ] },
 ];
+
+const allLinks = [...workGroups, ...adminGroups].flatMap(g => g.links);
+const ADMIN_OPEN_KEY = 'fresh-nav-admin-open';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { me, logout } = useAuth();
@@ -46,32 +72,62 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem('fresh-theme', theme); } catch { /* Theme persistence is optional. */ }
   }, [theme]);
   const permissions = navPermissions(me?.grants ?? []);
-  const primaryRole = me?.grants?.some(g => g.role === 'SUPER_ADMIN') ? 'Администратор' : me?.grants?.some(g => g.role === 'REGIONAL_MANAGER') ? 'Постановщик' : 'Исполнитель';
-  const current = pathname.startsWith('/branches/')||pathname.startsWith('/branch-card/') ? 'Карточка филиала' : groups.flatMap(g => g.links).find(l => l.path === pathname || (l.path!=='/'&&pathname.startsWith(l.path+'/')))?.label ?? 'Карточка задачи';
+  const grants = me?.grants ?? [];
+  const visible = (groups: NavGroup[]) => groups
+    .map(group => ({ ...group, links: group.links.filter(link => canSeeNavLink(link, grants, permissions)) }))
+    .filter(group => group.links.length > 0);
+  const work = useMemo(() => visible(workGroups), [me]);
+  const admin = useMemo(() => visible(adminGroups), [me]);
+  const adminPaths = admin.flatMap(g => g.links.map(l => l.path));
+  const adminActive = adminPaths.some(p => pathname === p || pathname.startsWith(p + '/'));
+  const [adminOpen, setAdminOpen] = useState(() => {
+    try { return localStorage.getItem(ADMIN_OPEN_KEY) === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(ADMIN_OPEN_KEY, adminOpen ? '1' : '0'); } catch { /* Persistence is optional. */ }
+  }, [adminOpen]);
+  const showAdmin = adminOpen || adminActive;
+  const primaryRole = grants.some(g => g.role === 'SUPER_ADMIN') ? 'Администратор'
+    : grants.some(g => g.role === 'REGIONAL_MANAGER') ? 'Постановщик' : 'Исполнитель';
+  const current = pathname.startsWith('/branches/') || pathname.startsWith('/branch-card/') ? 'Карточка филиала'
+    : allLinks.find(l => l.path === pathname || (l.path !== '/' && pathname.startsWith(l.path + '/')))?.label ?? 'Карточка задачи';
   const close = () => mobile.current?.close();
   const upload = () => { close(); navigate('/?import=1'); };
+  const renderLink = (link: NavLinkDef<IconName>) => <NavLink key={link.path} to={link.path}
+    end={link.path === '/'} onClick={close}
+    className={({ isActive }) => `shell-nav-link${isActive ? ' active' : ''}`}>
+    <Icon name={link.icon} /><span>{link.label}</span>
+    {link.future && <span className="shell-future"
+      title={link.path === '/diary' ? 'Рабочий beta-сценарий; полный каталог ещё в разработке' : 'Навигационный каркас · следующий этап'}
+      aria-label={link.path === '/diary' ? 'Beta' : 'Следующий этап'}>{link.path === '/diary' ? 'β' : '○'}</span>}
+  </NavLink>;
   const nav = <>
     <NavLink className="shell-brand" to="/" onClick={close} aria-label="FRESH · Обзор сети">
       <Logo /><span>ПОРТАЛ УПРАВЛЕНИЯ СЕТЬЮ</span>
     </NavLink>
     <nav className="shell-nav" aria-label="Основная навигация">
-      {groups.map(group => ({...group, links: group.links.filter(link=>canSeeNavLink(link, me?.grants??[], permissions))}))
-        .filter(group=>group.links.length>0).map(group => <div className="shell-nav-group" key={group.label}>
+      {work.map(group => <div className="shell-nav-group" key={group.label}>
         <div className="shell-nav-label">{group.label}</div>
-        {group.links.map(link => <NavLink key={link.path} to={link.path} end={link.path === '/'} onClick={close}
-          className={({ isActive }) => `shell-nav-link${isActive ? ' active' : ''}`}>
-          <Icon name={link.icon} /><span>{link.label}</span>
-          {link.future && <span className="shell-future" title={link.path==='/diary'?'Рабочий beta-сценарий; полный каталог ещё в разработке':'Навигационный каркас · следующий этап'} aria-label={link.path==='/diary'?'Beta':'Следующий этап'}>{link.path==='/diary'?'β':'○'}</span>}
-        </NavLink>)}
+        {group.links.map(renderLink)}
       </div>)}
-      {canSeeNavLink({path:'/organization'}, me?.grants??[], permissions) && <div className="shell-nav-group shell-org">
-        <div className="shell-nav-label">Оргструктура сети</div>
-        <NavLink className="shell-org-line" to="/organization" onClick={close}><Icon name="network" /><span>Открыть справочник</span></NavLink>
-        <p>История и текущий доступ<br />Без автоматических назначений</p>
+      {admin.length > 0 && <div className={`shell-nav-admin${showAdmin ? ' open' : ''}`}>
+        <button type="button" className="shell-admin-toggle" onClick={() => setAdminOpen(v => !v)}
+          aria-expanded={showAdmin} aria-controls="shell-admin-sections">
+          <Icon name="layers" /><span>Администрирование</span>
+          <span className="shell-admin-count">{adminPaths.length}</span>
+          <Icon name="chevron" />
+        </button>
+        <div id="shell-admin-sections" className="shell-admin-sections" hidden={!showAdmin}>
+          <p className="shell-admin-note">Настройка портала. В ежедневной работе руководителя не нужна.</p>
+          {admin.map(group => <div className="shell-nav-group" key={group.label}>
+            <div className="shell-nav-label">{group.label}</div>
+            {group.links.map(renderLink)}
+          </div>)}
+        </div>
       </div>}
     </nav>
     <div className="shell-sidebar-bottom">
-      {canSeeNavLink({path:'/prepared-reports'}, me?.grants??[], permissions) && <>
+      {canSeeNavLink({ path: '/prepared-reports', label: '', icon: 'upload' }, grants, permissions) && <>
         <button className="shell-upload" onClick={upload}><Icon name="upload" /><span>Загрузить QLIK-отчёты</span></button>
         <span className="shell-local-note">Excel · только в памяти страницы</span>
       </>}

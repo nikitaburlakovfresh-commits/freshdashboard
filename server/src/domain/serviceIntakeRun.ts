@@ -4,6 +4,8 @@
 // основание задаёт план прогона; строки, которые не сопоставились с филиалом
 // однозначно по названию, остаются непривязанными и прогон блокируется.
 import { randomUUID } from 'crypto';
+import { normalizeBranchName } from './branchNameMatch';
+import { resolveSourceAliases, resolveSourceExclusions } from './sourceNaming';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import { withTransaction } from '../db/pool';
@@ -30,14 +32,7 @@ export interface RunPlan {
 type Stage = 'UPLOAD' | 'PROBE' | 'REVIEW' | 'SCAN' | 'PREVIEW' | 'COMMIT';
 type Outcome = 'OK' | 'BLOCKED' | 'FAILED';
 
-/** Нормализация названия строки отчёта и филиала для однозначного сравнения.
- * Сопоставление только точное после нормализации: похожие названия не
- * склеиваются, неоднозначность считается блокировкой, а не догадкой. */
-export function normalizeBranchName(value: string): string {
-  return value.toLowerCase().replace(/ё/g, 'е')
-    .replace(/fresh|фреш|авто\s*центр|автоцентр|филиал/g, ' ')
-    .replace(/[^a-zа-я0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
-}
+export { normalizeBranchName };
 
 async function journal(actorUserId: string, batchId: string | null, stage: Stage,
   outcome: Outcome, detail: unknown, startedAt: Date) {
@@ -107,11 +102,31 @@ async function runBatch(actor: { userId: string; code: string }, networkId: stri
     const key = normalizeBranchName(candidate.display_name);
     byName.set(key, [...(byName.get(key) ?? []), candidate.id]);
   }
+  // Названия источника и исключения настроены внутри портала, а не в коде.
+  const eligible = new Set<string>(review.candidates.map((c: any) => c.id as string));
+  const { aliases, exclusions } = await withTransaction(async c => ({
+    aliases: await resolveSourceAliases(c, plan.period.end),
+    exclusions: await resolveSourceExclusions(c, networkId, plan.period.end),
+  }));
   const edits: { item_id: string; org_unit_id: string }[] = [];
   const unresolved: { row: number; kind: string; name: string; why: string }[] = [];
+  const excluded: { row: number; kind: string; name: string; reason: string }[] = [];
   for (const row of review.rows) {
     if (row.org_unit_id && row.status === 'PROPOSED') continue;
-    const hit = byName.get(normalizeBranchName(row.source_name)) ?? [];
+    const norm = normalizeBranchName(row.source_name);
+    const exclusion = exclusions.get(norm);
+    if (exclusion !== undefined) {
+      excluded.push({ row: row.source_row, kind: row.report_kind, name: row.source_name, reason: exclusion });
+      continue;
+    }
+    const alias = aliases.get(norm);
+    if (alias !== undefined) {
+      if (eligible.has(alias)) { edits.push({ item_id: row.item_id, org_unit_id: alias }); continue; }
+      unresolved.push({ row: row.source_row, kind: row.report_kind, name: row.source_name,
+        why: 'ALIAS_POINTS_TO_INACTIVE_BRANCH' });
+      continue;
+    }
+    const hit = byName.get(norm) ?? [];
     if (hit.length === 1) edits.push({ item_id: row.item_id, org_unit_id: hit[0] });
     else unresolved.push({ row: row.source_row, kind: row.report_kind, name: row.source_name,
       why: hit.length ? 'AMBIGUOUS_NAME' : 'NO_ACTIVE_BRANCH_WITH_THIS_NAME' });
@@ -128,11 +143,11 @@ async function runBatch(actor: { userId: string; code: string }, networkId: stri
   }
   if (unresolved.length) {
     await journal(actor.userId, batchId, 'REVIEW', 'BLOCKED',
-      { mapped: edits.length, unresolved }, started);
+      { mapped: edits.length, excluded, unresolved }, started);
     return { batch_id: batchId, outcome: 'BLOCKED' as const, stage: 'REVIEW' as const, unresolved };
   }
   await journal(actor.userId, batchId, 'REVIEW', 'OK',
-    { mapped: edits.length, version: review.current.version }, started);
+    { mapped: edits.length, excluded, version: review.current.version }, started);
 
   const scan = await scanBatch(auth, batchId, {}, randomUUID());
   await journal(actor.userId, batchId, 'SCAN', 'OK', scan, started);

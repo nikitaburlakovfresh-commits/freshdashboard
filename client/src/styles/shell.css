@@ -71,3 +71,13 @@
   .notifications-page>div:first-child{flex-wrap:wrap;gap:16px}
   .task-detail-page h1{overflow-wrap:anywhere}
 }
+.shell-nav-admin{border-top:1px solid var(--fresh-border);padding-top:14px;margin-top:2px}
+.shell-admin-toggle{display:flex;width:100%;gap:10px;align-items:center;min-height:40px;padding:8px 10px;border-radius:7px;border:1px solid transparent;background:none;color:var(--fresh-text-muted);font-size:13px;font-weight:600;cursor:pointer;text-align:left}
+.shell-admin-toggle:hover{background:var(--fresh-raised);color:var(--fresh-dark)}
+.shell-admin-toggle>.fresh-icon{width:17px;height:17px;flex-shrink:0}
+.shell-admin-toggle>.fresh-icon:last-child{margin-left:2px;transition:transform .15s}
+.shell-nav-admin.open .shell-admin-toggle{color:var(--fresh-dark)}
+.shell-nav-admin.open .shell-admin-toggle>.fresh-icon:last-child{transform:rotate(90deg)}
+.shell-admin-count{margin-left:auto;font-size:11px;font-weight:600;color:var(--fresh-text-muted);background:var(--fresh-raised);border-radius:999px;padding:1px 7px}
+.shell-admin-sections{display:flex;flex-direction:column;gap:16px;padding:8px 0 2px}
+.shell-admin-note{margin:0 10px 2px;font-size:11px;line-height:1.4;color:var(--fresh-text-muted)}

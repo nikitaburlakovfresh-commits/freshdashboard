@@ -20,6 +20,7 @@ export const NAV_REQUIRED_PERMISSION: Record<string, string> = {
   '/prepared-reports': 'report.fact_access.manage',
   '/saved-network': 'report.fact_access.manage',
   '/settings/thresholds': 'metric.threshold.manage',
+  '/settings/source-naming': 'report.source_naming.manage',
   '/settings/scoring': 'metric.scoring.manage',
   '/settings/focus': 'metric.focus.manage',
   '/settings/notifications': 'notification.policy.manage',
@@ -27,12 +28,31 @@ export const NAV_REQUIRED_PERMISSION: Record<string, string> = {
 };
 
 /**
+ * Описание пункта меню. Признак work выделяет разделы ежедневной работы
+ * руководителя и ролей филиала; всё остальное по умолчанию считается
+ * администрированием портала и живёт в свёрнутом разделе.
+ */
+export interface NavLinkDef<Icon = string> {
+  path: string;
+  label: string;
+  icon: Icon;
+  /** Ежедневный рабочий сценарий. Без признака раздел административный. */
+  work?: boolean;
+  future?: boolean;
+}
+
+/** Раздел ежедневной работы — только по явному признаку, без догадок по пути. */
+export function isWorkLink(link: { work?: boolean }): boolean {
+  return link.work === true;
+}
+
+/**
  * Навигационные заглушки следующих этапов показываются только администратору
  * портала: исполнителю и региональному менеджеру они не нужны и создают
  * ложное ощущение готового функционала.
  */
 export function canSeeNavLink(
-  link: { path: string; future?: boolean },
+  link: { path: string; future?: boolean; label?: string; icon?: unknown; work?: boolean },
   grants: Grant[],
   permissions = navPermissions(grants),
 ): boolean {

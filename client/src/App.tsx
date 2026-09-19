@@ -14,6 +14,7 @@ import SavedNetworkPage,{SavedBranchPage} from './pages/SavedNetworkPage';
 import ReportReviewPage from './pages/ReportReviewPage';
 import AccessPage from './pages/AccessPage';
 import MetricThresholdsPage from './pages/MetricThresholdsPage';
+import SourceNamingPage from './pages/SourceNamingPage';
 import NotificationSettingsPage from './pages/NotificationSettingsPage';
 import DivisionSummaryPage from './pages/DivisionSummaryPage';
 import BranchCardPage from './pages/BranchCardPage';
@@ -67,6 +68,7 @@ export default function App() {
         <Route path="/settings/scoring" element={<ScoringModelPage />} />
         <Route path="/settings/focus" element={<FocusConfigPage />} />
         <Route path="/settings/thresholds" element={<MetricThresholdsPage />} />
+        <Route path="/settings/source-naming" element={<SourceNamingPage />} />
         <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
         <Route path="/branch-card/:id" element={<BranchCardPage />} />
         <Route path="/my-deviations" element={<MyDeviationTasksPage />} />
