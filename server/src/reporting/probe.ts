@@ -3,7 +3,7 @@ import { Worker } from 'worker_threads';
 import { UploadFile } from './storage';
 import { ApiError } from '../util/errors';
 
-export const PARSER_VERSION='aggregate-shared-1+safezip-1';
+export const PARSER_VERSION='aggregate-shared-2+catalog-1+safezip-1';
 let active=0;
 export async function probeFiles(files:UploadFile[]):Promise<any> {
   if(active>=1) throw new ApiError('TEMPORARILY_UNAVAILABLE','Другая проверка выполняется. Повторите позже.',{retry_after_seconds:5});

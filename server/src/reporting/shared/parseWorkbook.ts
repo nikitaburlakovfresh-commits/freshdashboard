@@ -31,8 +31,11 @@ export async function parseWorkbook(buffer: ArrayBuffer, file: string): Promise<
   const parts = unzipSync(bytes, { filter: e => ['xl/worksheets/sheet1.xml', 'xl/sharedStrings.xml', 'xl/workbook.xml'].includes(e.name) });
   const sheetXml = strFromU8(parts['xl/worksheets/sheet1.xml']);
   const workbookXml = parts['xl/workbook.xml'] ? strFromU8(parts['xl/workbook.xml']) : '';
-  const headerXml = sheetXml.match(/<row\b[^>]*\br=["']1["'][^>]*>([\s\S]*?)<\/row>/)?.[1];
-  if (!headerXml || headerXml.length > 100000) return null;
+  // Многоуровневая шапка занимает до трёх строк; читаем ровно их и не больше.
+  const headerXml = [1, 2, 3]
+    .map(r => sheetXml.match(new RegExp(`<row\\b[^>]*\\br=["']${r}["'][^>]*>([\\s\\S]*?)</row>`))?.[1] ?? '')
+    .join('');
+  if (!headerXml || headerXml.length > 300000) return null;
   const cells = [...headerXml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)];
   const neededStrings = new Set<number>();
   for (const cell of cells) if (attr(cell[1], 't') === 's') neededStrings.add(Number(cell[2]?.match(/<v>(.*?)<\/v>/)?.[1]));
@@ -45,16 +48,18 @@ export async function parseWorkbook(buffer: ArrayBuffer, file: string): Promise<
       i++;
     }
   }
-  const headers: unknown[] = [];
+  // Часть источников объявляет формат многоуровневой шапкой (до трёх строк),
+  // поэтому классификация читает первые три строки, но только их.
+  const headerRows: unknown[][] = [[], [], []];
   for (const cell of cells) {
-    const address = attr(cell[1], 'r')?.match(/^([A-Z]{1,2})1$/)?.[1];
+    const address = attr(cell[1], 'r')?.match(/^([A-Z]{1,2})([1-3])$/);
     if (!address) continue;
-    const index = [...address].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0) - 1;
+    const index = [...address[1]].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0) - 1;
     const xml = cell[2] ?? '';
-    headers[index] = attr(cell[1], 't') === 's'
+    headerRows[Number(address[2]) - 1][index] = attr(cell[1], 't') === 's'
       ? strings.get(Number(xml.match(/<v>(.*?)<\/v>/)?.[1])) : textNodes(xml);
   }
-  const kind = detectReport(headers);
+  const kind = detectReport(headerRows);
   if (!kind) return null;
   if (/<!DOCTYPE|<!ENTITY|<[A-Za-z][\w.-]*:/i.test(sheetXml))
     throw new Error('Некорректная или неподдерживаемая структура XML отчёта.');

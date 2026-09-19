@@ -27,7 +27,7 @@ export interface SavedOverview {
   original_period:unknown;review:ReviewView;
   reports:Report[];rows:ReviewRow[];
   files:{id:string;display_name:string;content_hash:string;byte_size:number}[];
-  controls:{kind:ReportKind;items:{metric:string;official:number|null;sum:number|null;delta:number|null;matches:boolean}[]}[];
+  controls:{kind:ReportKind;items:{metric:string;official:number|null;sum:number|null;delta:number|null;additive:boolean;matches:boolean|null}[]}[];
   comparison:string[];
 }
 export interface SavedBranch {

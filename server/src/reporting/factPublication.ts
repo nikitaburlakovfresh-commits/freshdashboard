@@ -11,12 +11,17 @@ import { reviewContext,sourceItemId } from './review';
 import { factAccess,publisher } from './factAccess';
 import { readSource,uuid } from './storage';
 import { scanSource,SourceScanResult } from './scanner';
-import { METRIC_NAMES,reconcile,validDate,type MetricKey,type ReportKind } from './shared/reportModel';
+import { reconcile,validDate,REPORT_KINDS,REPORT_SPECS,type ReportKind } from './shared/reportModel';
+import { METRIC_NAMES,METRIC_KEYS,METRICS,isMetricKey,type MetricKey } from './shared/metricCatalog';
 
 const invalid=(s:string)=>new ApiError('VALIDATION_ERROR',s);
 const conflict=()=>new ApiError('ENTITY_VERSION_CONFLICT','Проверенный состав изменился или срок подтверждения истёк. Выполните новую проверку.');
 const digest=(x:unknown)=>canonicalJsonHash(x).toString('hex');
-const counts=['sales','stock','aged','plan'];
+// Дата среза склада, а не период: остатки измеряются на момент.
+const STOCK_SNAPSHOT_METRICS:string[]=['stock','stockCost','stockUnitCost','aged','agedCost','agedShare'];
+const PLAN_PERIOD_METRICS:string[]=['plan','planKso','planIron','planMargin','planUnitKso','planUnitMargin',
+  'suppliesPlan','suppliesPlanCost','creditsPlan','brokerPlan','creditSharePlan','creditKsoPlan',
+  'incomePerCreditPlan','avgCreditPlan','incomeSharePlan'];
 export function closed(raw:any,keys:string[]) {
   if(!raw||typeof raw!=='object'||Array.isArray(raw)||Object.keys(raw).some(k=>!keys.includes(k)))throw invalid('Неизвестные поля команды.');
   return raw;
@@ -26,16 +31,19 @@ type Command={review_version:number;choices:Choice[];reason:string;confirm_sourc
 function command(raw:any):Command {
   const b=closed(raw,['review_version','choices','reason','confirm_source_aggregates']);
   if(!Number.isSafeInteger(b.review_version)||b.review_version<1||b.confirm_source_aggregates!==true||
-    typeof b.reason!=='string'||b.reason.trim().length<16||b.reason.length>500||!Array.isArray(b.choices)||!b.choices.length||b.choices.length>8)
+    typeof b.reason!=='string'||b.reason.trim().length<16||b.reason.length>500||!Array.isArray(b.choices)||!b.choices.length||b.choices.length>METRIC_KEYS.length)
     throw invalid('Нужны сохранённая версия, явный выбор метрик, подтверждение и основание 16–500 символов.');
   const seen=new Set<string>();
   for(const item of b.choices) {
     const x=closed(item,['metric','source','methodology']);
-    if(!Object.keys(METRIC_NAMES).includes(x.metric)||!['summary','sales'].includes(x.source)||seen.has(x.metric)||
+    if(!isMetricKey(x.metric)||!(REPORT_KINDS as string[]).includes(x.source)||seen.has(x.metric)||
       typeof x.methodology!=='string'||x.methodology.trim().length<20||x.methodology.length>1000)
       throw invalid('Для каждой метрики выберите один источник и опишите утверждённую методику/состав агрегата (20–1000 символов).');
     // Summary revenue header is not validated by legacy parser; fail closed.
-    if(x.metric==='revenue'&&x.source==='summary')throw invalid('Выручка из сводки пока не поддержана: нет проверяемого заголовка колонки.');
+    // Воронка приходит двумя файлами с идентичными заголовками (обращения и звонки).
+    // Канал по файлу неотличим, поэтому публикация закрыта до ввода объявления канала.
+    if(REPORT_SPECS[x.source as ReportKind].channelRequired)
+      throw invalid('Воронка доступна для просмотра, но публикация требует объявления канала (обращения или звонки): заголовки двух выгрузок совпадают.');
     seen.add(x.metric);
   }
   return b;
@@ -113,11 +121,20 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
     const report=reports.find(r=>r.kind===choice.source);
     if(!report||!report.columns[choice.metric]){blockers.push(`${METRIC_NAMES[choice.metric]}: отсутствует выбранный источник.`);continue;}
     const control=reconcile(report).find(r=>r.metric===choice.metric);
-    if(!control?.matches)blockers.push(`${METRIC_NAMES[choice.metric]}: итог отчёта не согласуется с полным набором строк.`);
+    // «Сумма строк = итог» проверяется только для аддитивных показателей:
+    // доли, удельные величины и сроки по филиалам не складываются.
+    if(!control)blockers.push(`${METRIC_NAMES[choice.metric]}: показатель отсутствует в разобранном отчёте.`);
+    else if(control.matches===false)blockers.push(`${METRIC_NAMES[choice.metric]}: итог отчёта не согласуется с полным набором строк (расхождение ${control.delta}).`);
+    else if(control.matches===null&&control.additive&&REPORT_SPECS[report.kind].hasTotalRow)
+      blockers.push(`${METRIC_NAMES[choice.metric]}: итог отчёта или часть строк не прочитаны, сверка невозможна.`);
+    else if(control.matches===null&&control.additive)
+      blockers.push(`${METRIC_NAMES[choice.metric]}: источник не содержит строки итога, поэтому аддитивная сверка не подтверждена.`);
     const sourceFile=sourceFiles.find(f=>f.display_name===report.file);
     if(!sourceFile){blockers.push('Не установлена связь отчёта с оригиналом.');continue;}
-    const start=counts.slice(1,3).includes(choice.metric)?report.stockDate:choice.metric==='plan'?period?.planStart:period?.start;
-    const end=counts.slice(1,3).includes(choice.metric)?report.stockDate:choice.metric==='plan'?period?.planEnd:period?.end;
+    const start=STOCK_SNAPSHOT_METRICS.includes(choice.metric)?report.stockDate
+      :PLAN_PERIOD_METRICS.includes(choice.metric)?period?.planStart:period?.start;
+    const end=STOCK_SNAPSHOT_METRICS.includes(choice.metric)?report.stockDate
+      :PLAN_PERIOD_METRICS.includes(choice.metric)?period?.planEnd:period?.end;
     if(!start||!end||!validDate(start)||!validDate(end)||start>end){blockers.push(`${METRIC_NAMES[choice.metric]}: не подтверждён период/дата среза.`);continue;}
     for(const row of report.branches) {
       const item=sourceItemId(context.b.id,report.kind,row.row),mapping=view.rows.find(m=>m.item_id===item);
@@ -146,7 +163,7 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
         JOIN report_fact_snapshots s ON s.id=p.snapshot_id
         WHERE p.org_unit_id=$1 AND p.metric=$2 AND p.period_start=$3 AND p.period_end=$4`,[org,choice.metric,start,end])).rows[0];
       rows.push({org_unit_id:org,branch:view.candidates.find(x=>x.id===org)!.display_name,metric:choice.metric,
-        period_start:start,period_end:end,value,unit:counts.includes(choice.metric)?'COUNT':'RUB',
+        period_start:start,period_end:end,value,unit:METRICS[choice.metric].unit,
         previous_id:previous?.id??null,previous_value:previous?.value??null,revision:(previous?.revision??0)+1,
         provenance:{kind:'APPROVED_SOURCE_AGGREGATE',channel:'FORM_UI',producer:'QLIK',batch_id:context.b.id,
           file_id:sourceFile.id,file_hash:sourceFile.content_hash,scan_id:sourceFile.scan_id??null,
