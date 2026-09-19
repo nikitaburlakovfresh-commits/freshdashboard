@@ -44,7 +44,7 @@ module.exports = async function globalSetup() {
     // truncate of the dedicated test DB — never the dev/deployed DB, and
     // never triggered by db:seed, which stays non-destructive per contract).
     await client.query(
-      `TRUNCATE TABLE notification_policy_changes, notifications, consumer_receipts, outbox_events, audit_log,
+      `TRUNCATE TABLE portal_setting_changes, notification_policy_changes, notifications, consumer_receipts, outbox_events, audit_log,
               idempotency_records, submissions, work_item_fields, work_items,
               sessions RESTART IDENTITY CASCADE`,
     );

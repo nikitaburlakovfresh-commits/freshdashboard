@@ -157,6 +157,8 @@ export async function listDeviationTasks(auth:AuthedUser,query:any) {
   });
 }
 
+import { settingNumber } from '../settings/portalSettings';
+
 const OPEN_STATUSES=['DRAFT','ASSIGNED','IN_PROGRESS','SUBMITTED'];
 
 /**
@@ -173,6 +175,8 @@ export async function myDeviationTasks(auth:AuthedUser,query:any) {
   if(state!=='OPEN'&&state!=='ALL')throw invalid('Фильтр состояния принимает OPEN или ALL.','state');
   return withTransaction(async c=>{
     const grants=await factAccess(c,auth,'READ');
+    // Порог «срок близко» задаётся внутри портала, а не в коде.
+    const dueSoonHours=await settingNumber(c,'deviation_task_due_soon_hours');
     const rows=(await c.query(`SELECT d.id,d.work_item_id,d.org_unit_id,d.metric,d.rag,
       to_char(d.period_start,'YYYY-MM-DD') period_start,to_char(d.period_end,'YYYY-MM-DD') period_end,
       d.observed_value::text observed_value,d.basis,d.basis_value::text basis_value,d.reason,d.created_at,
@@ -194,13 +198,13 @@ export async function myDeviationTasks(auth:AuthedUser,query:any) {
         period_start:r.period_start,period_end:r.period_end,rag:r.rag,basis:r.basis,reason:r.reason,
         created_at:r.created_at,title:r.title,status:r.status,due_at:r.due_at,
         is_blocked:r.is_blocked,blocked_reason:r.blocked_reason,entity_version:r.entity_version,
-        due_state:!open?'CLOSED':due<now?'OVERDUE':due-now<=72*3600*1000?'DUE_SOON':'ON_TRACK',
+        due_state:!open?'CLOSED':due<now?'OVERDUE':due-now<=dueSoonHours*3600*1000?'DUE_SOON':'ON_TRACK',
         values_visible:visible,
         observed_value:visible?Number(r.observed_value):null,
         basis_value:visible?Number(r.basis_value):null,
         unit:visible?r.unit:null};
     });
-    return {items,metric_names:METRIC_NAMES,
+    return {items,metric_names:METRIC_NAMES,due_soon_hours:dueSoonHours,
       counts:{total:items.length,overdue:items.filter(i=>i.due_state==='OVERDUE').length,
         due_soon:items.filter(i=>i.due_state==='DUE_SOON').length,
         blocked:items.filter(i=>i.is_blocked).length}};

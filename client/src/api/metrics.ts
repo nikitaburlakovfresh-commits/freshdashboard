@@ -73,7 +73,7 @@ export interface MyDeviationTask {
 }
 export interface MyDeviationTasks {
   items:MyDeviationTask[]; metric_names:Record<string,string>;
-  counts:{total:number;overdue:number;due_soon:number;blocked:number};
+  counts:{total:number;overdue:number;due_soon:number;blocked:number}; due_soon_hours:number;
 }
 export const readMyDeviationTasks=(state:'OPEN'|'ALL') =>
   apiFetch<MyDeviationTasks>('/metrics/deviation-tasks/mine',{query:{state}});
@@ -88,6 +88,35 @@ export const readDeviationTasks=(start:string,end:string,org?:string)=>
   apiFetch<{items:DeviationTaskRow[];metric_names:Record<string,string>}>('/metrics/deviation-tasks',
     {query:{start,end,org}});
 
+export interface PortalSetting {
+  key:string; value_number:number; updated_at:string; title:string; unit:string;
+  min:number|null; max:number|null; integer:boolean;
+}
+export interface PortalSettingChange {
+  key:string; value_before:number; value_after:number; reason:string; created_at:string; changed_by_login:string;
+}
+export const readPortalSettings=()=>apiFetch<{items:PortalSetting[];history:PortalSettingChange[]}>(
+  '/metrics/portal-settings');
+export const savePortalSetting=(key:string,value:number,reason:string)=>
+  apiFetch<{key:string;value_number:number;changed:boolean;value_before?:number}>('/metrics/portal-settings',
+    {method:'POST',body:{key,value,reason},idempotent:true});
+
+export type NotificationPolicy='NONE'|'ASSIGNEE'|'REVIEWERS';
+export interface NotificationPolicyRow {
+  event_type:string; notification_policy:NotificationPolicy; consumer_name:string;
+}
+export interface NotificationPolicyChange {
+  event_type:string; policy_before:NotificationPolicy; policy_after:NotificationPolicy;
+  reason:string; created_at:string; changed_by_login:string;
+}
+export const readNotificationPolicies=()=>apiFetch<{items:NotificationPolicyRow[];
+  history:NotificationPolicyChange[];policies:NotificationPolicy[]}>('/metrics/notification-policies');
+export const saveNotificationPolicy=(event_type:string,policy:NotificationPolicy,reason:string)=>
+  apiFetch<{event_type:string;notification_policy:NotificationPolicy;changed:boolean;
+    policy_before?:NotificationPolicy}>('/metrics/notification-policies',
+    {method:'POST',body:{event_type,policy,reason},idempotent:true});
+
+export { POLICY_LABELS,EVENT_LABELS,settingHint,settingValueValid,reasonValid } from '../components/portalSettingsModel';
 export { DUE_LABELS,dueTone,basisLabel } from '../components/myDeviationTasksModel';
 export { OUTCOME_LABELS,outcomeTone,deltaLabel } from '../components/deviationOutcomeModel';
 export { RAG_LABELS,UNIT_LABELS,formatValue,ragReason,thresholdOrderValid } from '../components/metricThresholdModel';

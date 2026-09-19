@@ -43,6 +43,8 @@ export default function MyDeviationTasksPage() {
       <p role="status" className="portal-muted">Всего {data.counts.total} ·
         срок истёк {data.counts.overdue} · срок близко {data.counts.due_soon} ·
         приостановлено {data.counts.blocked}</p>
+      <p className="portal-muted">Срок считается близким за {data.due_soon_hours} ч до срока задачи.
+        Значение настраивается в разделе «Уведомления и сроки».</p>
       {data.items.length===0&&<p role="status">{state==='OPEN'
         ?'Задач по отклонениям в работе нет.'
         :'Задачи по отклонениям на вас не ставились.'}</p>}

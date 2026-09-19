@@ -7,6 +7,7 @@ import { listThresholds,setThreshold } from '../metrics/thresholds';
 import { createDeviationTask,listDeviationTasks,myDeviationTasks } from '../metrics/deviationTasks';
 import { branchCard } from '../metrics/branchCard';
 import { listNotificationPolicies,setNotificationPolicy } from '../settings/notificationPolicies';
+import { listPortalSettings,setPortalSetting } from '../settings/portalSettings';
 import { ApiError } from '../util/errors';
 export const metricsRouter=Router();
 const wrap=(f:(req:Request,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{f(req,res).catch(next);};
@@ -17,6 +18,11 @@ metricsRouter.use((req,res,next)=>{
 });
 metricsRouter.get('/overview',wrap(async(req,res)=>{res.json(await branchOverview(req.authUser!,req.query));}));
 metricsRouter.get('/branches/:id',wrap(async(req,res)=>{res.json(await branchCard(req.authUser!,req.params.id,req.query));}));
+metricsRouter.get('/portal-settings',wrap(async(req,res)=>{
+  res.json(await listPortalSettings(req.authUser!,req.query));}));
+metricsRouter.post('/portal-settings',requireOrigin,requireCsrf,wrap(async(req,res)=>{
+  const r=await setPortalSetting(req.authUser!,actorCtx(req),req.body,req.header('Idempotency-Key')??'');
+  res.status(r.status).json(r.body);}));
 metricsRouter.get('/notification-policies',wrap(async(req,res)=>{
   res.json(await listNotificationPolicies(req.authUser!,req.query));}));
 metricsRouter.post('/notification-policies',requireOrigin,requireCsrf,wrap(async(req,res)=>{

@@ -67,3 +67,5 @@
   .portal-chip,.portal-footnote,.portal-metric-meta{font-size:12px}
   .portal-dashboard h2{font-size:20px}
 }
+
+.portal-notice{color:var(--fresh-accent,#0a7d3c);line-height:1.6}

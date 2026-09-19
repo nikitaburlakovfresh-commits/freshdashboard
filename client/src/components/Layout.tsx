@@ -16,6 +16,7 @@ const groups: { label: string; links: { path: string; label: string; icon: IconN
   ] },
   { label: 'Управление результатом', links: [
     { path: '/settings/thresholds', label: 'Пороги показателей', icon: 'target' },
+    { path: '/settings/notifications', label: 'Уведомления и сроки', icon: 'target' },
     { path: '/kpi', label: 'KPI и MBO', icon: 'target', future: true },
     { path: '/bdr', label: 'БДР · план и факт', icon: 'wallet', future: true },
   ] },
