@@ -21,6 +21,7 @@ const groups: { label: string; links: { path: string; label: string; icon: IconN
   ] },
   { label: 'Операционная работа', links: [
     { path: '/tasks', label: 'Задачи', icon: 'check' },
+    { path: '/my-deviations', label: 'Мои задачи по отклонениям', icon: 'target' },
     { path: '/diary', label: 'Ежедневник', icon: 'calendar', future: true },
     { path: '/notifications', label: 'Уведомления', icon: 'bell' },
     { path: '/modules', label: 'Готовность модулей', icon: 'layers' },
@@ -40,7 +41,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem('fresh-theme', theme); } catch { /* Theme persistence is optional. */ }
   }, [theme]);
   const primaryRole = me?.grants?.some(g => g.role === 'SUPER_ADMIN') ? 'Администратор' : me?.grants?.some(g => g.role === 'REGIONAL_MANAGER') ? 'Постановщик' : 'Исполнитель';
-  const current = pathname.startsWith('/branches/') ? 'Карточка филиала' : groups.flatMap(g => g.links).find(l => l.path === pathname || (l.path!=='/'&&pathname.startsWith(l.path+'/')))?.label ?? 'Карточка задачи';
+  const current = pathname.startsWith('/branches/')||pathname.startsWith('/branch-card/') ? 'Карточка филиала' : groups.flatMap(g => g.links).find(l => l.path === pathname || (l.path!=='/'&&pathname.startsWith(l.path+'/')))?.label ?? 'Карточка задачи';
   const close = () => mobile.current?.close();
   const upload = () => { close(); navigate('/?import=1'); };
   const nav = <>

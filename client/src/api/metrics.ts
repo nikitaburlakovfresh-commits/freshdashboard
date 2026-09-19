@@ -63,6 +63,21 @@ export interface BranchCardData {
   metrics_without_threshold:string[]; deviations:DeviationHistoryRow[];
   metric_names:Record<string,string>; thresholds_configured:boolean;
 }
+export type DueState='OVERDUE'|'DUE_SOON'|'ON_TRACK'|'CLOSED';
+export interface MyDeviationTask {
+  id:string; work_item_id:string; org_unit_id:string; branch_name:string; metric:string; metric_name:string;
+  period_start:string; period_end:string; rag:'RED'|'AMBER'; basis:string; reason:string; created_at:string;
+  title:string; status:string; due_at:string; is_blocked:boolean; blocked_reason:string|null;
+  entity_version:number; due_state:DueState; values_visible:boolean;
+  observed_value:number|null; basis_value:number|null; unit:'COUNT'|'RUB'|null;
+}
+export interface MyDeviationTasks {
+  items:MyDeviationTask[]; metric_names:Record<string,string>;
+  counts:{total:number;overdue:number;due_soon:number;blocked:number};
+}
+export const readMyDeviationTasks=(state:'OPEN'|'ALL') =>
+  apiFetch<MyDeviationTasks>('/metrics/deviation-tasks/mine',{query:{state}});
+
 export const readBranchCard=(org:string,start:string,end:string)=>
   apiFetch<BranchCardData>(`/metrics/branches/${org}`,{query:{start,end}});
 
@@ -73,5 +88,6 @@ export const readDeviationTasks=(start:string,end:string,org?:string)=>
   apiFetch<{items:DeviationTaskRow[];metric_names:Record<string,string>}>('/metrics/deviation-tasks',
     {query:{start,end,org}});
 
+export { DUE_LABELS,dueTone,basisLabel } from '../components/myDeviationTasksModel';
 export { OUTCOME_LABELS,outcomeTone,deltaLabel } from '../components/deviationOutcomeModel';
 export { RAG_LABELS,UNIT_LABELS,formatValue,ragReason,thresholdOrderValid } from '../components/metricThresholdModel';

@@ -59,3 +59,4 @@
 .branch-task-link{font-size:var(--text-xs);}
 [data-tone="good"]{color:var(--rag-green);}
 [data-tone="bad"]{color:var(--rag-red);}
+[data-tone="warn"]{color:var(--rag-amber);}

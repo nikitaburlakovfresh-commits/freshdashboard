@@ -4,7 +4,7 @@ import { requireOrigin } from '../middleware/origin';
 import { enforceSessionRateLimit } from '../auth/rateLimit';
 import { branchOverview } from '../metrics/overview';
 import { listThresholds,setThreshold } from '../metrics/thresholds';
-import { createDeviationTask,listDeviationTasks } from '../metrics/deviationTasks';
+import { createDeviationTask,listDeviationTasks,myDeviationTasks } from '../metrics/deviationTasks';
 import { branchCard } from '../metrics/branchCard';
 import { ApiError } from '../util/errors';
 export const metricsRouter=Router();
@@ -22,6 +22,7 @@ metricsRouter.post('/thresholds',requireOrigin,requireCsrf,
 
 const actorCtx=(req:Request)=>({authUser:req.authUser!,requestId:req.ctx.requestId,
   ip:req.ip??null,userAgent:req.header('user-agent')??null});
+metricsRouter.get('/deviation-tasks/mine',wrap(async(req,res)=>{res.json(await myDeviationTasks(req.authUser!,req.query));}));
 metricsRouter.get('/deviation-tasks',wrap(async(req,res)=>{res.json(await listDeviationTasks(req.authUser!,req.query));}));
 metricsRouter.post('/deviation-tasks',requireOrigin,requireCsrf,wrap(async(req,res)=>{
   const idem=req.header('Idempotency-Key')??'';

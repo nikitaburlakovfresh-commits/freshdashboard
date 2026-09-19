@@ -53,7 +53,7 @@ export default function BranchGrid({org}:{org?:string}) {
     {data&&data.branches.length>0&&<div className="branch-grid">
       {data.branches.map(b=><article className="branch-card" key={b.org_unit_id} data-rag={b.rag}>
         <header>
-          <h3><Link to={`/branches/${b.org_unit_id}?start=${data.period_start}&end=${data.period_end}`}>
+          <h3><Link to={`/branch-card/${b.org_unit_id}?start=${data.period_start}&end=${data.period_end}`}>
             {b.display_name}</Link></h3>
           <RagBadge status={b.rag}/>
         </header>

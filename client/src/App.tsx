@@ -15,6 +15,7 @@ import ReportReviewPage from './pages/ReportReviewPage';
 import AccessPage from './pages/AccessPage';
 import MetricThresholdsPage from './pages/MetricThresholdsPage';
 import BranchCardPage from './pages/BranchCardPage';
+import MyDeviationTasksPage from './pages/MyDeviationTasksPage';
 import MetricAccessPage from './pages/MetricAccessPage';
 import ActivateAccountPage from './pages/ActivateAccountPage';
 import ModuleReadinessPage from './pages/ModuleReadinessPage';
@@ -57,7 +58,8 @@ export default function App() {
         <Route path="/access" element={<AccessPage />} />
         <Route path="/access/metrics" element={<MetricAccessPage />} />
         <Route path="/settings/thresholds" element={<MetricThresholdsPage />} />
-        <Route path="/branches/:id" element={<BranchCardPage />} />
+        <Route path="/branch-card/:id" element={<BranchCardPage />} />
+        <Route path="/my-deviations" element={<MyDeviationTasksPage />} />
         <Route path="/prepared-reports" element={<PreparedReportsPage />} />
         <Route path="/prepared-reports/:id/review" element={<ReportReviewPage />} />
         <Route path="/prepared-reports/:id/publish" element={<ReportPublicationPage />} />

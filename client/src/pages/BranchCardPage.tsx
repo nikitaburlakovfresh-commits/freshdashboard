@@ -44,7 +44,7 @@ export default function BranchCardPage() {
       <label>Период: по<input required aria-label="Период: по" type="date" min={start} value={end}
         onChange={e=>{setData(null);setEnd(e.target.value);}}/></label>
       <button className="btn" disabled={busy}>{busy?'Читаю…':'Показать карточку'}</button>
-      <Link className="btn btn-ghost" to="/operational">К сетке филиалов</Link>
+      <Link className="btn btn-ghost" to="/">К сетке филиалов</Link>
     </form>
     {error&&<p role="alert">{error}</p>}
     {!data&&!error&&!busy&&<p>Выберите точный период опубликованного среза.</p>}
