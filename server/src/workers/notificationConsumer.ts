@@ -17,6 +17,16 @@ const MESSAGE_BY_EVENT: Record<string, string> = {
   'work_item.reopened': 'Задача возобновлена.',
 };
 
+// Фиксированный текст для задач, поставленных по отклонению показателя
+// (контракт §7: шаблонный текст без значений показателя — цифры доступны только
+// через экраны с проверкой допуска к показателям).
+const DEVIATION_MESSAGE_BY_EVENT: Record<string, string> = {
+  'work_item.assigned': 'Вам назначена задача по отклонению показателя.',
+  'work_item.rework_requested': 'Задача по отклонению показателя возвращена на доработку.',
+  'work_item.reopened': 'Задача по отклонению показателя возобновлена.',
+};
+
+/** Fallback used only when event_catalog has no row for the event type. */
 const POLICY_BY_EVENT: Record<string, 'ASSIGNEE' | 'REVIEWERS' | 'NONE'> = {
   'work_item.created': 'NONE',
   'work_item.assigned': 'ASSIGNEE',
@@ -122,7 +132,15 @@ export async function runNotificationConsumerOnce(): Promise<number> {
         return true;
       }
 
-      const policy = POLICY_BY_EVENT[event.event_type] ?? 'NONE';
+      // Политика рассылки настраивается в event_catalog, а не в коде: это
+      // требование настраиваемости ТЗ v2.12. Карта в коде — только резерв для
+      // события, которого ещё нет в каталоге.
+      const catalog = await client.query(
+        `SELECT notification_policy FROM event_catalog WHERE event_type = $1`,
+        [event.event_type],
+      );
+      const policy = (catalog.rows[0]?.notification_policy as 'ASSIGNEE' | 'REVIEWERS' | 'NONE' | undefined)
+        ?? POLICY_BY_EVENT[event.event_type] ?? 'NONE';
       if (event.aggregate_type !== 'work_item' || policy === 'NONE') {
         await client.query(
           `INSERT INTO consumer_receipts (consumer, event_id, outcome) VALUES ($1,$2,'APPLIED')`,
@@ -149,7 +167,16 @@ export async function runNotificationConsumerOnce(): Promise<number> {
         return true;
       }
 
-      const message = MESSAGE_BY_EVENT[event.event_type] ?? 'Обновление по задаче.';
+      // Задача, поставленная по отклонению показателя, получает собственный
+      // текст. Признак берётся из связи задачи с отклонением, поэтому
+      // уведомление корректно и при первом назначении, и при переназначении.
+      const deviation = await client.query(
+        `SELECT 1 FROM metric_deviation_tasks WHERE work_item_id = $1`,
+        [event.aggregate_id],
+      );
+      const isDeviation = (deviation.rowCount ?? 0) > 0;
+      const message = (isDeviation ? DEVIATION_MESSAGE_BY_EVENT[event.event_type] : undefined)
+        ?? MESSAGE_BY_EVENT[event.event_type] ?? 'Обновление по задаче.';
       for (const recipientId of recipients) {
         const inserted = await client.query(
           `INSERT INTO notifications (event_id, recipient_user_id, org_unit_id, work_item_id, message)

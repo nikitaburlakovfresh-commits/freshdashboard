@@ -6,6 +6,7 @@ import { branchOverview } from '../metrics/overview';
 import { listThresholds,setThreshold } from '../metrics/thresholds';
 import { createDeviationTask,listDeviationTasks,myDeviationTasks } from '../metrics/deviationTasks';
 import { branchCard } from '../metrics/branchCard';
+import { listNotificationPolicies,setNotificationPolicy } from '../settings/notificationPolicies';
 import { ApiError } from '../util/errors';
 export const metricsRouter=Router();
 const wrap=(f:(req:Request,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{f(req,res).catch(next);};
@@ -16,6 +17,11 @@ metricsRouter.use((req,res,next)=>{
 });
 metricsRouter.get('/overview',wrap(async(req,res)=>{res.json(await branchOverview(req.authUser!,req.query));}));
 metricsRouter.get('/branches/:id',wrap(async(req,res)=>{res.json(await branchCard(req.authUser!,req.params.id,req.query));}));
+metricsRouter.get('/notification-policies',wrap(async(req,res)=>{
+  res.json(await listNotificationPolicies(req.authUser!,req.query));}));
+metricsRouter.post('/notification-policies',requireOrigin,requireCsrf,wrap(async(req,res)=>{
+  const r=await setNotificationPolicy(req.authUser!,actorCtx(req),req.body,req.header('Idempotency-Key')??'');
+  res.status(r.status).json(r.body);}));
 metricsRouter.get('/thresholds',wrap(async(req,res)=>{res.json(await listThresholds(req.authUser!,req.query));}));
 metricsRouter.post('/thresholds',requireOrigin,requireCsrf,
   wrap(async(req,res)=>{res.status(201).json(await setThreshold(req.authUser!,req.body,req.ctx.requestId));}));
