@@ -1,6 +1,7 @@
 import { unzipSync, strFromU8 } from 'fflate';
 import { readSheet } from 'read-excel-file/universal';
 import { detectReport, parseReport, type Report } from './reportModel';
+import { detectDetail, parseDetail, DETAIL_ROW_LIMIT, DETAIL_COLUMN_LIMIT, type DetailReport } from './detailModel';
 
 // Closed, single-sheet aggregate format. Classification uses only header cells,
 // never a UUID/file name. Unsupported detail rows are not parsed into records.
@@ -13,7 +14,22 @@ const decodeXml = (text: string) => text.replace(/&#x([0-9a-f]+);|&#(\d+);|&(amp
 const textNodes = (xml: string) => [...xml.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)].map(m => decodeXml(m[1])).join('');
 const attr = (xml: string, name: string) => xml.match(new RegExp(`\\b${name}=["']([^"']*)["']`))?.[1];
 
+export type ParsedWorkbook =
+  | { type: 'AGGREGATE'; report: Report }
+  | { type: 'DETAIL'; report: DetailReport };
+
+// Совместимость: агрегатный контур принимает только агрегатные форматы.
 export async function parseWorkbook(buffer: ArrayBuffer, file: string): Promise<Report | null> {
+  const parsed = await parseAnyWorkbook(buffer, file);
+  return parsed?.type === 'AGGREGATE' ? parsed.report : null;
+}
+
+export async function parseDetailWorkbook(buffer: ArrayBuffer, file: string): Promise<DetailReport | null> {
+  const parsed = await parseAnyWorkbook(buffer, file);
+  return parsed?.type === 'DETAIL' ? parsed.report : null;
+}
+
+export async function parseAnyWorkbook(buffer: ArrayBuffer, file: string): Promise<ParsedWorkbook | null> {
   const bytes = new Uint8Array(buffer);
   let expanded = 0, count = 0;
   const entries = new Set<string>();
@@ -60,7 +76,12 @@ export async function parseWorkbook(buffer: ArrayBuffer, file: string): Promise<
       ? strings.get(Number(xml.match(/<v>(.*?)<\/v>/)?.[1])) : textNodes(xml);
   }
   const kind = detectReport(headerRows);
-  if (!kind) return null;
+  const detailKind = kind ? null : detectDetail(headerRows);
+  if (!kind && !detailKind) return null;
+  // Детальные выгрузки идут по своим лимитам строк и столбцов; агрегатный
+  // лимит 500 филиалов к ним не применяется и не ослабляется для агрегатов.
+  const maxRows = detailKind ? DETAIL_ROW_LIMIT : 502;
+  const maxColumns = detailKind ? DETAIL_COLUMN_LIMIT : 64;
   if (/<!DOCTYPE|<!ENTITY|<[A-Za-z][\w.-]*:/i.test(sheetXml))
     throw new Error('Некорректная или неподдерживаемая структура XML отчёта.');
   // Bounds apply before the library allocates sparse arrays from row/cell refs.
@@ -68,8 +89,10 @@ export async function parseWorkbook(buffer: ArrayBuffer, file: string): Promise<
   const rowRefs = new Set<number>();
   for (const m of sheetXml.matchAll(/<row\b([^>]*)>/g)) {
     const row = Number(attr(m[1], 'r'));
-    if (++rowCount > 502 || !Number.isInteger(row) || row < 1 || row > 502)
-      throw new Error('Превышен лимит строк агрегатного отчёта (500 филиалов).');
+    if (++rowCount > maxRows || !Number.isInteger(row) || row < 1 || row > maxRows)
+      throw new Error(detailKind
+        ? `Превышен лимит строк детальной выгрузки (${DETAIL_ROW_LIMIT}).`
+        : 'Превышен лимит строк агрегатного отчёта (500 филиалов).');
     if (rowRefs.has(row)) throw new Error('Некорректная структура: повторный адрес строки.');
     rowRefs.add(row);
   }
@@ -78,7 +101,7 @@ export async function parseWorkbook(buffer: ArrayBuffer, file: string): Promise<
     const address = attr(m[1], 'r')?.match(/^([A-Z]{1,2})(\d+)$/);
     if (!address) throw new Error('Некорректный адрес ячейки.');
     const column = [...address[1]].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0);
-    if (column > 64 || Number(address[2]) < 1 || Number(address[2]) > 502) throw new Error('Ячейки вне допустимого диапазона отчёта.');
+    if (column > maxColumns || Number(address[2]) < 1 || Number(address[2]) > maxRows) throw new Error('Ячейки вне допустимого диапазона отчёта.');
     if (cellRefs.has(address[0])) throw new Error('Некорректная структура: повторный адрес ячейки.');
     cellRefs.add(address[0]);
   }
@@ -86,5 +109,7 @@ export async function parseWorkbook(buffer: ArrayBuffer, file: string): Promise<
   const sheetName = decodeXml(attr(sheetTag, 'name') ?? 'Sheet1');
   if (sheetName.length > 100) throw new Error('Некорректное имя листа.');
   const rows = await readSheet(buffer, 1, { trim: false });
-  return parseReport(rows, kind, file, sheetName);
+  return detailKind
+    ? { type: 'DETAIL', report: parseDetail(rows, detailKind, file, sheetName) }
+    : { type: 'AGGREGATE', report: parseReport(rows, kind!, file, sheetName) };
 }
