@@ -13,6 +13,31 @@ const operationPermissions: Record<string,string> = {
   ORG_UNIT_CREATE:'org_unit.create',ORG_UNIT_RENAME:'org_unit.rename',ORG_UNIT_MOVE_TO_CLUSTER:'org_unit.move',
   ORG_UNIT_ACTIVATE:'org_unit.activate',
 };
+export interface OperatorActor { userId:string; operatorApproval:string }
+type Actor = AuthedUser | OperatorActor;
+const isOperator=(a:Actor):a is OperatorActor=>'operatorApproval' in a;
+
+/** Operator command path: no HTTP session, no elevation. The actor must be the
+ * singleton bootstrapped administrator whose bounded editor stage was already
+ * provisioned, and the caller must present an explicit approval reference. */
+async function operatorAccess(client:PoolClient,actor:OperatorActor,permission:string) {
+  if(!actor.operatorApproval || actor.operatorApproval.trim().length<16) throw new ApiError('FORBIDDEN','Требуется явное основание оператора.');
+  await client.query('LOCK TABLE app_users, role_grants, roles, role_permissions IN SHARE MODE');
+  const r=await client.query(`SELECT DISTINCT rp.permission_code FROM administrator_bootstrap b
+    JOIN organization_editor_provisioning e ON e.user_id=b.user_id AND e.grant_id=b.grant_id
+    JOIN app_users u ON u.id=b.user_id
+    JOIN role_grants g ON g.id=b.grant_id AND g.user_id=u.id
+    JOIN roles r ON r.code=g.role_code AND r.scope_kind=g.scope_kind
+    JOIN role_permissions rp ON rp.role_code=r.code
+    WHERE u.id=$1 AND u.is_active AND u.user_kind='INDIVIDUAL' AND NOT u.password_last_shared_indicator
+      AND g.scope_kind='NETWORK' AND g.org_unit_id IS NULL AND g.revoked_at IS NULL
+      AND g.valid_from<=now() AND (g.valid_until IS NULL OR now()<g.valid_until)`,[actor.userId]);
+  const permissions=new Set<string>(r.rows.map(row=>row.permission_code));
+  if(!permissions.has('organization.directory.review') || !permissions.has(permission)) {
+    throw new ApiError('FORBIDDEN','Требуются отдельное право редактора и действующее назначение NETWORK.');
+  }
+  return permissions;
+}
 type Change = Record<string, any>;
 type Proposal = Record<string, any>;
 const invalid = (message: string) => new ApiError('VALIDATION_ERROR',message);
@@ -198,10 +223,12 @@ export async function getOrgChange(auth:AuthedUser,id:string) {
     return {...publicProposal(p),history:history.rows};
   });
 }
-export async function commandOrgChange(auth:AuthedUser,action:'create'|'edit'|'preview'|'apply',id:string|null,raw:unknown,key:string|undefined,requestId:string) {
+export async function commandOrgChange(auth:Actor,action:'create'|'edit'|'preview'|'apply',id:string|null,raw:unknown,key:string|undefined,requestId:string) {
   return withTransaction(async client=>{
     const phase=action==='create'||action==='edit'?'draft':action;
-    const permissions=await access(client,auth,`organization.change.${phase}`);
+    const permissions=isOperator(auth)
+      ? await operatorAccess(client,auth,`organization.change.${phase}`)
+      : await access(client,auth,`organization.change.${phase}`);
     // Prevent all external directory writers racing validation, and serialize
     // graph mutations before acquiring proposal locks (consistent lock order).
     await client.query('LOCK TABLE org_directory_units, org_directory_name_history, org_directory_affiliation_history, org_change_proposals, org_branch_activations IN SHARE ROW EXCLUSIVE MODE');
@@ -271,7 +298,8 @@ export async function commandOrgChange(auth:AuthedUser,action:'create'|'edit'|'p
     await writeAuditAndOutbox(client,{
       actorUserId:auth.userId,actorRole:null,orgUnitId:null,workItemId:null,action:`ORG_CHANGE_${action.toUpperCase()}`,
       aggregateType:'org_change',aggregateId:p!.id,aggregateVersion:p!.version,requestId,
-      beforeState:safe(before),afterState:safe(result),reason:p!.change.reason?.trim() || null,resolution:'APPLIED',
+      beforeState:safe(before),afterState:safe(result),
+      reason:[p!.change.reason?.trim() || null,isOperator(auth)?`Оператор: ${auth.operatorApproval.trim()}`:null].filter(Boolean).join(' | ') || null,resolution:'APPLIED',
       retentionClass:'SECURITY_5Y',eventType:'organization.change.recorded',
       payload:{proposal_id:p!.id,status:p!.status,operation:p!.change.operation,target_id:p!.target_id},
     });
