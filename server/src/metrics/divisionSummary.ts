@@ -16,6 +16,25 @@ const validDate=(v:unknown):v is string=>{
 const OPEN=['DRAFT','ASSIGNED','IN_PROGRESS','SUBMITTED'];
 
 type Cell={metric:string;rag:Rag;threshold_id:string|null;snapshot_id:string};
+/** Отклонение, по которому задачу можно поставить прямо из сводки. */
+type OpenDeviation={metric:string;metric_name:string;rag:'RED'|'AMBER';snapshot_id:string;
+  value:number;unit:string;revision:number;basis:string|null;basis_value:number|null;
+  threshold_id:string|null;has_task:boolean;work_item_id:string|null;task_status:string|null};
+/**
+ * Настраиваемая приоритетность риска (ТЗ v2.12 §1). Веса живут в настройках
+ * портала, а не в коде: порядок вывода утверждается и меняется внутри портала.
+ * Вес влияет только на сортировку и не меняет ни один показатель.
+ */
+const RISK_KEYS=['risk_weight_red','risk_weight_amber','risk_weight_deviation_without_task',
+  'risk_weight_task_overdue','risk_weight_branch_without_data'] as const;
+export type RiskWeights=Record<typeof RISK_KEYS[number],number>;
+export function riskScore(w:RiskWeights,x:{red:number;amber:number;
+  deviations_without_task:number;tasks_overdue:number;branches_without_data:number}):number {
+  return x.red*w.risk_weight_red+x.amber*w.risk_weight_amber
+    +x.deviations_without_task*w.risk_weight_deviation_without_task
+    +x.tasks_overdue*w.risk_weight_task_overdue
+    +x.branches_without_data*w.risk_weight_branch_without_data;
+}
 type BranchAgg={
   org_unit_id:string; display_name:string; division_id:string|null; division_name:string|null;
   regional_manager_user_id:string|null; regional_manager_name:string|null;
@@ -23,6 +42,7 @@ type BranchAgg={
   metrics_without_threshold:string[]; red:string[]; amber:string[]; rag:Rag;
   deviations_with_task:number; deviations_without_task:number;
   tasks_open:number; tasks_overdue:number; tasks_due_soon:number;
+  open_deviations:OpenDeviation[]; risk_score:number;
 };
 
 const worstOf=(cells:Cell[]):Rag=>cells.some(c=>c.rag==='RED')?'RED'
@@ -64,6 +84,8 @@ export async function divisionDeviationSummary(auth:AuthedUser,query:any) {
       accessible.set(g.org_unit_id,[...new Set([...(accessible.get(g.org_unit_id)??[]),...g.metrics])]);
     const orgIds=[...accessible.keys()];
     const dueSoonHours=await settingNumber(c,'deviation_task_due_soon_hours');
+    const weights={} as RiskWeights;
+    for(const k of RISK_KEYS)weights[k]=await settingNumber(c,k);
 
     // Филиал, его название и дивизион на дату конца периода: подчинённость берётся
     // из истории привязок, а не из текущего состояния структуры.
@@ -105,7 +127,7 @@ export async function divisionDeviationSummary(auth:AuthedUser,query:any) {
         metrics_accessible:(accessible.get(u.org_unit_id)??[]).length,
         metrics_published:[],metrics_missing:[],metrics_without_threshold:[],
         red:[],amber:[],rag:'NONE',deviations_with_task:0,deviations_without_task:0,
-        tasks_open:0,tasks_overdue:0,tasks_due_soon:0});
+        tasks_open:0,tasks_overdue:0,tasks_due_soon:0,open_deviations:[],risk_score:0});
     }
     const filtered=[...branches.values()]
       .filter(b=>!q.division||b.division_id===q.division);
@@ -130,7 +152,7 @@ export async function divisionDeviationSummary(auth:AuthedUser,query:any) {
     const pairs=filtered.flatMap(b=>(accessible.get(b.org_unit_id)??[])
       .map(metric=>({org:b.org_unit_id,metric})));
     const facts=pairs.length?(await c.query(`SELECT s.id snapshot_id,s.org_unit_id,s.metric,
-        s.value::text value,d.id deviation_task_id,w.status task_status,w.due_at
+        s.value::text value,s.unit,s.revision,d.id deviation_task_id,d.work_item_id,w.status task_status,w.due_at
       FROM report_fact_snapshots s
       JOIN report_fact_current p ON p.snapshot_id=s.id
       LEFT JOIN metric_deviation_tasks d ON d.snapshot_id=s.id
@@ -149,7 +171,7 @@ export async function divisionDeviationSummary(auth:AuthedUser,query:any) {
     for(const r of facts) {
       const b=branches.get(r.org_unit_id); if(!b)continue;
       const t=thresholdFor(thresholds,r.metric,r.org_unit_id);
-      const {rag}=evaluateRag(t,Number(r.value),planFor.get(r.org_unit_id)??null);
+      const {rag,basis_value}=evaluateRag(t,Number(r.value),planFor.get(r.org_unit_id)??null);
       b.metrics_published.push(r.metric);
       if(!t)b.metrics_without_threshold.push(r.metric);
       cells.set(r.org_unit_id,[...(cells.get(r.org_unit_id)??[]),
@@ -158,6 +180,14 @@ export async function divisionDeviationSummary(auth:AuthedUser,query:any) {
       if(rag==='AMBER')b.amber.push(r.metric);
       if(rag==='RED'||rag==='AMBER') {
         if(r.deviation_task_id)b.deviations_with_task+=1; else b.deviations_without_task+=1;
+        // Основание постановки задачи отдаётся вместе со строкой сводки: версия
+        // снимка обязательна, иначе сервер отклонит задачу по переопубликованному
+        // показателю. Клиентский статус основанием не является — сервер проверяет заново.
+        b.open_deviations.push({metric:r.metric,metric_name:(METRIC_NAMES as Record<string,string>)[r.metric]??r.metric,
+          rag,snapshot_id:r.snapshot_id,value:Number(r.value),unit:r.unit,revision:r.revision,
+          basis:t?.basis??null,basis_value:basis_value??null,threshold_id:t?.id??null,
+          has_task:Boolean(r.deviation_task_id),work_item_id:r.deviation_task_id?r.work_item_id:null,
+          task_status:r.deviation_task_id?r.task_status:null});
       }
       if(r.deviation_task_id&&OPEN.includes(r.task_status)) {
         b.tasks_open+=1;
@@ -171,6 +201,11 @@ export async function divisionDeviationSummary(auth:AuthedUser,query:any) {
       b.rag=worstOf(cells.get(b.org_unit_id)??[]);
       b.metrics_missing=(accessible.get(b.org_unit_id)??[])
         .filter(m=>!b.metrics_published.includes(m));
+      b.risk_score=riskScore(weights,{red:b.red.length,amber:b.amber.length,
+        deviations_without_task:b.deviations_without_task,tasks_overdue:b.tasks_overdue,
+        branches_without_data:b.metrics_published.length?0:1});
+      b.open_deviations.sort((x,y)=>(x.rag===y.rag?0:x.rag==='RED'?-1:1)
+        ||Number(x.has_task)-Number(y.has_task)||x.metric.localeCompare(y.metric));
     }
 
     const divisions=new Map<string,any>();
@@ -211,28 +246,30 @@ export async function divisionDeviationSummary(auth:AuthedUser,query:any) {
         const m=byRm.get(key)??{user_id:b.regional_manager_user_id,
           full_name:b.regional_manager_name,is_vacant:!b.regional_manager_user_id,
           branches_total:0,red:0,amber:0,deviations_without_task:0,
-          tasks_open:0,tasks_overdue:0,branch_ids:[] as string[]};
+          tasks_open:0,tasks_overdue:0,branches_without_data:0,risk_score:0,
+          branch_ids:[] as string[]};
         m.branches_total+=1;
+        if(!b.metrics_published.length)m.branches_without_data+=1;
         if(b.rag==='RED')m.red+=1; else if(b.rag==='AMBER')m.amber+=1;
         m.deviations_without_task+=b.deviations_without_task;
         m.tasks_open+=b.tasks_open; m.tasks_overdue+=b.tasks_overdue;
         m.branch_ids.push(b.org_unit_id);
         byRm.set(key,m);
       }
-      d.managers=[...byRm.values()].sort((a,b)=>b.red-a.red||b.amber-a.amber
+      for(const m of byRm.values())m.risk_score=riskScore(weights,m);
+      d.managers=[...byRm.values()].sort((a,b)=>b.risk_score-a.risk_score
         ||(a.full_name??'я').localeCompare(b.full_name??'я','ru'));
-      const order:Record<Rag,number>={RED:0,AMBER:1,NONE:2,GREEN:3};
-      (d.branches as BranchAgg[]).sort((a,b)=>order[a.rag]-order[b.rag]
-        ||b.deviations_without_task-a.deviations_without_task
+      d.risk_score=riskScore(weights,d);
+      (d.branches as BranchAgg[]).sort((a,b)=>b.risk_score-a.risk_score
         ||a.display_name.localeCompare(b.display_name,'ru'));
     }
 
-    const list=[...divisions.values()].sort((a,b)=>b.red-a.red||b.amber-a.amber
+    const list=[...divisions.values()].sort((a,b)=>b.risk_score-a.risk_score
       ||a.division_name.localeCompare(b.division_name,'ru'));
     return {
       mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:q.start,period_end:q.end,
       metric_names:METRIC_NAMES,due_soon_hours:dueSoonHours,
-      thresholds_configured:thresholds.length>0,
+      thresholds_configured:thresholds.length>0,risk_weights:weights,
       totals:{
         divisions:list.length,
         branches:filtered.length,

@@ -116,6 +116,13 @@ export const saveNotificationPolicy=(event_type:string,policy:NotificationPolicy
     policy_before?:NotificationPolicy}>('/metrics/notification-policies',
     {method:'POST',body:{event_type,policy,reason},idempotent:true});
 
+/** Основание отклонения из строки сводки: достаточно для постановки задачи. */
+export interface OpenDeviation {
+  metric:string; metric_name:string; rag:'RED'|'AMBER'; snapshot_id:string;
+  value:number; unit:'COUNT'|'RUB'; revision:number;
+  basis:'ABSOLUTE'|'PLAN_PERCENT'|null; basis_value:number|null; threshold_id:string|null;
+  has_task:boolean; work_item_id:string|null; task_status:string|null;
+}
 export interface DivisionBranchRow {
   org_unit_id:string; display_name:string; division_id:string|null; division_name:string|null;
   regional_manager_user_id:string|null; regional_manager_name:string|null;
@@ -123,11 +130,12 @@ export interface DivisionBranchRow {
   metrics_without_threshold:string[]; red:string[]; amber:string[]; rag:'RED'|'AMBER'|'GREEN'|'NONE';
   deviations_with_task:number; deviations_without_task:number;
   tasks_open:number; tasks_overdue:number; tasks_due_soon:number;
+  open_deviations:OpenDeviation[]; risk_score:number;
 }
 export interface DivisionManagerRow {
   user_id:string|null; full_name:string|null; is_vacant:boolean; branches_total:number;
   red:number; amber:number; deviations_without_task:number; tasks_open:number; tasks_overdue:number;
-  branch_ids:string[];
+  branches_without_data:number; risk_score:number; branch_ids:string[];
 }
 export interface DivisionSummaryRow {
   division_id:string|null; division_name:string; branches_total:number;
@@ -135,13 +143,16 @@ export interface DivisionSummaryRow {
   red:number; amber:number; green:number; unknown:number;
   deviations_total:number; deviations_without_task:number;
   tasks_open:number; tasks_overdue:number; tasks_due_soon:number;
-  metrics_without_threshold:string[];
+  metrics_without_threshold:string[]; risk_score:number;
   by_metric:Record<string,{red:number;amber:number;without_task:number}>;
   managers:DivisionManagerRow[]; branches:DivisionBranchRow[];
 }
 export interface DivisionSummary {
   mode:string; period_start:string; period_end:string; metric_names:Record<string,string>;
   due_soon_hours:number; thresholds_configured:boolean;
+  risk_weights:{risk_weight_red:number;risk_weight_amber:number;
+    risk_weight_deviation_without_task:number;risk_weight_task_overdue:number;
+    risk_weight_branch_without_data:number};
   totals:{divisions:number;branches:number;branches_without_data:number;red:number;amber:number;
     deviations_without_task:number;tasks_open:number;tasks_overdue:number;tasks_due_soon:number};
   divisions:DivisionSummaryRow[];
@@ -149,7 +160,7 @@ export interface DivisionSummary {
 export const readDivisionSummary=(start:string,end:string,division?:string)=>
   apiFetch<DivisionSummary>('/metrics/divisions/deviations',{query:{start,end,division}});
 
-export { focusOrder,managerLabel,missingLabel } from '../components/divisionSummaryModel';
+export { focusOrder,managerLabel,missingLabel,riskScore,RISK_WEIGHT_LABELS } from '../components/divisionSummaryModel';
 export { POLICY_LABELS,EVENT_LABELS,settingHint,settingValueValid,reasonValid } from '../components/portalSettingsModel';
 export { DUE_LABELS,dueTone,basisLabel } from '../components/myDeviationTasksModel';
 export { OUTCOME_LABELS,outcomeTone,deltaLabel } from '../components/deviationOutcomeModel';

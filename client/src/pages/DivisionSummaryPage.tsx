@@ -1,7 +1,9 @@
 import React,{useEffect,useState} from 'react';
 import { Link } from 'react-router-dom';
-import { readDivisionSummary,type DivisionSummary } from '../api/metrics';
-import { managerLabel,missingLabel } from '../components/divisionSummaryModel';
+import { readDivisionSummary,type DivisionSummary,type OpenDeviation } from '../api/metrics';
+import { managerLabel,missingLabel,deviationAction,RISK_WEIGHT_LABELS,
+  type RiskWeights } from '../components/divisionSummaryModel';
+import DeviationTaskModal from '../components/DeviationTaskModal';
 import { RagDot } from '../components/RagBadge';
 import '../styles/branch-grid.css';
 
@@ -21,6 +23,8 @@ export default function DivisionSummaryPage() {
   const [data,setData]=useState<DivisionSummary|null>(null);
   const [error,setError]=useState(''),[busy,setBusy]=useState(false);
   const [open,setOpen]=useState<string|null>(null);
+  const [target,setTarget]=useState<{branch:string;branchName:string;dev:OpenDeviation}|null>(null);
+  const [created,setCreated]=useState('');
 
   async function load() {
     setBusy(true);setError('');
@@ -54,6 +58,8 @@ export default function DivisionSummaryPage() {
     </div>
 
     {error&&<p role="alert">{error}</p>}
+    {created&&<p role="status" className="portal-notice">Задача поставлена.{' '}
+      <Link to={`/tasks/${created}`}>Открыть карточку задачи</Link></p>}
     {busy&&!data&&<p>Читаю сводку…</p>}
 
     {data&&<>
@@ -62,6 +68,11 @@ export default function DivisionSummaryPage() {
         отклонений без задачи {data.totals.deviations_without_task} ·
         задач в работе {data.totals.tasks_open}, из них просрочено {data.totals.tasks_overdue},
         срок близко {data.totals.tasks_due_soon}</p>
+      <p className="portal-muted">Порядок вывода задан утверждённой приоритетностью риска:{' '}
+        {(Object.keys(RISK_WEIGHT_LABELS) as (keyof RiskWeights)[])
+          .map(k=>`${RISK_WEIGHT_LABELS[k]} ${data.risk_weights[k]}`).join(' · ')}.
+        Веса меняются в разделе «Уведомления и сроки» с основанием и историей; на сами
+        показатели они не влияют.</p>
       <p className="portal-muted">Филиалов без опубликованных данных за период: {data.totals.branches_without_data}.
         Отсутствие публикации не считается нулём и не считается выполнением плана.
         {!data.thresholds_configured&&' Пороги не настроены: статусы не рассчитаны.'}</p>
@@ -119,7 +130,7 @@ export default function DivisionSummaryPage() {
             <table className="local-table">
               <thead><tr><th>Статус</th><th>Филиал</th><th>Региональный менеджер</th>
                 <th>Красные показатели</th><th>Жёлтые показатели</th><th>Без задачи</th>
-                <th>Задачи</th><th>Данные</th></tr></thead>
+                <th>Задачи</th><th>Данные</th><th>Действие по отклонению</th></tr></thead>
               <tbody>{d.branches.map(b=><tr key={b.org_unit_id}>
                 <td><RagDot status={b.rag}/></td>
                 <td><Link to={`/branch-card/${b.org_unit_id}?start=${data.period_start}&end=${data.period_end}`}>
@@ -134,11 +145,29 @@ export default function DivisionSummaryPage() {
                 <td>{b.metrics_published.length} из {b.metrics_accessible}
                   {b.metrics_missing.length>0&&<><br/><small className="portal-muted">
                     {missingLabel(b.metrics_missing,names)}</small></>}</td>
+                <td>{b.open_deviations.length===0&&<span className="portal-muted">—</span>}
+                  {b.open_deviations.map(dv=>{
+                    const act=deviationAction(dv);
+                    return <div key={dv.metric}>
+                      {act.actionable
+                        ?<button className="btn btn-ghost" onClick={()=>setTarget(
+                          {branch:b.org_unit_id,branchName:b.display_name,dev:dv})}>
+                          {dv.metric_name}: поставить задачу</button>
+                        :<small className="portal-muted">{dv.metric_name}:{' '}
+                          {dv.work_item_id
+                            ?<Link to={`/tasks/${dv.work_item_id}`}>{act.label}</Link>
+                            :act.label}</small>}
+                    </div>;
+                  })}</td>
               </tr>)}</tbody>
             </table>
           </div>}
         </section>;
       })}
     </>}
+    {target&&<DeviationTaskModal branch={target.branch} branchName={target.branchName}
+      period={{start:data!.period_start,end:data!.period_end}} cell={target.dev}
+      onClose={()=>setTarget(null)}
+      onCreated={id=>{setTarget(null);setCreated(id);void load();}}/>}
   </section>;
 }

@@ -17,6 +17,16 @@ const invalid=(s:string,path?:string)=>new ApiError('VALIDATION_ERROR',s,path?{i
 export const SETTING_SPECS:Record<string,{title:string;unit:string;min:number;max:number;integer:boolean}>={
   deviation_task_due_soon_hours:{title:'Срок задачи считается близким, часов до срока',
     unit:'HOURS',min:1,max:720,integer:true},
+  risk_weight_red:{title:'Вес красного показателя в приоритетности риска',
+    unit:'POINTS',min:0,max:1000,integer:true},
+  risk_weight_amber:{title:'Вес жёлтого показателя в приоритетности риска',
+    unit:'POINTS',min:0,max:1000,integer:true},
+  risk_weight_deviation_without_task:{title:'Вес отклонения без поставленной задачи',
+    unit:'POINTS',min:0,max:1000,integer:true},
+  risk_weight_task_overdue:{title:'Вес просроченной задачи по отклонению',
+    unit:'POINTS',min:0,max:1000,integer:true},
+  risk_weight_branch_without_data:{title:'Вес филиала без опубликованных данных',
+    unit:'POINTS',min:0,max:1000,integer:true},
 };
 
 /** Текущее значение параметра. Отсутствие строки — ошибка конфигурации, не ноль. */

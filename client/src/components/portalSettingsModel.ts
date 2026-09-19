@@ -23,7 +23,7 @@ export const EVENT_LABELS:Record<string,string>={
 };
 export const eventLabel=(code:string)=>EVENT_LABELS[code]??code;
 
-export const UNIT_HINTS:Record<string,string>={HOURS:'часов',NUMBER:''};
+export const UNIT_HINTS:Record<string,string>={HOURS:'часов',POINTS:'баллов приоритета',NUMBER:''};
 
 /** Подсказка допустимого диапазона настройки. */
 export function settingHint(s:{min:number|null;max:number|null;integer:boolean;unit:string}):string {

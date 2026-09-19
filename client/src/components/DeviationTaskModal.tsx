@@ -1,5 +1,13 @@
 import React,{useEffect,useState} from 'react';
 import { createDeviationTask,type MetricCell } from '../api/metrics';
+
+/**
+ * Основание отклонения, достаточное для постановки задачи. Одинаково подходит и
+ * карточке филиала, и строке сводки по дивизиону: обязательна версия снимка,
+ * потому что сервер заново проверяет отклонение именно по ней.
+ */
+export type DeviationCellView=Pick<MetricCell,'metric'|'metric_name'|'value'|'unit'|'rag'
+  |'basis'|'basis_value'|'threshold_id'|'revision'|'snapshot_id'>;
 import { listTaskTemplates } from '../api/endpoints';
 import type { TaskTemplate } from '../api/types';
 import { formatValue,ragReason,RAG_LABELS } from './metricThresholdModel';
@@ -11,7 +19,7 @@ import { defaultTitle,draftError,dueIso,type DeviationDraft } from './deviationT
  * проверяет отклонение по текущим данным и порогам.
  */
 export default function DeviationTaskModal({branch,branchName,period,cell,onClose,onCreated}:{
-  branch:string; branchName:string; period:{start:string;end:string}; cell:MetricCell;
+  branch:string; branchName:string; period:{start:string;end:string}; cell:DeviationCellView;
   onClose:()=>void; onCreated:(workItemId:string)=>void;
 }) {
   const [templates,setTemplates]=useState<TaskTemplate[]>([]);

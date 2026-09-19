@@ -88,6 +88,9 @@ beforeAll(async()=>{
     reason:'Synthetic isolated division summary administration',
     approvalReference:'SYNTHETIC_DIVSUM_APPROVAL'});
   expect(boot.grantId).toBeTruthy();
+  // globalSetup снимает права SUPER_ADMIN: возвращаем управление настройками портала.
+  await pool.query(`INSERT INTO role_permissions(role_code,permission_code)
+    VALUES('SUPER_ADMIN','portal.setting.manage') ON CONFLICT DO NOTHING`);
   admin=await login('divsum_admin',password);rf=await login('rf_a');rmUser=await login('rm_b');
   // Только не-демо сеть: демо-контур нельзя смешивать с боевой структурой.
   network=(await pool.query(`SELECT id FROM org_directory_units
@@ -216,4 +219,113 @@ test('DS-06 сводка не выходит за пределы допуско�
   expect(branchA.metrics_accessible).toBe(1);
   expect(branchA.metrics_published).toEqual(['sales']);
   expect(branchA.metrics_missing).toEqual([]);
+});
+
+/** Изменение веса приоритетности риска внутри портала, с основанием. */
+async function setWeight(key:string,value:number) {
+  const res=await authed(admin).post(`${base}/portal-settings`).set('Idempotency-Key',randomUUID())
+    .send({key,value,reason:'Synthetic risk priority tuning for division summary suite'});
+  expect(res.status).toBe(200);
+}
+
+test('DS-07 приоритетность риска задаётся настройкой портала, а не кодом',async()=>{
+  const before=await summary(admin,`?start=${PERIOD.start}&end=${PERIOD.end}&division=${division}`);
+  const w=before.body.risk_weights;
+  expect(w.risk_weight_red).toBeGreaterThan(0);
+  const d=before.body.divisions[0];
+  // Оценка риска считается ровно по утверждённым весам, без скрытых коэффициентов.
+  const named=d.managers.find((m:any)=>m.user_id===rmUser.userId);
+  expect(named.risk_score).toBe(named.red*w.risk_weight_red+named.amber*w.risk_weight_amber
+    +named.deviations_without_task*w.risk_weight_deviation_without_task
+    +named.tasks_overdue*w.risk_weight_task_overdue
+    +named.branches_without_data*w.risk_weight_branch_without_data);
+  expect(d.branches[0].risk_score).toBeGreaterThanOrEqual(d.branches[1].risk_score);
+
+  // Филиал без опубликованных данных в дивизионе Запад: доступ есть, публикаций нет.
+  const empty=await unit('DIVSUM_D','Филиал Г · тест','ORG_UNIT',other);
+  await readAccess(empty,['sales']);
+  const byColour=await summary(admin);
+  expect(byColour.body.divisions[0].division_id).toBe(division);
+
+  // Руководитель утверждает, что отсутствие данных важнее цвета: порядок меняется,
+  // а сами показатели остаются прежними.
+  await setWeight('risk_weight_red',0);
+  await setWeight('risk_weight_amber',0);
+  await setWeight('risk_weight_deviation_without_task',0);
+  await setWeight('risk_weight_task_overdue',0);
+  await setWeight('risk_weight_branch_without_data',1000);
+  const byData=await summary(admin);
+  expect(byData.body.divisions[0].division_id).toBe(other);
+  expect(byData.body.divisions[0].branches_without_data).toBe(1);
+  expect(byData.body.totals.red).toBe(byColour.body.totals.red);
+
+  // История изменений настройки сохраняется вместе с основанием.
+  const hist=await authed(admin).get(`${base}/portal-settings`);
+  expect(hist.body.history.some((h:any)=>h.key==='risk_weight_branch_without_data'
+    &&Number(h.value_after)===1000&&h.reason.length>=16)).toBe(true);
+
+  await setWeight('risk_weight_red',100);
+  await setWeight('risk_weight_amber',40);
+  await setWeight('risk_weight_deviation_without_task',25);
+  await setWeight('risk_weight_task_overdue',60);
+  await setWeight('risk_weight_branch_without_data',15);
+  expect((await summary(admin)).body.divisions[0].division_id).toBe(division);
+});
+
+test('DS-08 задача ставится прямо из строки сводки по её же основанию',async()=>{
+  const res=await summary(admin,`?start=${PERIOD.start}&end=${PERIOD.end}&division=${division}`);
+  const row=res.body.divisions[0].branches.find((x:any)=>x.org_unit_id===b);
+  const dev=row.open_deviations.find((o:any)=>!o.has_task);
+  expect(dev).toMatchObject({metric:'sales',rag:'RED'});
+  expect(dev.snapshot_id).toBeTruthy();
+  expect(dev.work_item_id).toBeNull();
+
+  // Постановка задачи требует полномочий на филиале: без них строка сводки
+  // остаётся видимой, но задача не создаётся.
+  const denied=await authed(admin).post(`${base}/deviation-tasks`).set('Idempotency-Key',randomUUID())
+    .send({org_unit_id:b,metric:dev.metric,period_start:PERIOD.start,period_end:PERIOD.end,
+      snapshot_id:dev.snapshot_id,expected_rag:dev.rag,template_code:'pilot_task_v1',
+      title:'Отклонение продаж: без полномочий',
+      due_at:new Date(Date.now()+48*3600*1000).toISOString().replace(/\.\d+Z$/,'Z'),
+      reason:'Attempt without branch authority from division summary row',assignee_user_id:null});
+  expect(denied.status).toBe(403);
+  await pool.query(`INSERT INTO role_grants(user_id,role_code,org_unit_id,scope_kind,valid_from)
+    VALUES($1,'REGIONAL_MANAGER',$2,'ORG_UNIT','2021-01-01')`,[admin.userId,b]);
+
+  const created=await authed(admin).post(`${base}/deviation-tasks`).set('Idempotency-Key',randomUUID())
+    .send({org_unit_id:b,metric:dev.metric,period_start:PERIOD.start,period_end:PERIOD.end,
+      snapshot_id:dev.snapshot_id,expected_rag:dev.rag,template_code:'pilot_task_v1',
+      title:'Отклонение продаж: разобрать причины',
+      due_at:new Date(Date.now()+48*3600*1000).toISOString().replace(/\.\d+Z$/,'Z'),
+      reason:'Task opened directly from division deviation summary row',assignee_user_id:null});
+  expect(created.status).toBe(201);
+
+  const after=await summary(admin,`?start=${PERIOD.start}&end=${PERIOD.end}&division=${division}`);
+  const updated=after.body.divisions[0].branches.find((x:any)=>x.org_unit_id===b);
+  const linked=updated.open_deviations.find((o:any)=>o.metric==='sales');
+  expect(linked.has_task).toBe(true);
+  expect(linked.work_item_id).toBe(created.body.work_item_id);
+  expect(linked.task_status).toBeTruthy();
+  expect(updated.deviations_without_task).toBe(row.deviations_without_task-1);
+  expect(updated.tasks_due_soon).toBe(1);
+
+  // Повторная постановка по тому же основанию не создаёт вторую задачу.
+  const again=await authed(admin).post(`${base}/deviation-tasks`).set('Idempotency-Key',randomUUID())
+    .send({org_unit_id:b,metric:dev.metric,period_start:PERIOD.start,period_end:PERIOD.end,
+      snapshot_id:dev.snapshot_id,expected_rag:dev.rag,template_code:'pilot_task_v1',
+      title:'Отклонение продаж: повтор',
+      due_at:new Date(Date.now()+48*3600*1000).toISOString().replace(/\.\d+Z$/,'Z'),
+      reason:'Duplicate attempt from division deviation summary row',assignee_user_id:null});
+  expect(again.body.code).toBe('DEVIATION_CONFLICT');
+
+  // Устаревшее основание из открытой сводки: показатель переопубликован — задача не ставится.
+  await publish(b,grantB,'sales',25);
+  const stale=await authed(admin).post(`${base}/deviation-tasks`).set('Idempotency-Key',randomUUID())
+    .send({org_unit_id:b,metric:'sales',period_start:PERIOD.start,period_end:PERIOD.end,
+      snapshot_id:dev.snapshot_id,expected_rag:'RED',template_code:'pilot_task_v1',
+      title:'Отклонение продаж: устаревшее основание',
+      due_at:new Date(Date.now()+48*3600*1000).toISOString().replace(/\.\d+Z$/,'Z'),
+      reason:'Stale snapshot attempt from division deviation summary row',assignee_user_id:null});
+  expect(stale.status).not.toBe(201);
+  expect(stale.body.code).toBe('DEVIATION_CONFLICT');
 });
