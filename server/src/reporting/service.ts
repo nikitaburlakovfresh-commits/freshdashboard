@@ -5,7 +5,7 @@ import { withTransaction } from '../db/pool';
 import { ApiError } from '../util/errors';
 import { writeAuditAndOutbox } from '../domain/auditOutbox';
 import { stagingAccess } from './access';
-import { hash, uuid, safeName, persistSources, readSource, UploadFile, SourceFile, MAX_FILE_BYTES } from './storage';
+import { hash, uuid, safeName, persistSources, readSource, UploadFile, SourceFile, MAX_FILE_BYTES, MAX_BATCH_FILES } from './storage';
 import { probeFiles, PARSER_VERSION } from './probe';
 import { validatePeriod } from './shared/reportModel';
 
@@ -82,8 +82,8 @@ export async function detail(auth:AuthedUser,id:string) {
 }
 export async function uploadBatch(auth:AuthedUser,raw:unknown,uploads:UploadFile[],requestId:string) {
   const meta=parseMetadata(raw);
-  if(!uploads.length || uploads.length>2 || uploads.some(f=>!f.bytes.length || f.bytes.length>MAX_FILE_BYTES ||
-    !/\.xlsx$/i.test(f.name) || f.bytes.length<4 || f.bytes.readUInt32LE(0)!==0x04034b50)) throw invalid('Допустимы 1–2 XLSX до 8 МиБ каждый.');
+  if(!uploads.length || uploads.length>MAX_BATCH_FILES || uploads.some(f=>!f.bytes.length || f.bytes.length>MAX_FILE_BYTES ||
+    !/\.xlsx$/i.test(f.name) || f.bytes.length<4 || f.bytes.readUInt32LE(0)!==0x04034b50)) throw invalid(`Допустимы 1–${MAX_BATCH_FILES} XLSX до 8 МиБ каждый.`);
   const files=uploads.map(f=>({meta:{id:randomUUID(),display_name:safeName(f.name),byte_size:f.bytes.length,content_hash:hash(f.bytes)},bytes:f.bytes}));
   if(new Set(files.map(f=>f.meta.content_hash)).size!==files.length) throw invalid('Одинаковый файл дважды в пакете.');
   // Confirmation prose is provenance, not business identity: rewording the

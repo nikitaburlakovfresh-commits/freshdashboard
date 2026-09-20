@@ -1,8 +1,9 @@
 import React,{useCallback,useEffect,useState} from 'react';
 import { Link } from 'react-router-dom';
+import { useReportDate } from '../state/reportDate';
 import { readOverview,readDivisionSummary,COMPONENT_MISSING_LABELS,EVALUATION_LABELS,
   RULE_ROLE_LABELS,RAG_LABELS,type Overview,type BranchCard,
-  type DivisionSummary } from '../api/metrics';
+  type DivisionSummary,type RunRateTile } from '../api/metrics';
 import RagBadge,{ RagDot } from '../components/RagBadge';
 import '../styles/branch-grid.css';
 import '../styles/network-score.css';
@@ -16,11 +17,23 @@ import '../styles/network-score.css';
 const num=(v:number|null,digits=1)=>v===null?'—':v.toLocaleString('ru-RU',
   {minimumFractionDigits:digits,maximumFractionDigits:digits});
 const FOCUS_FORMATS:Record<string,string>={COUNT:'шт.',PCT:'%',RUB:'руб.',RUB_MLN:'млн руб.'};
+/** Значение плитки run-rate. Null — «нет данных», а не ноль. */
+function runRateValue(t:RunRateTile):string {
+  if(t.value===null) return '—';
+  if(t.format==='PCT') return `${Math.round(t.value*100)}%`;
+  if(t.format==='RATIO') return `${t.value.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})}×`;
+  if(t.format==='RUB') return t.value>=1000
+    ? `${Math.round(t.value/1000).toLocaleString('ru-RU')} тыс ₽`
+    : `${Math.round(t.value).toLocaleString('ru-RU')} ₽`;
+  return Math.round(t.value).toLocaleString('ru-RU');
+}
+const RU_DATE=(iso:string)=>iso.split('-').reverse().join('.');
 
 export default function NetworkScorePage() {
-  const month=new Date().toISOString().slice(0,7);
-  const [start,setStart]=useState(`${month}-01`);
-  const [end,setEnd]=useState(new Date().toISOString().slice(0,10));
+  // Период факта задаётся глобальным срезом из топбара: от начала месяца
+  // выбранной даты до самой даты. Локального дубля выбора даты на экране нет.
+  const {reportDate,periodStart}=useReportDate();
+  const start=periodStart,end=reportDate;
   const [data,setData]=useState<Overview|null>(null);
   const [managers,setManagers]=useState<DivisionSummary|null>(null);
   const [error,setError]=useState(''),[busy,setBusy]=useState(false),[open,setOpen]=useState<string[]>([]);
@@ -35,7 +48,7 @@ export default function NetworkScorePage() {
       try{setManagers(await readDivisionSummary(from,to));}catch{setManagers(null);}
     }catch(e:any){setError(e.message);}finally{setBusy(false);}
   },[]);
-  useEffect(()=>{void load(start,end);},[load]);// eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{void load(start,end);},[load,start,end]);
 
   const net=data?.network;
   const tiles=[
@@ -43,30 +56,21 @@ export default function NetworkScorePage() {
     {label:'Зелёные филиалы',value:String(net?.green??0),hint:'Все условия зелёного статуса выполнены',rag:'GREEN' as const},
     {label:'Жёлтые филиалы',value:String(net?.amber??0),hint:'Есть отклонения без красных правил',rag:'AMBER' as const},
     {label:'Красные филиалы',value:String(net?.red??0),hint:'Сработало правило красного статуса',rag:'RED' as const},
-    {label:'Без балла',value:String(net?.without_score??0),hint:'Нет данных для расчёта — это не ноль',rag:'NONE' as const},
   ];
   const branchesByManager=groupByManager(data?.branches??[],managers);
 
   return <div className="portal-page network-score">
-    <header className="portal-heading"><div>
-      <span className="portal-eyebrow">ОБЗОР СЕТИ · БАЛЛ И ФОКУСЫ</span>
-      <h1>Обзор сети</h1>
-      <p className="portal-muted">Балл филиала, светофор и фокусы месяца рассчитываются сервером по
-        действующей версии модели из настроек портала. Отсутствие факта или плана не заменяется нулём.</p>
-    </div>
-      <Link className="btn" to="/settings/scoring">Модель балла</Link>
+    <header className="overview-head">
+      <div>
+        <h1>Обзор сети</h1>
+        <p className="overview-subline">Срез на {RU_DATE(end)} · {data?data.branches.length:'…'} филиалов
+          {net&&net.without_score>0&&<> · без балла {net.without_score}</>}</p>
+      </div>
+      <div className="overview-head-actions">
+        <Link className="btn" to="/division-summary">Сводка по задачам</Link>
+        <Link className="btn" to="/settings/scoring">Модель балла</Link>
+      </div>
     </header>
-
-    <section className="portal-panel beta-filters">
-      <label>Период: с<input aria-label="Период: с" type="date" value={start}
-        onChange={e=>setStart(e.target.value)}/></label>
-      <label>Период: по<input aria-label="Период: по" type="date" min={start} value={end}
-        onChange={e=>setEnd(e.target.value)}/></label>
-      <button className="btn" disabled={busy||!start||!end} onClick={()=>void load(start,end)}>
-        {busy?'Читаю…':'Показать обзор'}</button>
-      {data?.scoring.month_progress!==null&&data?.scoring.month_progress!==undefined&&
-        <span className="portal-muted">Прогресс месяца K = {(data.scoring.month_progress*100).toFixed(1)} %</span>}
-    </section>
 
     {error&&<section className="portal-panel" role="alert">{error}</section>}
     {busy&&<p role="status">Загружаю серверный срез…</p>}
@@ -79,6 +83,13 @@ export default function NetworkScorePage() {
       <div className="score-tiles">{tiles.map(t=><article className="score-tile" key={t.label}
         data-rag={t.rag??'NEUTRAL'}>
         <span>{t.label}</span><strong className="tabnum">{t.value}</strong><small>{t.hint}</small>
+      </article>)}</div>
+
+      <div className="runrate-tiles">{data.run_rates.map(t=><article className="runrate-tile" key={t.code}>
+        <span className="runrate-icon" data-code={t.code} aria-hidden="true"/>
+        <div><strong className="tabnum">{runRateValue(t)}</strong>
+          <span>{t.label}</span>
+          <small>{t.value===null?(t.basis??'нет данных за срез'):t.hint}</small></div>
       </article>)}</div>
 
       <section className="portal-panel">

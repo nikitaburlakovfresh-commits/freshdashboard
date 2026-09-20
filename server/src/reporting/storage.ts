@@ -4,6 +4,8 @@ import path from 'path';
 import { createHash } from 'crypto';
 
 export const MAX_FILE_BYTES=8*1024*1024;
+/** Пакет приёма QLIK: десять агрегатных отчётов загружаются одной кнопкой. */
+export const MAX_BATCH_FILES=10;
 export const hash=(data:Buffer|string)=>createHash('sha256').update(data).digest('hex');
 export const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export interface SourceFile { id:string; display_name:string; content_hash:string; byte_size:number }

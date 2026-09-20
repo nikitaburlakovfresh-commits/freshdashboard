@@ -8,7 +8,7 @@ export function periodMetadata(confirmed:boolean,period:ImportPeriod,confirmatio
   return {state:'CONFIRMED',...period,confirmation:confirmation.trim()};
 }
 export function checkStagingFiles(files:{name:string;size:number}[]) {
-  if(!files.length || files.length>2) throw new Error('Выберите один или два агрегатных XLSX.');
+  if(!files.length || files.length>10) throw new Error('Выберите от одного до десяти агрегатных XLSX одного пакета.');
   if(files.some(f=>!f.size || f.size>8*1024*1024 || !/\.xlsx$/i.test(f.name))) throw new Error('Допустимы XLSX до 8 МиБ каждый.');
 }
 export const stagingStatus=(b:Pick<StagingBatch,'status'|'storage_state'>)=>

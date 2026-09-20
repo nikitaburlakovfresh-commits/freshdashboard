@@ -9,7 +9,8 @@ export { METRICS, METRIC_KEYS, METRIC_NAMES, isAdditiveMetric, isCountMetric, is
 export type { MetricKey };
 
 export type ReportKind =
-  | 'summary' | 'sales' | 'supplies' | 'suppliesForecast' | 'credits' | 'tradeUp' | 'funnel';
+  | 'summary' | 'sales' | 'supplies' | 'suppliesForecast' | 'credits' | 'tradeUp' | 'funnel'
+  | 'revenuePlan' | 'discounts';
 export type Values = Partial<Record<MetricKey, number | null>>;
 export interface ReportRow { name: string; key: string; row: number; values: Values }
 /** Служебные и архивные строки источника. Сохраняются отдельно: они не филиалы
@@ -39,11 +40,13 @@ export interface ReportBatch {
 export const REPORT_NAMES: Record<ReportKind, string> = {
   summary: 'Сводка продаж и склада',
   sales: 'Продажи · КСО и маржа',
-  supplies: 'Поставки · план, факт, себестоимость',
+  supplies: 'Склад · план на конец месяца, факт и себестоимость',
   suppliesForecast: 'Поставки · прогноз и цена в закупке',
   credits: 'Финансовые услуги и кредиты',
   tradeUp: 'Trade Up и кредиты по типу поставки',
   funnel: 'Воронка обращений или звонков',
+  revenuePlan: 'План выручки · ручная форма',
+  discounts: 'Скидки по локациям',
 };
 export const normalize = (value: string) => value.normalize('NFKC').replace(/\s+/g, ' ').trim().toLocaleLowerCase('ru');
 const TOTAL_LABELS = ['итого', 'всего', 'итого по сети', 'итоги', 'total'];
@@ -79,13 +82,18 @@ export const REPORT_SPECS: Record<ReportKind, ReportSpec> = {
   },
   supplies: {
     headerRow: 1, hasTotalRow: true,
-    columns: { suppliesPlan: 'B', suppliesFact: 'C', suppliesPlanCost: 'D', suppliesFactCost: 'E' },
+    // Отчёт про склад, а не про поставки: C — фактический склад в штуках,
+    // E — его себестоимость. Столбец D («План Себестоимость») к публикации не
+    // допущен: значения в нём не согласуются ни со складом, ни с поставками.
+    columns: { stockPlanMonthEnd: 'B', stock: 'C', stockCost: 'E' },
   },
   suppliesForecast: {
     headerRow: 1, hasTotalRow: true,
     columns: {
       suppliesPlan: 'B', suppliesFact: 'C', suppliesForecast: 'E',
-      purchasePrice: 'F', suppliesForecastCost: 'G',
+      // Столбец F — сумма закупки по факту поставок, а не цена одного
+      // автомобиля: смешивать его с purchasePrice из сводки нельзя.
+      suppliesFactCost: 'F', suppliesForecastCost: 'G',
     },
   },
   credits: {
@@ -99,17 +107,28 @@ export const REPORT_SPECS: Record<ReportKind, ReportSpec> = {
   },
   tradeUp: {
     headerRow: 3, hasTotalRow: true,
-    columns: {
-      tradeUpTotal: 'B', tradeUpCommission: 'C', tradeUpBuyout: 'D',
-      creditShareTotal: 'E', creditShareCommission: 'F', creditShareBuyout: 'G',
-    },
+    // Из отчёта используется только проникновение Trade-Up (обмен БУ на БУ).
+    // Разрезы по комиссии и выкупу, а также доли кредитов из этого источника
+    // в портал не принимаются: доля кредитов ведётся по отчёту КСО.
+    columns: { tradeUpTotal: 'B' },
+  },
+  /** Скидки по локациям: принимаются выданные авто, количество и сумма скидок
+   * и цена продажи. Доли и удельные значения портал считает сам. */
+  discounts: {
+    headerRow: 1, hasTotalRow: true,
+    columns: { sales: 'B', discountCount: 'C', discountAmount: 'E', revenue: 'G' },
+  },
+  /** Ручная форма плана выручки: только филиал и плановая выручка.
+   * Итоговая строка не предусмотрена — итог сети портал считает сам. */
+  revenuePlan: {
+    headerRow: 1, hasTotalRow: false,
+    columns: { planRevenue: 'B' },
   },
   funnel: {
     headerRow: 1, hasTotalRow: true, channelRequired: true,
-    columns: {
-      funnelTraffic: 'B', funnelVisits: 'C', funnelTrafficToVisit: 'D', funnelDeals: 'E',
-      funnelVisitToDeal: 'F', funnelTrafficToDeal: 'G',
-    },
+    // Принимаются только исходные величины воронки; все три конверсии портал
+    // считает сам из трафика, визитов и сделок.
+    columns: { funnelTraffic: 'B', funnelVisits: 'C', funnelDeals: 'E' },
   },
 };
 export function validDate(value: string): boolean {
@@ -160,10 +179,14 @@ export function detectReport(rows: unknown[][]): ReportKind | null {
         at(h, 'D', 'План Себестоимость, руб.') && at(h, 'E', 'Факт Себестоимость, руб.')) return 'supplies';
     if (at(h, 'B', 'План, шт.') && at(h, 'C', 'Факт, шт.') && at(h, 'E', 'Прогноз, шт.') &&
         at(h, 'F', 'Цена в Закупке, руб.') && at(h, 'G', 'Прогноз, руб.')) return 'suppliesForecast';
+    if (at(h, 'B', 'План Выручка, руб.') && !cell(h, 'C').trim()) return 'revenuePlan';
     if (at(h, 'B', 'План Количество кредитов') && at(h, 'C', 'Факт Кол-во кредитов (Google)') &&
         at(h, 'D', 'Факт Кол-во кредитов (CRM)') && at(h, 'M', 'План КСО') &&
         at(h, 'V', 'План % дохода от суммы кредита')) return 'credits';
   }
+  if (at(h, 'A', 'Локация') && at(h, 'B', 'Выдано авто, шт') &&
+      at(h, 'C', 'Количество скидок, шт.') && at(h, 'E', 'Сумма Скидок, руб.') &&
+      at(h, 'G', 'Цена продажи, руб.')) return 'discounts';
   if (at(h, 'A', 'Дилер Первого Касания') && at(h, 'B', 'Трафик') && at(h, 'C', 'Визит') &&
       at(h, 'E', 'Сделки') && /^Конверсия \(Трафик → Визит\)/i.test(cell(h, 'D').trim()) &&
       /^Конверсия \(Трафик → Сделка\)/i.test(cell(h, 'G').trim())) return 'funnel';
@@ -200,9 +223,11 @@ export function parseReport(rows: unknown[][], kind: ReportKind, file: string, s
     stockDate = dates[0];
   }
   if (kind === 'supplies') {
+    // Дата в подписи столбца B — ошибка выгрузки: там план склада на конец
+    // месяца, а не план на указанную дату. Дата проверяется на формат, но
+    // периодом плана не становится: период объявляет загружающий.
     const date = headerDate('B');
-    if (!date || !validDate(date)) throw new Error('Некорректная дата плана в заголовке отчёта поставок.');
-    planDate = date;
+    if (!date || !validDate(date)) throw new Error('Некорректная дата в заголовке отчёта склада.');
   }
   const readRow = (raw: unknown[], row: number, name: string): ReportRow => {
     const values: Values = {};

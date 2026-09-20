@@ -88,7 +88,7 @@ export default function PreparedReportsPage() {
         <form onSubmit={upload}><fieldset className="org-editor-fields" disabled={busy}>
           <label>Корневая сеть<select value={network} onChange={e=>setNetwork(e.target.value)} required>
             <option value="">Выберите сеть</option>{cap.roots.map(r=><option value={r.id} key={r.id}>{r.display_name} · {r.code}</option>)}</select></label>
-          <label>Агрегатные XLSX · до 2 файлов, до 8 МиБ каждый<input ref={input} type="file" accept=".xlsx" multiple
+          <label>Агрегатные XLSX · до 10 отчётов одним пакетом, до 8 МиБ каждый<input ref={input} type="file" accept=".xlsx" multiple
             onChange={e=>setFiles(Array.from(e.target.files ?? []))}/></label>
           <label className="org-editor-wide">Период продаж<select value={confirmed?'confirmed':'unknown'} onChange={e=>setConfirmed(e.target.value==='confirmed')}>
             <option value="unknown">Не подтверждён — сохранить только для проверки</option><option value="confirmed">Подтверждаю период вручную</option></select></label>

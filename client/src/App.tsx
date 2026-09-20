@@ -7,6 +7,7 @@ import TaskListPage from './pages/TaskListPage';
 import TaskDetailPage from './pages/TaskDetailPage';
 import NotificationsPage from './pages/NotificationsPage';
 import OperationalPage from './pages/OperationalPage';
+import { ReportDateProvider } from './state/reportDate';
 import PortalModulePage from './pages/PortalModulePage';
 import OrganizationPage from './pages/OrganizationPage';
 import PreparedReportsPage from './pages/PreparedReportsPage';
@@ -50,9 +51,10 @@ export default function App() {
   }
 
   return (
-    <Layout>
+    <ReportDateProvider><Layout>
       <Routes>
-        <Route path="/" element={<OperationalPage />} />
+        <Route path="/" element={<NetworkScorePage />} />
+        <Route path="/operational" element={<OperationalPage />} />
         <Route path="/branches/:orgId" element={<OperationalPage />} />
         {['/analytics','/bdr','/kpi'].map(path=><Route key={path} path={path} element={<PortalModulePage/>}/>)}
         <Route path="/diary" element={<PersonalDayPage/>}/>
@@ -80,6 +82,6 @@ export default function App() {
         <Route path="/saved-network/:id/branches/:itemId" element={<SavedBranchPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </Layout>
+    </Layout></ReportDateProvider>
   );
 }

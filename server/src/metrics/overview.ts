@@ -15,6 +15,49 @@ const validDate=(v:unknown):v is string=>{
   return Number.isFinite(t)&&new Date(t).toISOString().slice(0,10)===v;
 };
 
+
+/**
+ * Сетевые плитки run-rate по канону старого портала: a = дней в месяце /
+ * прошедших дней. Считаются только по опубликованным показателям в области
+ * доступа пользователя. Отсутствие источника даёт null с явным основанием —
+ * ноль и выполнение плана не подставляются.
+ */
+export type RunRateCode='sales_runrate'|'stock_turnover'|'margin_runrate'|'supplies_runrate'|'avg_sale_price';
+export interface RunRateTile {
+  code:RunRateCode; label:string; hint:string; value:number|null;
+  format:'PCT'|'COUNT'|'RUB'|'RATIO'; fact:number|null; plan:number|null; basis:string|null;
+}
+function runRateTiles(totals:Map<string,number>,on:string):RunRateTile[] {
+  const [y,m,d]=on.split('-').map(Number);
+  const days=new Date(Date.UTC(y,m,0)).getUTCDate();
+  const a=d>0?days/d:null;
+  const get=(metric:string)=>totals.has(metric)?totals.get(metric)!:null;
+  const runRate=(factMetric:string,planMetric:string):{value:number|null;basis:string|null} => {
+    const fact=get(factMetric),plan=get(planMetric);
+    if(fact===null)return {value:null,basis:`FACT_NOT_PUBLISHED:${factMetric}`};
+    if(plan===null)return {value:null,basis:`PLAN_NOT_PUBLISHED:${planMetric}`};
+    if(!(plan>0)||a===null)return {value:null,basis:'PLAN_NOT_POSITIVE'};
+    return {value:fact*a/plan*100,basis:null};
+  };
+  const sales=runRate('sales','plan'),margin=runRate('margin','planMargin');
+  const revenue=get('revenue'),salesFact=get('sales');
+  return [
+    {code:'sales_runrate',label:'Run-rate продажи',hint:'факт / план шт',format:'PCT',
+      value:sales.value,fact:salesFact,plan:get('plan'),basis:sales.basis},
+    {code:'stock_turnover',label:'Оборачиваемость склада',hint:'в темпе продаж',format:'RATIO',
+      value:null,fact:salesFact,plan:null,basis:'STOCK_START_NOT_PUBLISHED'},
+    {code:'margin_runrate',label:'Run-rate маржа',hint:'к плану маржи',format:'PCT',
+      value:margin.value,fact:get('margin'),plan:get('planMargin'),basis:margin.basis},
+    {code:'supplies_runrate',label:'Run-rate поставки',hint:'к плану поставок',format:'PCT',
+      value:null,fact:null,plan:null,basis:'SUPPLIES_NOT_PUBLISHED'},
+    {code:'avg_sale_price',label:'Средняя цена продажи',hint:'выручка на 1 авто',format:'RUB',
+      value:revenue!==null&&salesFact!==null&&salesFact>0?revenue/salesFact:null,
+      fact:revenue,plan:null,
+      basis:revenue===null?'FACT_NOT_PUBLISHED:revenue'
+        :salesFact===null?'FACT_NOT_PUBLISHED:sales':salesFact>0?null:'SALES_NOT_POSITIVE'},
+  ];
+}
+
 /**
  * Сетка филиалов ТЗ v2.12: только опубликованные показатели в пределах допусков
  * пользователя. Статус светофора берётся из настроенных порогов; при отсутствии
@@ -35,6 +78,7 @@ export async function branchOverview(auth:AuthedUser,query:any) {
       metric_names:METRIC_NAMES,branches:[],thresholds_configured:false,
       scoring:{configured:false,model_id:null,month_progress:null},
       network:{branches_with_score:0,average_score:null,green:0,amber:0,red:0,without_score:0},
+      run_rates:runRateTiles(new Map(),q.end),
       focus:{month:`${q.end.slice(0,7)}-01`,configured:false,slots:[]}};
     const rows=(await c.query(`SELECT s.id snapshot_id,s.org_unit_id,s.metric,s.value::text value,s.unit,
       s.revision,s.created_at,n.display_name,d.id deviation_task_id,d.work_item_id,w.status task_status,
@@ -80,6 +124,11 @@ export async function branchOverview(auth:AuthedUser,query:any) {
       return {...b,rag:worst,metrics_without_threshold:b.metrics.filter(m=>!m.threshold_id).map(m=>m.metric),
         score:score.score,score_rag:score.rag,score_components:score.components,score_reasons:score.reasons};
     });
+    // Сетевые суммы для плиток run-rate: только по показателям, доступным
+    // пользователю; отсутствующий показатель остаётся отсутствующим.
+    const totals=new Map<string,number>();
+    for(const b of branches)for(const m of b.metrics)
+      totals.set(m.metric,(totals.get(m.metric)??0)+m.value);
     const scored=branches.filter(b=>b.score!==null);
     const count=(rag:Rag)=>scored.filter(b=>b.score_rag===rag).length;
     return {mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:q.start,period_end:q.end,
@@ -91,6 +140,7 @@ export async function branchOverview(auth:AuthedUser,query:any) {
         average_score:scored.length?scored.reduce((s,b)=>s+(b.score as number),0)/scored.length:null,
         green:count('GREEN'),amber:count('AMBER'),red:count('RED'),
         without_score:branches.length-scored.length},
+      run_rates:runRateTiles(totals,q.end),
       focus:{month:`${q.end.slice(0,7)}-01`,configured:!!focus,
         configuration_id:focus?.id??null,
         // Факт фокуса не выводится из агрегатов до объявления соответствия

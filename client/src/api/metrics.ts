@@ -25,11 +25,17 @@ export interface BranchCard {
   score:number|null; score_rag:Rag;
   score_components:ScoreComponent[]; score_reasons:string[];
 }
+export type RunRateCode='sales_runrate'|'stock_turnover'|'margin_runrate'|'supplies_runrate'|'avg_sale_price';
+export interface RunRateTile {
+  code:RunRateCode; label:string; hint:string; value:number|null;
+  format:'PCT'|'COUNT'|'RUB'|'RATIO'; fact:number|null; plan:number|null; basis:string|null;
+}
 export interface Overview {
   mode:string; period_start:string; period_end:string;
   branches:BranchCard[]; thresholds_configured:boolean;
   metric_names:Record<string,string>;
   scoring:{configured:boolean;model_id:string|null;month_progress:number|null};
+  run_rates:RunRateTile[];
   network:{branches_with_score:number;average_score:number|null;
     green:number;amber:number;red:number;without_score:number};
   focus:{month:string;configured:boolean;configuration_id?:string|null;

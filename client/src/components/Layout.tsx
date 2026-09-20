@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import Logo from './Logo';
 import Icon, { type IconName } from './Icon';
 import { canSeeNavLink, navPermissions, type NavLinkDef } from './navAccess';
+import { useReportDate } from '../state/reportDate';
 
 type NavGroup = { label: string; links: NavLinkDef<IconName>[] };
 
@@ -34,7 +35,7 @@ const workGroups: NavGroup[] = [
  */
 const adminGroups: NavGroup[] = [
   { label: 'Данные и отчёты', links: [
-    { path: '/prepared-reports', label: 'Приём отчётов QLIK', icon: 'upload' },
+    { path: '/prepared-reports', label: 'Загрузка пакета отчётов QLIK', icon: 'upload' },
     { path: '/saved-network', label: 'Предпросмотр публикации', icon: 'chart' },
   ] },
   { label: 'Правила расчёта', links: [
@@ -58,12 +59,17 @@ const adminGroups: NavGroup[] = [
 
 const allLinks = [...workGroups, ...adminGroups].flatMap(g => g.links);
 const ADMIN_OPEN_KEY = 'fresh-nav-admin-open';
+const ADMIN_GROUPS_KEY = 'fresh-nav-admin-groups';
+
+/** Срез позже сегодняшнего дня не существует: поле даты ограничено текущей датой. */
+const TODAY=new Date().toISOString().slice(0,10);
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { me, logout } = useAuth();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const mobile = useRef<HTMLDialogElement>(null);
+  const { reportDate, setReportDate } = useReportDate();
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('fresh-theme') === 'dark' ? 'dark' : 'light'; } catch { return 'light'; }
   });
@@ -87,12 +93,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem(ADMIN_OPEN_KEY, adminOpen ? '1' : '0'); } catch { /* Persistence is optional. */ }
   }, [adminOpen]);
   const showAdmin = adminOpen || adminActive;
+  // Внутренние разделы администрирования тоже раскрываются по отдельности,
+  // чтобы длинный список настроек не разворачивался целиком.
+  const [openGroups, setOpenGroups] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(ADMIN_GROUPS_KEY) ?? '[]') as string[]; } catch { return []; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(ADMIN_GROUPS_KEY, JSON.stringify(openGroups)); } catch { /* Persistence is optional. */ }
+  }, [openGroups]);
+  const toggleGroup = (label: string) => setOpenGroups(list =>
+    list.includes(label) ? list.filter(l => l !== label) : [...list, label]);
   const primaryRole = grants.some(g => g.role === 'SUPER_ADMIN') ? 'Администратор'
     : grants.some(g => g.role === 'REGIONAL_MANAGER') ? 'Постановщик' : 'Исполнитель';
   const current = pathname.startsWith('/branches/') || pathname.startsWith('/branch-card/') ? 'Карточка филиала'
     : allLinks.find(l => l.path === pathname || (l.path !== '/' && pathname.startsWith(l.path + '/')))?.label ?? 'Карточка задачи';
   const close = () => mobile.current?.close();
-  const upload = () => { close(); navigate('/?import=1'); };
+  const upload = () => { close(); navigate('/prepared-reports'); };
   const renderLink = (link: NavLinkDef<IconName>) => <NavLink key={link.path} to={link.path}
     end={link.path === '/'} onClick={close}
     className={({ isActive }) => `shell-nav-link${isActive ? ' active' : ''}`}>
@@ -119,10 +135,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </button>
         <div id="shell-admin-sections" className="shell-admin-sections" hidden={!showAdmin}>
           <p className="shell-admin-note">Настройка портала. В ежедневной работе руководителя не нужна.</p>
-          {admin.map(group => <div className="shell-nav-group" key={group.label}>
-            <div className="shell-nav-label">{group.label}</div>
-            {group.links.map(renderLink)}
-          </div>)}
+          {admin.map(group => {
+            const groupActive = group.links.some(l => pathname === l.path || pathname.startsWith(l.path + '/'));
+            const groupOpen = openGroups.includes(group.label) || groupActive;
+            return <div className={`shell-nav-group shell-nav-subgroup${groupOpen ? ' open' : ''}`} key={group.label}>
+              <button type="button" className="shell-subgroup-toggle" aria-expanded={groupOpen}
+                onClick={() => toggleGroup(group.label)}>
+                <span>{group.label}</span>
+                <span className="shell-admin-count">{group.links.length}</span>
+                <Icon name="chevron" />
+              </button>
+              <div hidden={!groupOpen}>{group.links.map(renderLink)}</div>
+            </div>;
+          })}
         </div>
       </div>}
     </nav>
@@ -150,7 +175,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <header className="shell-topbar">
         <button className="shell-icon-button shell-menu-toggle" aria-label="Открыть меню" onClick={() => mobile.current?.showModal()}><Icon name="menu" /></button>
         <div className="shell-breadcrumb"><span>FRESH Portal</span><Icon name="chevron" /><strong>{current}</strong></div>
-        <div className="shell-top-actions"><span className="shell-stage">Сетевой срез · ТЗ v2.12</span>
+        <div className="shell-top-actions">
+          <label className="shell-report-date">
+            <span>Срез отчёта</span>
+            <input type="date" value={reportDate} max={TODAY}
+              aria-label="Дата отчётного среза"
+              onChange={e => setReportDate(e.target.value)} />
+          </label>
           <button className="shell-icon-button" aria-label={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
             onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Сменить тему"><Icon name={theme === 'dark' ? 'sun' : 'moon'} /></button>
           <NavLink className="shell-icon-button" to="/notifications" aria-label="Открыть уведомления"><Icon name="bell" /></NavLink>
