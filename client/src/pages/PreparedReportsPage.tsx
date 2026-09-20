@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { ApiError } from '../api/client';
 import { getStagingCapabilities,listStagingBatches,getStagingBatch,uploadStagingBatch,probeStagingBatch,
-  type StagingCapabilities,type StagingBatch } from '../api/reportBatches';
+  autoPublishStagingBatch,type StagingCapabilities,type StagingBatch,
+  type AutoPublishResult } from '../api/reportBatches';
 import { METRIC_NAMES,REPORT_NAMES,sourceAddress,type ImportPeriod,type ReportKind } from '../imports/reportModel';
 import { periodMetadata,checkStagingFiles,stagingStatus,periodLabel,blockerLabel } from '../components/reportStagingModel';
 import Icon from '../components/Icon';
@@ -20,6 +21,7 @@ export default function PreparedReportsPage() {
   const [files,setFiles]=useState<File[]>([]),[confirmed,setConfirmed]=useState(false);
   const [period,setPeriod]=useState<ImportPeriod>({start:'',end:'',planStart:'',planEnd:''}),[confirmation,setConfirmation]=useState('');
   const [busy,setBusy]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
+  const [auto,setAuto]=useState<AutoPublishResult|null>(null);
   const input=useRef<HTMLInputElement>(null),request=useRef(0),alive=useRef(true);
   const fail=(e:unknown)=>{
     if(!alive.current)return;
@@ -59,6 +61,22 @@ export default function PreparedReportsPage() {
       if(alive.current){setSelected(result);setBatches(list.items);setNotice(saved.reused?'Найден ранее сохранённый пакет: повторной записи нет.':'Пакет сохранён на сервере. Рабочие показатели не изменены.');}
     } catch(e){fail(e);} finally {if(alive.current)setBusy(false);}
   }
+  /** Загрузка и публикация одной операцией: ручные этапы не требуются. */
+  async function publishNow() {
+    setError('');setNotice('');setSelected(null);setAuto(null);setBusy(true);request.current++;
+    try {
+      checkStagingFiles(files);
+      if(!network)throw new Error('Сначала выберите существующую корневую сеть.');
+      if(!confirmed)throw new Error('Для публикации нужен подтверждённый период: портал не выводит его из файлов.');
+      const meta=periodMetadata(true,period,confirmation);
+      const result=await autoPublishStagingBatch(network,meta,files);
+      const list=await listStagingBatches();
+      if(!alive.current)return;
+      setAuto(result);setBatches(list.items);setFiles([]);if(input.current)input.current.value='';
+      setNotice(result.message);
+      if(result.batch_id) setSelected(await getStagingBatch(result.batch_id));
+    } catch(e){fail(e);} finally {if(alive.current)setBusy(false);}
+  }
   async function probe() {
     if(!selected)return;
     setBusy(true);setError('');setNotice('');
@@ -90,7 +108,15 @@ export default function PreparedReportsPage() {
             <option value="">Выберите сеть</option>{cap.roots.map(r=><option value={r.id} key={r.id}>{r.display_name} · {r.code}</option>)}</select></label>
           <label>Агрегатные XLSX · до 10 отчётов одним пакетом, до 8 МиБ каждый<input ref={input} type="file" accept=".xlsx" multiple
             onChange={e=>setFiles(Array.from(e.target.files ?? []))}/></label>
-          <label className="org-editor-wide">Период продаж<select value={confirmed?'confirmed':'unknown'} onChange={e=>setConfirmed(e.target.value==='confirmed')}>
+          <label className="org-editor-wide">Период продаж<select value={confirmed?'confirmed':'unknown'} onChange={e=>{
+            const on=e.target.value==='confirmed';setConfirmed(on);
+            if(on&&!period.start){
+              const now=new Date(),m=String(now.getMonth()+1).padStart(2,'0');
+              const first=`${now.getFullYear()}-${m}-01`,today=now.toISOString().slice(0,10);
+              setPeriod({start:first,end:today,planStart:first,planEnd:today});
+              if(!confirmation) setConfirmation('Период подтверждён администратором при загрузке пакета из портала.');
+            }
+          }}>
             <option value="unknown">Не подтверждён — сохранить только для проверки</option><option value="confirmed">Подтверждаю период вручную</option></select></label>
           {confirmed && <>
             {([['start','Продажи: с'],['end','Продажи: по'],['planStart','План: с (необязательно)'],['planEnd','План: по (необязательно)']] as const)
@@ -98,7 +124,28 @@ export default function PreparedReportsPage() {
             <label className="org-editor-wide">Основание подтверждения периода<textarea maxLength={500} minLength={10} required value={confirmation} onChange={e=>setConfirmation(e.target.value)} /></label>
           </>}
         </fieldset><p className="org-small">Период не выводится из имени файла, даты загрузки или даты склада. Филиалы не привязываются автоматически.</p>
-        <button className="btn reports-primary" disabled={!intake || busy || !network || !files.length} type="submit">Сохранить и проверить на сервере</button></form>
+        <button className="btn reports-primary" disabled={!intake || busy || !network || !files.length} type="submit">Сохранить и проверить на сервере</button>
+        <button className="btn reports-primary" type="button" onClick={publishNow}
+          disabled={!intake || busy || !network || !files.length || !confirmed}
+          title="Загрузка, привязка филиалов и публикация показателей одной операцией">
+          Загрузить и опубликовать</button></form>
+        {auto&&<div className="reports-auto" role="status">
+          <p><strong>{auto.message}</strong></p>
+          <ul>
+            <li>Распознано отчётов: {auto.recognized.length
+              ?auto.recognized.map(r=>`${REPORT_NAMES[r.kind as ReportKind]??r.kind} (${r.rows} строк)`).join(', ')
+              :'нет'}</li>
+            <li>Привязано строк к филиалам: {auto.mapped_rows}</li>
+            {auto.published_metrics.length>0&&<li>Опубликованы показатели: {auto.published_metrics.join(', ')}</li>}
+            {auto.withheld_metrics.length>0&&<li>Не опубликованы (нет разрешения на показатель): {auto.withheld_metrics.join(', ')}</li>}
+            {auto.skipped_files.length>0&&<li>Файлы вне публикации: {auto.skipped_files
+              .map(f=>`${f.name} — ${f.reason}`).join('; ')}</li>}
+            {auto.excluded_rows.length>0&&<li>Исключённые строки: {auto.excluded_rows
+              .map(r=>`${r.name} (${r.reason})`).join('; ')}</li>}
+            {auto.unresolved_rows.length>0&&<li>Строки без филиала: {auto.unresolved_rows
+              .map(r=>`${r.name} — ${r.why}`).join('; ')}</li>}
+          </ul>
+        </div>}
       </section>
       <section className="portal-panel"><div className="portal-eyebrow">02 / СОХРАНЁННЫЕ ПАКЕТЫ</div><h2>Последние пакеты <span className="reports-count">{batches.length}</span></h2>
         {!batches.length?<p className="org-empty">Здесь появятся закрытые пакеты после загрузки. Они сохранятся после обновления страницы.</p>:

@@ -143,7 +143,11 @@ export async function probeBatch(auth:AuthedUser,id:string,raw:any,requestId:str
     await stagingAccess(c,auth);const batch=await load(c,auth,id);
     if(batch.status!=='QUARANTINE') return publicBatch(batch);
     if(batch.version!==snapshot.batch.version) throw new ApiError('ENTITY_VERSION_CONFLICT','Пакет изменился; откройте заново.');
-    const blockers=['NEEDS_MAPPING','MALWARE_SCAN_REQUIRED','CANONICAL_COMMIT_NOT_IMPLEMENTED'];
+    // Публикация в канонический контур реализована (report_fact_publications),
+    // поэтому исторический блокер CANONICAL_COMMIT_NOT_IMPLEMENTED снят.
+    // Антивирусная проверка выполняется отдельным этапом scanBatch и не
+    // объявляется блокером структурной проверки.
+    const blockers=['NEEDS_MAPPING'];
     if(batch.period.state!=='CONFIRMED') blockers.push('PERIOD_REQUIRES_CONFIRMATION');
     if(batch.period.state==='CONFIRMED' && !batch.period.planStart) blockers.push('PLAN_PERIOD_UNCONFIRMED');
     const preview=result.ok ? {...result.preview,valid_structure:true,blockers,network_id:batch.network_id,

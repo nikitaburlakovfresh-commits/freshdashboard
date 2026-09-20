@@ -130,3 +130,37 @@
 @media(max-width:1100px){.score-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
   .runrate-tiles,.focus-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.score-tiles,.runrate-tiles,.focus-row{grid-template-columns:1fr}}
+
+/* Иконки плиток и карточки филиалов внутри группы РМ. */
+.score-tile .tile-icon,.runrate-icon,.focus-tile-icon{display:grid;place-items:center}
+.score-tile .tile-icon svg,.runrate-icon svg,.focus-tile-icon svg{width:16px;height:16px}
+.score-tile .tile-icon{flex:0 0 auto;width:34px;height:34px;border-radius:10px;background:var(--fresh-raised);
+  border:1px solid var(--fresh-border);color:var(--fresh-text-muted)}
+.score-tile .tile-icon[data-rag="GREEN"]{color:var(--rag-green)}
+.score-tile .tile-icon[data-rag="AMBER"]{color:var(--rag-amber)}
+.score-tile .tile-icon[data-rag="RED"]{color:var(--rag-red)}
+.score-tile>div{min-width:0;display:flex;flex-direction:column;gap:2px}
+.score-tile>div>span{font-size:12px;color:var(--fresh-dark)}
+.score-tile>div>small{font-size:11px;color:var(--fresh-text-muted);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.runrate-icon{color:var(--fresh-text-muted)}
+.focus-tile-icon{color:var(--fresh-text-muted)}
+
+.branch-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:2px 0 14px}
+.branch-tile{border:1px solid var(--fresh-border);border-radius:12px;background:var(--fresh-surface);
+  padding:12px 14px;min-width:0;border-left:3px solid var(--rag-none)}
+.branch-tile[data-rag="RED"]{border-left-color:var(--rag-red)}
+.branch-tile[data-rag="AMBER"]{border-left-color:var(--rag-amber)}
+.branch-tile[data-rag="GREEN"]{border-left-color:var(--rag-green)}
+.branch-tile[data-open]{grid-column:1/-1}
+.branch-tile-head{display:flex;flex-direction:column;gap:8px}
+.branch-tile-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;background:none;
+  border:0;color:inherit;text-align:left;padding:0;min-height:36px;font-size:13px;width:100%;min-width:0}
+.branch-tile-name{display:flex;align-items:center;gap:7px;min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.branch-tile-score{font-size:19px;line-height:1.1;white-space:nowrap}
+.branch-tile-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+@media(max-width:1500px){.branch-tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:1200px){.branch-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px){.branch-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.branch-tiles{grid-template-columns:1fr}}

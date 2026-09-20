@@ -9,6 +9,7 @@ import { capabilities, listBatches, detail, uploadBatch, probeBatch, downloadSou
 import { ApiError } from '../util/errors';
 import { getReview,saveReview,savedOverview,savedBranch } from '../reporting/review';
 import { requireReportIntake } from '../middleware/featureGate';
+import { autoPublishPackage } from '../reporting/autoPublish';
 
 export const reportBatchesRouter=Router();
 const wrap=(fn:(req:Request,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{
@@ -47,6 +48,15 @@ reportBatchesRouter.post('/',requireOrigin,requireCsrf,requireReportIntake,wrap(
   try {
     const upload=await readUpload(req);
     res.status(200).json(await uploadBatch(req.authUser!,upload.metadata,upload.files,req.ctx.requestId));
+  } finally {receiving=false;}
+}));
+// Приём «одной кнопкой»: загрузка, привязка и публикация без ручных этапов.
+reportBatchesRouter.post('/auto-publish',requireOrigin,requireCsrf,requireReportIntake,wrap(async(req,res)=>{
+  if(receiving) throw new ApiError('TEMPORARILY_UNAVAILABLE','Другая загрузка выполняется. Повторите позже.',{retry_after_seconds:5});
+  receiving=true;
+  try {
+    const upload=await readUpload(req);
+    res.status(200).json(await autoPublishPackage(req.authUser!,upload.metadata,upload.files,req.ctx.requestId));
   } finally {receiving=false;}
 }));
 reportBatchesRouter.post('/:id/probe',requireOrigin,requireCsrf,requireReportIntake,wrap(async(req,res)=>{

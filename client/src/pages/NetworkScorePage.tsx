@@ -5,6 +5,7 @@ import { readOverview,readDivisionSummary,COMPONENT_MISSING_LABELS,EVALUATION_LA
   RULE_ROLE_LABELS,RAG_LABELS,type Overview,type BranchCard,
   type DivisionSummary,type RunRateTile } from '../api/metrics';
 import RagBadge,{ RagDot } from '../components/RagBadge';
+import Icon from '../components/Icon';
 import '../styles/branch-grid.css';
 import '../styles/network-score.css';
 
@@ -28,6 +29,30 @@ function runRateValue(t:RunRateTile):string {
   return Math.round(t.value).toLocaleString('ru-RU');
 }
 const RU_DATE=(iso:string)=>iso.split('-').reverse().join('.');
+/**
+ * Причина отсутствия факта на языке руководителя: технические коды сервера
+ * («FACT_NOT_PUBLISHED:sales») на экран не выводятся.
+ */
+function basisLabel(basis:string|null):string {
+  if(!basis) return 'нет опубликованных данных за срез';
+  const [code,metric]=basis.split(':');
+  const MAP:Record<string,string>={
+    FACT_NOT_PUBLISHED:'факт ещё не опубликован',
+    PLAN_NOT_PUBLISHED:'план ещё не опубликован',
+    STOCK_START_NOT_PUBLISHED:'нет склада на начало периода',
+    SUPPLIES_NOT_PUBLISHED:'поставки ещё не опубликованы',
+    NOT_MAPPED_TO_PUBLISHED_METRIC:'соответствие показателю не объявлено',
+    NO_ACCESS:'нет допуска к показателю',
+  };
+  const human=MAP[code];
+  if(!human) return basis;
+  return metric?`${human} (${metric})`:human;
+}
+/** Иконка плитки run-rate по её смыслу. */
+const RUNRATE_ICONS:Record<string,'target'|'stock'|'wallet'|'layers'|'chart'>={
+  sales_runrate:'target',stock_turnover:'stock',margin_runrate:'wallet',
+  supplies_runrate:'layers',avg_sale_price:'chart',
+};
 const MONTHS=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь',
   'ноябрь','декабрь'];
 /** «2026-09-01» → «сентябрь 2026 г.» */
@@ -75,11 +100,12 @@ export default function NetworkScorePage() {
   useEffect(()=>{void load(start,end);},[load,start,end]);
 
   const net=data?.network;
-  const tiles=[
-    {label:'Средний балл сети',value:net?num(net.average_score):'—',hint:`По ${net?.branches_with_score??0} филиалам с определённым баллом`},
-    {label:'Зелёные филиалы',value:String(net?.green??0),hint:'Все условия зелёного статуса выполнены',rag:'GREEN' as const},
-    {label:'Жёлтые филиалы',value:String(net?.amber??0),hint:'Есть отклонения без красных правил',rag:'AMBER' as const},
-    {label:'Красные филиалы',value:String(net?.red??0),hint:'Сработало правило красного статуса',rag:'RED' as const},
+  const tiles:{label:string;value:string;hint:string;rag?:'GREEN'|'AMBER'|'RED';
+    icon:'chart'|'check'|'info'|'shield'}[]=[
+    {icon:'chart',label:'Средний балл сети',value:net?num(net.average_score):'—',hint:`По ${net?.branches_with_score??0} филиалам с определённым баллом`},
+    {icon:'check',label:'Зелёные филиалы',value:String(net?.green??0),hint:'Все условия зелёного статуса выполнены',rag:'GREEN' as const},
+    {icon:'info',label:'Жёлтые филиалы',value:String(net?.amber??0),hint:'Есть отклонения без красных правил',rag:'AMBER' as const},
+    {icon:'shield',label:'Красные филиалы',value:String(net?.red??0),hint:'Сработало правило красного статуса',rag:'RED' as const},
   ];
   const branchesByManager=groupByManager(data?.branches??[],managers);
 
@@ -105,15 +131,18 @@ export default function NetworkScorePage() {
         <Link to="/settings/scoring">Настроить модель балла</Link>.</p>}
 
       <div className="score-tiles">{tiles.map(t=><article className="score-tile" key={t.label}
-        data-rag={t.rag??'NEUTRAL'}>
-        <span>{t.label}</span><strong className="tabnum">{t.value}</strong><small>{t.hint}</small>
+        data-rag={t.rag??'NEUTRAL'} title={t.hint}>
+        <span className="tile-icon" data-rag={t.rag??'NEUTRAL'} aria-hidden="true"><Icon name={t.icon}/></span>
+        <div><strong className="tabnum">{t.value}</strong><span>{t.label}</span>
+          <small>{t.hint}</small></div>
       </article>)}</div>
 
       <div className="runrate-tiles">{data.run_rates.map(t=><article className="runrate-tile" key={t.code}>
-        <span className="runrate-icon" data-code={t.code} aria-hidden="true"/>
+        <span className="runrate-icon" data-code={t.code} aria-hidden="true">
+          <Icon name={RUNRATE_ICONS[t.code]??'chart'}/></span>
         <div><strong className="tabnum">{runRateValue(t)}</strong>
           <span>{t.label}</span>
-          <small>{t.value===null?(t.basis??'нет данных за срез'):t.hint}</small></div>
+          <small>{t.value===null?basisLabel(t.basis):t.hint}</small></div>
       </article>)}</div>
 
       <section className="focus-block">
@@ -125,7 +154,7 @@ export default function NetworkScorePage() {
           в портале.</p>}
         {data.focus.configured&&<div className="focus-row">{data.focus.slots.map(s=>
           <article className="focus-tile" key={s.slot} data-missing={s.fact===null?'1':undefined}>
-            <span className="focus-tile-icon" aria-hidden="true"/>
+            <span className="focus-tile-icon" aria-hidden="true"><Icon name="target"/></span>
             <div>
               <p className="focus-tile-value">
                 <strong className="tabnum">{s.fact===null?'—'
@@ -140,7 +169,7 @@ export default function NetworkScorePage() {
                 :s.requires_daily_logs?'появится после ведения ежедневников'
                 :s.fact_basis==='NOT_MAPPED_TO_PUBLISHED_METRIC'
                   ?'соответствие показателю не объявлено'
-                  :s.fact_basis}</small>}
+                  :basisLabel(s.fact_basis)}</small>}
             </div>
           </article>)}</div>}
       </section>
@@ -166,7 +195,7 @@ export default function NetworkScorePage() {
                   ?list.filter(k=>k!==group.key):[...list,group.key])}>
                 {expanded?'Свернуть':'Открыть'}</button>
             </div>
-            {expanded&&<div className="score-rows">{group.branches.map(b=><BranchRow key={b.org_unit_id}
+            {expanded&&<div className="branch-tiles">{group.branches.map(b=><BranchRow key={b.org_unit_id}
               branch={b} period={{start:data.period_start,end:data.period_end}}
               open={open.includes(b.org_unit_id)}
               onToggle={()=>setOpen(list=>list.includes(b.org_unit_id)
@@ -197,14 +226,17 @@ function groupByManager(branches:BranchCard[],summary:DivisionSummary|null):Grou
 
 function BranchRow({branch:b,period,open,onToggle}:{branch:BranchCard;
   period:{start:string;end:string};open:boolean;onToggle:()=>void}) {
-  return <article className="score-row" data-rag={b.score_rag}>
-    <div className="score-row-head">
-      <button type="button" className="score-row-toggle" aria-expanded={open} onClick={onToggle}>
-        <RagDot status={b.score_rag}/>{b.display_name}</button>
-      <span className="score-row-value tabnum">{b.score===null?'балл не рассчитан':num(b.score)}</span>
-      <RagBadge status={b.score_rag}/>
-      <Link className="score-row-link"
-        to={`/branch-card/${b.org_unit_id}?start=${period.start}&end=${period.end}`}>Карточка →</Link>
+  return <article className="branch-tile score-row" data-rag={b.score_rag} data-open={open?'1':undefined}>
+    <div className="branch-tile-head">
+      <button type="button" className="branch-tile-toggle" aria-expanded={open} onClick={onToggle}>
+        <span className="branch-tile-name"><RagDot status={b.score_rag}/>{b.display_name}</span>
+        <strong className="branch-tile-score tabnum">{b.score===null?'—':`${Math.round(b.score)}%`}</strong>
+      </button>
+      <div className="branch-tile-foot">
+        <RagBadge status={b.score_rag}/>
+        <Link className="score-row-link"
+          to={`/branch-card/${b.org_unit_id}?start=${period.start}&end=${period.end}`}>Карточка →</Link>
+      </div>
     </div>
     {open&&<div className="score-row-body">
       {b.score_reasons.length>0&&<ul className="score-reasons">
