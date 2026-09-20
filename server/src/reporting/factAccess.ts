@@ -28,19 +28,11 @@ export async function factAccess(c:PoolClient,auth:AuthedUser,capability:'PUBLIS
       AND (a.valid_until IS NULL OR a.valid_until>now()) AND g.revoked_at IS NULL
       AND g.valid_from<=now() AND (g.valid_until IS NULL OR g.valid_until>now())
       AND (($2='PUBLISH' AND g.role_code='SUPER_ADMIN' AND g.scope_kind='NETWORK' AND g.org_unit_id IS NULL)
-        OR ($2='READ' AND g.scope_kind='ORG_UNIT' AND g.org_unit_id IS NOT NULL)
-        OR ($2='READ' AND g.scope_kind='NETWORK' AND g.org_unit_id IS NULL))`,
+        OR ($2='READ' AND g.scope_kind='ORG_UNIT' AND g.org_unit_id IS NOT NULL))`,
   [auth.userId,capability])).rows as Grant[];
-  if(capability!=='READ') return rows.map(stripScope);
-  // Сетевая область видимости на чтение раскрывается в действующие филиалы
-  // каталога: перечень показателей остаётся тем же, что выдан допуском, а
-  // отсутствие филиалов в каталоге не подменяется пустым доступом к сети.
-  const network=rows.filter(r=>r.scope_kind==='NETWORK');
-  if(!network.length) return rows.map(stripScope);
-  const units=(await c.query(`SELECT id FROM org_directory_units
-    WHERE kind='ORG_UNIT' AND effective_to IS NULL ORDER BY id`)).rows as {id:string}[];
-  const expanded=network.flatMap(g=>units.map(u=>({grant_id:g.grant_id,org_unit_id:u.id,metrics:g.metrics})));
-  return [...rows.filter(r=>r.scope_kind!=='NETWORK').map(stripScope),...expanded];
+  // Неявного сетевого читателя нет: чтение выдаётся допуском на конкретный
+  // филиал. Сетевая область видимости собирается из перечня таких допусков.
+  return rows.map(stripScope);
 }
 interface Grant {grant_id:string;org_unit_id:string|null;scope_kind:string;metrics:string[]}
 const stripScope=(g:Grant)=>({grant_id:g.grant_id,org_unit_id:g.org_unit_id,metrics:g.metrics});
