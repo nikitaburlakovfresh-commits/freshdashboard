@@ -24,9 +24,6 @@ export function ReportDateProvider({children}:{children:React.ReactNode}) {
     }catch{return today();}
   });
   const [periods,setPeriods]=useState<PublishedPeriod[]>([]);
-  const [touched,setTouched]=useState(()=>{
-    try{return !!localStorage.getItem(KEY);}catch{return false;}
-  });
   useEffect(()=>{
     // Перечень опубликованных срезов нужен, чтобы дата по умолчанию указывала на
     // существующую публикацию. Пользовательский выбор не переопределяется.
@@ -34,17 +31,21 @@ export function ReportDateProvider({children}:{children:React.ReactNode}) {
     readPublishedPeriods().then((r:{periods:PublishedPeriod[]})=>{
       if(!alive)return;
       setPeriods(r.periods);
-      if(!touched&&r.periods.length) setDate(r.periods[0].period_end);
+      // Если выбранная дата не совпадает ни с одним опубликованным срезом,
+      // экран был бы пустым: подставляем последнюю публикацию и сообщаем это
+      // подписью среза. Данные при этом не досчитываются.
+      if(r.periods.length&&!r.periods.some(p=>p.period_end===reportDate))
+        setDate(r.periods[0].period_end);
     }).catch(()=>{/* Отсутствие перечня не меняет выбранный срез. */});
     return()=>{alive=false;};
-  },[touched]);
+  },[]);
   useEffect(()=>{
     try{localStorage.setItem(KEY,reportDate);}catch{/* Сохранение выбора необязательно. */}
   },[reportDate]);
   const setReportDate=useCallback((d:string)=>{
     // Пустое или некорректное значение из поля даты не сбрасывает срез на «сегодня»
     // молча: выбор пользователя сохраняется до следующего явного изменения.
-    if(/^\d{4}-\d{2}-\d{2}$/.test(d)) {setTouched(true);setDate(d);}
+    if(/^\d{4}-\d{2}-\d{2}$/.test(d)) setDate(d);
   },[]);
   const match=periods.find(p=>p.period_end===reportDate);
   const value=useMemo(()=>({reportDate,setReportDate,periods,

@@ -64,7 +64,7 @@ export default function FocusConfigPage() {
   const set=(i:number,patch:Partial<SlotForm>)=>
     setSlots(list=>list.map((s,idx)=>idx===i?{...s,...patch}:s));
 
-  return <div className="portal-page network-score">
+  return <div className="portal-page network-kpi">
     <h1>Фокусы внимания месяца</h1>
     <p className="portal-muted">Пять фокусов на месяц выбираются из каталога и настраиваются внутри портала.
       Версии историчны: изменение фокусов не переписывает прошедшие месяцы.</p>

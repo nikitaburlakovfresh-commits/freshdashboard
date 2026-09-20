@@ -60,7 +60,7 @@ export default function ScoringModelPage() {
   const setWeight=(i:number,patch:Partial<WeightForm>)=>
     setWeights(list=>list.map((w,idx)=>idx===i?{...w,...patch}:w));
 
-  return <div className="portal-page network-score">
+  return <div className="portal-page network-kpi">
     <h1>Модель балла филиала</h1>
     <p className="portal-muted">Веса, ограничение балла, пороги правил светофора и полосы конверсии задаются
       внутри портала без изменения кода. Балл не рассчитывается, пока модель не настроена: отсутствие

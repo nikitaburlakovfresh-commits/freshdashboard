@@ -83,7 +83,7 @@ export default function NetworkScorePage() {
   ];
   const branchesByManager=groupByManager(data?.branches??[],managers);
 
-  return <div className="portal-page network-score">
+  return <div className="portal-page network-kpi">
     <header className="overview-head">
       <div>
         <h1>Обзор сети</h1>
