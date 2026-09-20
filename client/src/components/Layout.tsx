@@ -15,8 +15,8 @@ type NavGroup = { label: string; links: NavLinkDef<IconName>[] };
  */
 const workGroups: NavGroup[] = [
   { label: 'Результат сети', links: [
-    { path: '/', label: 'Вся сеть', icon: 'grid', work: true },
-    { path: '/network-overview', label: 'Обзор сети · балл и фокусы', icon: 'chart', work: true },
+    { path: '/', label: 'Обзор сети · KPI', icon: 'chart', work: true },
+    { path: '/operational', label: 'Вся сеть · задачи и отклонения', icon: 'grid', work: true },
     { path: '/division-summary', label: 'Сводка по дивизионам', icon: 'chart', work: true },
   ] },
   { label: 'Моя работа', links: [

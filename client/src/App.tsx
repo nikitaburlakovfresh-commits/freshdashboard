@@ -66,7 +66,9 @@ export default function App() {
         <Route path="/access" element={<AccessPage />} />
         <Route path="/access/metrics" element={<MetricAccessPage />} />
         <Route path="/division-summary" element={<DivisionSummaryPage />} />
-        <Route path="/network-overview" element={<NetworkScorePage />} />
+        {/* Обзор KPI живёт на главной; прежний адрес сохранён как переход,
+            чтобы закладки руководителей не ломались. */}
+        <Route path="/network-overview" element={<Navigate to="/" replace />} />
         <Route path="/settings/scoring" element={<ScoringModelPage />} />
         <Route path="/settings/focus" element={<FocusConfigPage />} />
         <Route path="/settings/thresholds" element={<MetricThresholdsPage />} />
