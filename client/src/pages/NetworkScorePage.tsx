@@ -28,6 +28,29 @@ function runRateValue(t:RunRateTile):string {
   return Math.round(t.value).toLocaleString('ru-RU');
 }
 const RU_DATE=(iso:string)=>iso.split('-').reverse().join('.');
+const MONTHS=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь',
+  'ноябрь','декабрь'];
+/** «2026-09-01» → «сентябрь 2026 г.» */
+function focusMonthLabel(month:string):string {
+  const [y,m]=month.split('-').map(Number);
+  return m>=1&&m<=12?`${MONTHS[m-1]} ${y} г.`:month;
+}
+/**
+ * Средний балл группы РМ считается только по филиалам с рассчитанным баллом.
+ * Если балла нет ни у одного филиала, показывается «—», а не ноль.
+ */
+function groupScore(branches:BranchCard[]):string {
+  const scored=branches.filter(b=>b.score!==null);
+  if(!scored.length) return '—';
+  return `${Math.round(scored.reduce((sum,b)=>sum+(b.score??0),0)/scored.length)}%`;
+}
+/** Цвет числа группы: по худшему статусу филиалов, без собственных порогов на клиенте. */
+function groupRag(branches:BranchCard[]):string {
+  if(branches.some(b=>b.score_rag==='RED')) return 'RED';
+  if(branches.some(b=>b.score_rag==='AMBER')) return 'AMBER';
+  if(branches.some(b=>b.score_rag==='GREEN')) return 'GREEN';
+  return 'NONE';
+}
 
 export default function NetworkScorePage() {
   // Период факта задаётся глобальным срезом из топбара: от начала месяца
@@ -37,6 +60,7 @@ export default function NetworkScorePage() {
   const [data,setData]=useState<Overview|null>(null);
   const [managers,setManagers]=useState<DivisionSummary|null>(null);
   const [error,setError]=useState(''),[busy,setBusy]=useState(false),[open,setOpen]=useState<string[]>([]);
+  const [openGroups,setOpenGroups]=useState<string[]>([]);
 
   const load=useCallback(async(from:string,to:string)=>{
     setBusy(true);setError('');setData(null);setManagers(null);
@@ -92,49 +116,62 @@ export default function NetworkScorePage() {
           <small>{t.value===null?(t.basis??'нет данных за срез'):t.hint}</small></div>
       </article>)}</div>
 
-      <section className="portal-panel">
-        <div className="portal-section-head"><div><h2>Фокусы внимания · {data.focus.month}</h2>
-          <p className="portal-muted">Пять фокусов месяца настраиваются внутри портала. План задаётся
-            вручную функциональным руководителем.</p></div>
-          <Link className="btn" to="/settings/focus">Настроить фокусы</Link></div>
-        {!data.focus.configured&&<p role="status">Фокусы на этот месяц не настроены.</p>}
-        {data.focus.configured&&<div className="focus-grid">{data.focus.slots.map(s=>
-          <article className="focus-card" key={s.slot}>
-            <header><span className="focus-slot">Фокус {s.slot}</span>
-              <span className="portal-chip">{s.direction==='HIGHER_IS_BETTER'?'Больше — лучше':'Меньше — лучше'}</span>
-            </header>
-            <h3>{s.label}</h3>
-            <dl>
-              <div><dt>План</dt><dd className="tabnum">{s.plan===null?'не задан':
-                `${s.plan.toLocaleString('ru-RU')} ${FOCUS_FORMATS[s.format]??''}`}</dd></div>
-              <div><dt>Факт</dt><dd className="tabnum">{s.fact===null?'не публикуется':
-                s.fact.toLocaleString('ru-RU')}</dd></div>
-            </dl>
-            {s.fact===null&&<small className="portal-muted">
-              {s.fact_basis==='NOT_MAPPED_TO_PUBLISHED_METRIC'
-                ?'Соответствие кода фокуса опубликованному показателю не объявлено — факт не подставляется.'
-                :s.fact_basis}</small>}
-            {(s.requires_vin_level||s.requires_daily_logs)&&<small className="portal-muted">
-              Требуется источник: {[s.requires_vin_level&&'VIN-уровень',
-                s.requires_daily_logs&&'ежедневники'].filter(Boolean).join(', ')}.</small>}
+      <section className="focus-block">
+        <div className="focus-block-head">
+          <h2>Фокусы внимания — {focusMonthLabel(data.focus.month)}</h2>
+          <Link className="focus-block-link" to="/settings/focus">Настроить фокусы</Link>
+        </div>
+        {!data.focus.configured&&<p role="status" className="portal-muted">Фокусы на этот месяц не настроены
+          в портале.</p>}
+        {data.focus.configured&&<div className="focus-row">{data.focus.slots.map(s=>
+          <article className="focus-tile" key={s.slot} data-missing={s.fact===null?'1':undefined}>
+            <span className="focus-tile-icon" aria-hidden="true"/>
+            <div>
+              <p className="focus-tile-value">
+                <strong className="tabnum">{s.fact===null?'—'
+                  :`${s.fact.toLocaleString('ru-RU')}${s.format==='PCT'?'%':''}`}</strong>
+                <span className="tabnum"> / {s.plan===null?'план не задан'
+                  :`план ${s.direction==='LOWER_IS_BETTER'?'≤':''}${s.plan.toLocaleString('ru-RU')}${
+                    s.format==='PCT'?'%':` ${FOCUS_FORMATS[s.format]??''}`}`}</span>
+              </p>
+              <span className="focus-tile-label" title={s.label}>{s.label}</span>
+              {s.fact===null&&<small className="focus-tile-note">{
+                s.requires_vin_level?'появится после накопления базы по VIN'
+                :s.requires_daily_logs?'появится после ведения ежедневников'
+                :s.fact_basis==='NOT_MAPPED_TO_PUBLISHED_METRIC'
+                  ?'соответствие показателю не объявлено'
+                  :s.fact_basis}</small>}
+            </div>
           </article>)}</div>}
       </section>
 
-      <section className="portal-panel">
-        <div className="portal-section-head"><div><h2>Филиалы по региональным менеджерам</h2>
-          <p className="portal-muted">Балл, статус и основания статуса. Раскройте филиал, чтобы увидеть
-            вклад каждого показателя.</p></div>
-          <span className="portal-chip">{data.branches.length} филиалов в области доступа</span></div>
-        {!data.branches.length&&<p role="status">За этот период в вашей области доступа нет опубликованных
-          показателей.</p>}
-        {branchesByManager.map(group=><div className="score-group" key={group.key}>
-          <h3>{group.title} <span className="portal-muted">· {group.branches.length}</span></h3>
-          <div className="score-rows">{group.branches.map(b=><BranchRow key={b.org_unit_id} branch={b}
-            period={{start:data.period_start,end:data.period_end}}
-            open={open.includes(b.org_unit_id)}
-            onToggle={()=>setOpen(list=>list.includes(b.org_unit_id)
-              ?list.filter(id=>id!==b.org_unit_id):[...list,b.org_unit_id])}/>)}</div>
-        </div>)}
+      <section className="manager-list">
+        {!data.branches.length&&<p role="status" className="portal-muted">За этот период в вашей области
+          доступа нет опубликованных показателей.</p>}
+        {branchesByManager.map(group=>{
+          const expanded=openGroups.includes(group.key);
+          return <div className="manager-block" key={group.key}>
+            <div className="manager-row">
+              <button type="button" className="manager-toggle" aria-expanded={expanded}
+                onClick={()=>setOpenGroups(list=>list.includes(group.key)
+                  ?list.filter(k=>k!==group.key):[...list,group.key])}>
+                <span className="manager-chevron" data-open={expanded?'1':undefined} aria-hidden="true"/>
+                <strong>{group.title}</strong>
+                <span className="manager-score tabnum" data-rag={groupRag(group.branches)}>
+                  {groupScore(group.branches)}</span>
+                <span className="manager-count">· {group.branches.length} филиалов</span>
+              </button>
+              <button type="button" className="manager-open"
+                onClick={()=>setOpenGroups(list=>list.includes(group.key)
+                  ?list.filter(k=>k!==group.key):[...list,group.key])}>
+                {expanded?'Свернуть':'Открыть'}</button>
+            </div>
+            {expanded&&<div className="score-rows">{group.branches.map(b=><BranchRow key={b.org_unit_id}
+              branch={b} period={{start:data.period_start,end:data.period_end}}
+              open={open.includes(b.org_unit_id)}
+              onToggle={()=>setOpen(list=>list.includes(b.org_unit_id)
+                ?list.filter(id=>id!==b.org_unit_id):[...list,b.org_unit_id])}/>)}</div>}
+          </div>;})}
       </section>
     </>}
   </div>;
