@@ -150,3 +150,22 @@ export async function branchOverview(auth:AuthedUser,query:any) {
       aggregation:'NONE',freshness:'NOT_EVALUATED'};
   });
 }
+
+/**
+ * Перечень опубликованных срезов в пределах допусков пользователя. Нужен, чтобы
+ * выбор даты отчёта указывал на фактически опубликованный период, а не на
+ * произвольный день: отсутствие среза не подменяется нулями.
+ */
+export async function publishedPeriods(auth:AuthedUser) {
+  return withTransaction(async c=>{
+    const grants=await factAccess(c,auth,'READ');
+    if(!grants.length)return {periods:[]};
+    const orgs=grants.map(g=>g.org_unit_id).filter((v):v is string=>!!v);
+    if(!orgs.length)return {periods:[]};
+    const rows=(await c.query(`SELECT period_start,period_end,count(DISTINCT org_unit_id)::int branches
+      FROM report_fact_current WHERE org_unit_id=ANY($1::uuid[])
+      GROUP BY period_start,period_end ORDER BY period_end DESC,period_start DESC LIMIT 60`,[orgs])).rows;
+    return {periods:rows.map((r:any)=>({period_start:String(r.period_start).slice(0,10),
+      period_end:String(r.period_end).slice(0,10),branches:r.branches}))};
+  });
+}

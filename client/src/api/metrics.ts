@@ -55,6 +55,9 @@ export interface ThresholdCommand {
   green_from:number; amber_from:number; effective_from:string; reason:string;
 }
 
+export interface PublishedPeriod {period_start:string;period_end:string;branches:number}
+export const readPublishedPeriods=()=>
+  apiFetch<{periods:PublishedPeriod[]}>('/metrics/published-periods');
 export const readOverview=(start:string,end:string,org?:string)=>
   apiFetch<Overview>('/metrics/overview',{query:{start,end,org}});
 export const readThresholds=(history=false)=>

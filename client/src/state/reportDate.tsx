@@ -1,4 +1,5 @@
 import React,{createContext,useCallback,useContext,useEffect,useMemo,useState} from 'react';
+import { readPublishedPeriods,type PublishedPeriod } from '../api/metrics';
 
 /**
  * Глобальная дата отчётного среза. Один выбор в топбаре действует на все
@@ -11,7 +12,8 @@ const today=()=>new Date().toISOString().slice(0,10);
 /** Первое число месяца выбранной даты: период факта считается от начала месяца. */
 export const monthStart=(date:string)=>`${date.slice(0,7)}-01`;
 
-interface ReportDateValue {reportDate:string;setReportDate:(d:string)=>void;periodStart:string}
+interface ReportDateValue {reportDate:string;setReportDate:(d:string)=>void;periodStart:string;
+  periods:PublishedPeriod[];periodEnd:string}
 const Ctx=createContext<ReportDateValue|null>(null);
 
 export function ReportDateProvider({children}:{children:React.ReactNode}) {
@@ -21,16 +23,33 @@ export function ReportDateProvider({children}:{children:React.ReactNode}) {
       return saved&&/^\d{4}-\d{2}-\d{2}$/.test(saved)?saved:today();
     }catch{return today();}
   });
+  const [periods,setPeriods]=useState<PublishedPeriod[]>([]);
+  const [touched,setTouched]=useState(()=>{
+    try{return !!localStorage.getItem(KEY);}catch{return false;}
+  });
+  useEffect(()=>{
+    // Перечень опубликованных срезов нужен, чтобы дата по умолчанию указывала на
+    // существующую публикацию. Пользовательский выбор не переопределяется.
+    let alive=true;
+    readPublishedPeriods().then((r:{periods:PublishedPeriod[]})=>{
+      if(!alive)return;
+      setPeriods(r.periods);
+      if(!touched&&r.periods.length) setDate(r.periods[0].period_end);
+    }).catch(()=>{/* Отсутствие перечня не меняет выбранный срез. */});
+    return()=>{alive=false;};
+  },[touched]);
   useEffect(()=>{
     try{localStorage.setItem(KEY,reportDate);}catch{/* Сохранение выбора необязательно. */}
   },[reportDate]);
   const setReportDate=useCallback((d:string)=>{
     // Пустое или некорректное значение из поля даты не сбрасывает срез на «сегодня»
     // молча: выбор пользователя сохраняется до следующего явного изменения.
-    if(/^\d{4}-\d{2}-\d{2}$/.test(d)) setDate(d);
+    if(/^\d{4}-\d{2}-\d{2}$/.test(d)) {setTouched(true);setDate(d);}
   },[]);
-  const value=useMemo(()=>({reportDate,setReportDate,periodStart:monthStart(reportDate)}),
-    [reportDate,setReportDate]);
+  const match=periods.find(p=>p.period_end===reportDate);
+  const value=useMemo(()=>({reportDate,setReportDate,periods,
+    periodStart:match?match.period_start:monthStart(reportDate),
+    periodEnd:reportDate}),[reportDate,setReportDate,periods,match]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

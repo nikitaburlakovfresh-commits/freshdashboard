@@ -46,7 +46,7 @@ export async function provisionBranchReader(login:string,roleCode:string,metrics
         requestId:eventId,beforeState:null,
         afterState:{login,role_code:roleCode,org_unit_id:u.id,scope_kind:'ORG_UNIT'},
         reason:approval.trim(),resolution:'APPLIED',retentionClass:'SECURITY_5Y',
-        eventType:'access.role_grant',payload:{login,org_unit_id:u.id}});
+        eventType:'access.change.recorded',payload:{login,org_unit_id:u.id}});
       const row=(await c.query(`INSERT INTO role_grants(user_id,role_code,org_unit_id,scope_kind,valid_from)
         VALUES($1,$2,$3,'ORG_UNIT',now()) RETURNING id`,[user.id,roleCode,u.id])).rows[0];
       created.push({branch:u.code,grant_id:row.id,reused:false});
