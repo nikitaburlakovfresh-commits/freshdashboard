@@ -7,6 +7,7 @@ import { uuid } from '../reporting/storage';
 import { evaluateRag, resolveThresholds, thresholdFor, type Rag } from './thresholds';
 import { computeBranchScore, monthProgress, resolveScoringModel } from './scoring';
 import { resolveFocusConfiguration } from './focus';
+import { branchAffiliations } from './orgHierarchy';
 
 const invalid=(s:string)=>new ApiError('VALIDATION_ERROR',s);
 const validDate=(v:unknown):v is string=>{
@@ -115,13 +116,19 @@ export async function branchOverview(auth:AuthedUser,query:any) {
     // Модель балла и фокусы месяца берутся из настроек портала на дату среза.
     const model=await resolveScoringModel(c,q.end);
     const focus=await resolveFocusConfiguration(c,q.end);
+    const affiliations=await branchAffiliations(c,[...byOrg.keys()],q.end);
     const branches=[...byOrg.values()].map(b=>{
       const worst:Rag=b.metrics.some(m=>m.rag==='RED')?'RED'
         :b.metrics.some(m=>m.rag==='AMBER')?'AMBER'
           :b.metrics.some(m=>m.rag==='GREEN')?'GREEN':'NONE';
       const values=new Map<string,number>(b.metrics.map(m=>[m.metric,m.value]));
       const score=computeBranchScore(model,values,q.end);
-      return {...b,rag:worst,metrics_without_threshold:b.metrics.filter(m=>!m.threshold_id).map(m=>m.metric),
+      const aff=affiliations.get(b.org_unit_id);
+      return {...b,rag:worst,
+        cluster_id:aff?.cluster_id??null,cluster_name:aff?.cluster_name??null,
+        division_id:aff?.division_id??null,division_name:aff?.division_name??null,
+        manager_user_id:aff?.manager_user_id??null,manager_name:aff?.manager_name??null,
+        group_key:aff?.group_key??'none',group_label:aff?.group_label??'Филиал без зоны РМ',metrics_without_threshold:b.metrics.filter(m=>!m.threshold_id).map(m=>m.metric),
         score:score.score,score_rag:score.rag,score_components:score.components,score_reasons:score.reasons};
     });
     // Сетевые суммы для плиток run-rate: только по показателям, доступным

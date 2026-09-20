@@ -188,7 +188,8 @@ export default function NetworkScorePage() {
                 <strong>{group.title}</strong>
                 <span className="manager-score tabnum" data-rag={groupRag(group.branches)}>
                   {groupScore(group.branches)}</span>
-                <span className="manager-count">· {group.branches.length} филиалов</span>
+                <span className="manager-count">· {group.branches.length} филиалов
+                  {group.division&&<> · {group.division}</>}</span>
               </button>
               <button type="button" className="manager-open"
                 onClick={()=>setOpenGroups(list=>list.includes(group.key)
@@ -206,20 +207,19 @@ export default function NetworkScorePage() {
   </div>;
 }
 
-interface Group {key:string;title:string;branches:BranchCard[]}
-/** Группировка филиалов по РМ. Неизвестная привязка не выдумывается. */
-function groupByManager(branches:BranchCard[],summary:DivisionSummary|null):Group[] {
-  if(!summary) return branches.length?[{key:'all',title:'Все доступные филиалы',branches}]:[];
-  const owner=new Map<string,{key:string;title:string}>();
-  for(const d of summary.divisions) for(const m of d.managers) {
-    const title=m.is_vacant||!m.full_name?`${d.division_name} · РМ не назначен`:m.full_name;
-    for(const id of m.branch_ids) owner.set(id,{key:m.user_id??`vacant:${d.division_id??d.division_name}`,title});
-  }
+interface Group {key:string;title:string;division:string|null;branches:BranchCard[]}
+/**
+ * Группировка филиалов по зоне регионального менеджера. Привязка приходит с
+ * сервера из истории справочника на дату среза; филиал без привязки попадает в
+ * отдельную явную группу и не приписывается чужому РМ.
+ */
+function groupByManager(branches:BranchCard[],_summary:DivisionSummary|null):Group[] {
   const groups=new Map<string,Group>();
   for(const b of branches) {
-    const o=owner.get(b.org_unit_id)??{key:'unknown',title:'Региональный менеджер не определён'};
-    const g=groups.get(o.key)??{key:o.key,title:o.title,branches:[]};
-    g.branches.push(b);groups.set(o.key,g);
+    const key=b.group_key??'none';
+    const g=groups.get(key)??{key,title:b.group_label??'Филиал без зоны РМ',
+      division:b.division_name??null,branches:[]};
+    g.branches.push(b);groups.set(key,g);
   }
   return [...groups.values()].sort((a,b)=>a.title.localeCompare(b.title,'ru'));
 }

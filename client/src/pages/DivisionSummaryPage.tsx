@@ -19,7 +19,10 @@ const today=()=>new Date().toISOString().slice(0,10);
 export default function DivisionSummaryPage() {
   const [start,setStart]=useState(monthStart());
   const [end,setEnd]=useState(today());
-  const [division,setDivision]=useState('');
+  // Дивизион можно открыть прямо из сайдбара: ?division=<uuid>.
+  const [division,setDivision]=useState(()=>{
+    try{return new URLSearchParams(window.location.search).get('division')??'';}catch{return '';}
+  });
   const [data,setData]=useState<DivisionSummary|null>(null);
   const [error,setError]=useState(''),[busy,setBusy]=useState(false);
   const [open,setOpen]=useState<string|null>(null);

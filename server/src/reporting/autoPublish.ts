@@ -135,14 +135,39 @@ export async function autoPublishPackage(auth: AuthedUser, metadata: any,
     return out;
   }
 
-  const preview: any = await previewPublication(auth, uploaded.id, {
-    review_version: review.current.version, choices,
-    reason: `Публикация пакета QLIK за ${period.start} — ${period.end} одной операцией из портала.`,
-    confirm_source_aggregates: true,
-  });
-  if (!preview.can_commit) {
+  // Показатель, по которому сверка с итогом источника невозможна, не
+  // публикуется, но и не блокирует остальной пакет: он объявляется отложенным
+  // с причиной из проверки. Подмена значений и отключение сверки недопустимы.
+  const codeByName = new Map<string, string>(Object.entries(METRIC_NAMES).map(([code, name]) => [name, code]));
+  let active = choices;
+  let preview: any = null;
+  for (let attempt = 0; attempt < 4 && active.length; attempt++) {
+    preview = await previewPublication(auth, uploaded.id, {
+      review_version: review.current.version, choices: active,
+      reason: `Публикация пакета QLIK за ${period.start} — ${period.end} одной операцией из портала.`,
+      confirm_source_aggregates: true,
+    });
+    if (preview.can_commit) break;
+    const blockers: string[] = preview.blockers ?? [];
+    const blocked = new Set<string>();
+    for (const blocker of blockers) {
+      const name = blocker.slice(0, blocker.indexOf(':'));
+      const code = codeByName.get(name.trim());
+      if (code) blocked.add(code);
+    }
+    if (!blocked.size) {
+      out.stage = 'PUBLISH';
+      out.message = blockers.join('; ') || 'Публикация заблокирована проверками портала.';
+      return out;
+    }
+    for (const code of blocked)
+      out.withheld_metrics.push(`${METRIC_NAMES[code as keyof typeof METRIC_NAMES] ?? code} — сверка с итогом источника не подтверждена`);
+    active = active.filter(choice => !blocked.has(choice.metric));
+    preview = null;
+  }
+  if (!preview?.can_commit) {
     out.stage = 'PUBLISH';
-    out.message = (preview.blockers ?? []).join('; ') || 'Публикация заблокирована проверками портала.';
+    out.message = 'Ни один показатель пакета не прошёл сверку с итогами источников: публикация не выполнена.';
     return out;
   }
   const committed: any = await commitPublication(auth, uploaded.id, {
@@ -151,7 +176,7 @@ export async function autoPublishPackage(auth: AuthedUser, metadata: any,
   out.stage = 'DONE';
   out.publication_id = committed.publication_id ?? null;
   out.published = Number(committed.count ?? preview.rows.length);
-  out.published_metrics = choices.map(c => METRIC_NAMES[c.metric as keyof typeof METRIC_NAMES] ?? c.metric);
+  out.published_metrics = active.map(c => METRIC_NAMES[c.metric as keyof typeof METRIC_NAMES] ?? c.metric);
   out.message = `Опубликовано ${out.published} значений; метрики обзора пересчитаны по опубликованным показателям.`;
   return out;
 }

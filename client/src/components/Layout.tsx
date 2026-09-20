@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import Logo from './Logo';
 import Icon, { type IconName } from './Icon';
 import { canSeeNavLink, navPermissions, type NavLinkDef } from './navAccess';
+import { getOrganizationTree } from '../api/organization';
 import { useReportDate } from '../state/reportDate';
 
 type NavGroup = { label: string; links: NavLinkDef<IconName>[] };
@@ -117,6 +118,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       title={link.path === '/diary' ? 'Рабочий beta-сценарий; полный каталог ещё в разработке' : 'Навигационный каркас · следующий этап'}
       aria-label={link.path === '/diary' ? 'Beta' : 'Следующий этап'}>{link.path === '/diary' ? 'β' : '○'}</span>}
   </NavLink>;
+  // Дивизионы сети берутся из справочника оргструктуры на дату среза: список
+  // не зашит в код и меняется вместе со структурой. Ошибка чтения не ломает
+  // навигацию — раздел просто не показывается.
+  const [divisions, setDivisions] = useState<{ id: string; display_name: string }[]>([]);
+  useEffect(() => {
+    let alive = true;
+    getOrganizationTree(reportDate)
+      .then(tree => { if (alive) setDivisions(tree.items.filter(u => u.kind === 'DIVISION')
+        .map(u => ({ id: u.id, display_name: u.display_name }))); })
+      .catch(() => { if (alive) setDivisions([]); });
+    return () => { alive = false; };
+  }, [reportDate]);
   const nav = <>
     <NavLink className="shell-brand" to="/" onClick={close} aria-label="FRESH · Обзор сети">
       <Logo /><span>ПОРТАЛ УПРАВЛЕНИЯ СЕТЬЮ</span>
@@ -126,6 +139,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="shell-nav-label">{group.label}</div>
         {group.links.map(renderLink)}
       </div>)}
+      {divisions.length > 0 && <div className="shell-nav-group">
+        <div className="shell-nav-label">Дивизионы</div>
+        {divisions.map(d => <NavLink key={d.id} to={`/division-summary?division=${d.id}`} onClick={close}
+          className={({ isActive }) => `shell-nav-link${isActive ? ' active' : ''}`}>
+          <Icon name="network" /><span>{d.display_name}</span>
+        </NavLink>)}
+      </div>}
       {admin.length > 0 && <div className={`shell-nav-admin${showAdmin ? ' open' : ''}`}>
         <button type="button" className="shell-admin-toggle" onClick={() => setAdminOpen(v => !v)}
           aria-expanded={showAdmin} aria-controls="shell-admin-sections">

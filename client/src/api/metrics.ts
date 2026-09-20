@@ -24,6 +24,11 @@ export interface BranchCard {
   /** Балл филиала: null, когда данных или модели нет. Это не ноль. */
   score:number|null; score_rag:Rag;
   score_components:ScoreComponent[]; score_reasons:string[];
+  /** Привязка филиала на дату среза: зона РМ и дивизион из справочника. */
+  cluster_id?:string|null; cluster_name?:string|null;
+  division_id?:string|null; division_name?:string|null;
+  manager_user_id?:string|null; manager_name?:string|null;
+  group_key?:string; group_label?:string;
 }
 export type RunRateCode='sales_runrate'|'stock_turnover'|'margin_runrate'|'supplies_runrate'|'avg_sale_price';
 export interface RunRateTile {
