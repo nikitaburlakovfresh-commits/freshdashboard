@@ -47,8 +47,26 @@ export default function PersonalDayPage() {
         {day.record?<><p>Состояние: <StatusBadge status={day.record.status as any}/></p><p>Окно: {new Date(day.record.window_open).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} — {new Date(day.record.window_close).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК.</p>
           {!day.record.can_fill&&<p>Окно закрыто. Сохранённую запись можно читать, редактирование заблокировано сервером.</p>}</>:
           <p>{day.policy?'Окно настроено руководителем. Создание разрешено только внутри него; повторное открытие не создаёт дубль.':'Сначала РМ должен настроить окно заполнения для этой роли в карточке филиала.'}</p>}
-        <p className="portal-muted">Beta-форма: план действий, итог и риски. Это не замена полного отраслевого каталога ежедневных показателей.</p>
+        <p className="portal-muted">28 задач дня по вашей роли, разделами. Поля сохраняются сами; отметка
+          «Не выполнено» — это ответ, а не пропуск.</p>
         <Link to={`/branches/${org}`}>Карточка филиала →</Link>
+      </section>}
+      {day&&<section className="portal-panel"><h2>Задачи от руководителя</h2>
+        <p className="portal-muted">Поставлены вам извне ежедневника, на этот день и ранее. Просроченные
+          остаются в списке: перенос срока не делает задачу выполненной.</p>
+        {day.assigned_tasks.length?<div className="personal-task-list">{day.assigned_tasks.map(t=>{
+          // Просрочка определяется по рабочей дате ежедневника, а не по «сейчас»:
+          // открыв вчерашний день, руководитель должен видеть его картину.
+          const overdue=!!t.due_at_local&&t.due_at_local.slice(0,10)<date;
+          return <Link className="personal-task" to={`/tasks/${t.id}`} key={t.id} data-overdue={overdue?'1':undefined}>
+            <div><strong>{t.title}</strong>
+              <small>{t.template_name}
+                {t.created_by_name&&<> · поставил {t.created_by_name}</>}
+                {t.due_at_local?<> · срок {t.due_at_local} МСК</>:<> · срок не задан</>}
+                {overdue&&<> · просрочена</>}
+                {t.in_daily_log&&<> · уже в ежедневнике</>}</small></div>
+            <StatusBadge status={t.status as any}/></Link>;})}</div>
+          :<p>Задач от руководителя на этот день нет.</p>}
       </section>}
       {day&&<section className="portal-panel"><h2>Результаты задач за выбранный день</h2><p className="portal-muted">Снимки отправленных версий. Отправлено на проверку не означает принято.</p>
         {day.links.length?day.links.map(l=><article className="beta-result" key={l.submission_id}><Link to={`/tasks/${l.work_item_id}`}>{l.title} · версия сдачи {l.revision}</Link><p>{l.completion_summary}</p><small>Текущий статус задачи: {l.current_task_status}. Снимок текста не перезаписывается.</small></article>):<p>Связанных результатов нет. При сдаче задачи выберите «Добавить в мой ежедневник» и дату.</p>}</section>}

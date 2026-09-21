@@ -14,15 +14,35 @@ function Scalar({ def, value, onChange, disabled, label }: {
     inputMode={def.type === 'number' ? 'decimal' : undefined} maxLength={def.max_chars}/>;
 }
 
+/**
+ * Разделы формы. Ежедневник РФ — это 95 полей 28 задач: плоским списком он
+ * нечитаем, поэтому поля собираются по номеру задачи из схемы шаблона.
+ * Поля без номера раздела остаются одной группой без заголовка — так ведут себя
+ * обычные задачи с парой полей.
+ */
+interface Section { num: number|null; title: string; hints: string[]; optional: boolean; fields: FieldDef[] }
+export function groupFieldsBySection(schema: FieldDef[]): Section[] {
+  const out: Section[] = [];
+  for (const def of schema) {
+    const num = def.section_num ?? null;
+    const last = out[out.length - 1];
+    if (last && last.num === num) { last.fields.push(def); continue; }
+    out.push({ num, title: def.section_title ?? '', hints: def.section_hints ?? [],
+      optional: !!def.optional, fields: [def] });
+  }
+  return out;
+}
+
 export default function TaskFields({ item, drafts, editable, busy, onChange, onSave }: {
   item: WorkItem; drafts: FieldDrafts; editable: boolean; busy: boolean;
   onChange: (path: string, value: string) => void; onSave: (path: string) => void;
 }) {
-  return <div className="task-fields">
-    <p className="task-fields-note">{item.template_display_name} · Роль: {item.owner_role ?? 'не определена'}.
-      Сохранение каждого поля отдельно; сдача фиксирует все поля одной версией результата.</p>
-    {item.template_code.startsWith('rf_') && <p className="task-fields-notice">Предварительная форма РФ. Введённые значения не публикуются как KPI; формулы и бизнес-приёмка форм ещё не завершены.</p>}
-    {item.field_schema.map(def => {
+  const sections = groupFieldsBySection(item.field_schema);
+  const grouped = sections.some(s => s.num !== null);
+  // У ежедневника поля сохраняются сами через 0,7 секунды после ввода, поэтому
+  // 95 кнопок «Сохранить» здесь только мешают: остаётся признак состояния.
+  const autosaves = !!item.daily_log;
+  const renderField = (def: FieldDef) => {
       const saved = item.fields.find(f => f.field_path === def.field_path);
       const draft = drafts[def.field_path];
       const value = editable ? draft?.value ?? '' : saved?.value ?? '';
@@ -56,10 +76,40 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
         {def.type === 'number' && <p className="task-fields-note">Десятичный разделитель: точка.
           {def.min_value !== undefined && ` Минимум: ${def.min_value}.`}{def.max_value !== undefined && ` Максимум: ${def.max_value}.`} Отсутствие данных не равно нулю.</p>}
         {editable && <div className="task-field-footer">
-          <button type="button" disabled={busy || !dirty || rows === null && def.type === 'repeatable_group'} onClick={() => onSave(def.field_path)}>Сохранить: {def.label}</button>
+          {!autosaves && <button type="button" disabled={busy || !dirty || rows === null && def.type === 'repeatable_group'} onClick={() => onSave(def.field_path)}>Сохранить: {def.label}</button>}
           <span aria-live="polite">{dirty ? busy ? 'Сохраняю…' : 'Не сохранено' : saved?.value != null ? 'Сохранено на сервере' : 'Не заполнено'}</span>
         </div>}
       </section>;
+  };
+
+  return <div className="task-fields">
+    <p className="task-fields-note">{item.template_display_name} · Роль: {item.owner_role ?? 'не определена'}.
+      {autosaves ? ' Поля сохраняются сами; сдача фиксирует все поля одной версией результата.'
+        : ' Сохранение каждого поля отдельно; сдача фиксирует все поля одной версией результата.'}</p>
+    {item.template_code.startsWith('rf_') && <p className="task-fields-notice">Предварительная форма РФ. Введённые значения не публикуются как KPI; формулы и бизнес-приёмка форм ещё не завершены.</p>}
+    {!grouped ? item.field_schema.map(renderField) : sections.map((section, index) => {
+      // Состояние раздела берётся из его же отметки выполнения, а не
+      // высчитывается по заполненности: «не выполнено» — это осознанный ответ,
+      // и подменять его пустотой нельзя.
+      const mark = section.fields.find(f => /_done$/.test(f.field_path));
+      const markValue = mark ? item.fields.find(f => f.field_path === mark.field_path)?.value ?? '' : '';
+      const answered = section.fields.filter(f =>
+        (item.fields.find(sf => sf.field_path === f.field_path)?.value ?? '') !== '').length;
+      // Закрытие дня открыто сразу: с него начинают и им заканчивают.
+      const closing = section.num === 99;
+      return <details className="task-section" key={`${section.num}-${index}`} open={closing}
+        data-state={markValue === 'Выполнено' ? 'done' : markValue === 'Не выполнено' ? 'skipped' : undefined}>
+        <summary>
+          <span className="task-section-num">{closing || section.num === null ? '' : section.num}</span>
+          <span className="task-section-title">{section.title || 'Поля задачи'}
+            {section.optional && <em className="task-section-optional"> · необязательно</em>}</span>
+          <span className="task-section-state">
+            {markValue ? markValue : answered ? `заполнено ${answered} из ${section.fields.length}` : 'не заполнено'}</span>
+        </summary>
+        {section.hints.length > 0 && <ul className="task-section-hints">
+          {section.hints.map((hint, i) => <li key={i}>{hint}</li>)}</ul>}
+        {section.fields.map(renderField)}
+      </details>;
     })}
   </div>;
 }

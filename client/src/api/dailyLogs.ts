@@ -12,9 +12,17 @@ export interface DailyPolicy {
   id:string;role_code:string;version:number;effective_from:string;base_open_time:string;base_close_time:string;
   early_open_hours:number;late_close_hours:number;reason:string;
 }
+// Задачи, поставленные руководителем, — отдельный блок дня. Сервер отдаёт их
+// вместе с ежедневником, включая просроченные.
+export interface AssignedTask {
+  id:string;title:string;status:string;entity_version:number;
+  due_at_local:string|null;template_name:string;created_by:string|null;
+  created_by_name:string|null;in_daily_log:boolean;
+}
 export interface PersonalDay {
   business_date:string;current_business_date:string;record:(DailyMeta&{status:string;entity_version:number})|null;
-  policy:DailyPolicy|null;links:DailyLink[];primary_storage:string;external_sync_status:string;
+  policy:DailyPolicy|null;links:DailyLink[];assigned_tasks:AssignedTask[];
+  primary_storage:string;external_sync_status:string;
 }
 export interface BranchSummary {
   id:string;code:string;display_name:string;is_demo:boolean;type_code:string|null;lifecycle_state:string;

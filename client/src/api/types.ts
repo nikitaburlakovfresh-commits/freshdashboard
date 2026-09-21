@@ -98,6 +98,13 @@ export interface FieldDef {
   type: 'text' | 'number' | 'url' | 'date' | 'select' | 'repeatable_group';
   required: boolean;
   section?: string;
+  // Разделы ежедневника: номер задачи старого портала, её формулировка и
+  // подсказки. Приходят в схеме шаблона как есть, поэтому форма группируется по
+  // ним, а не по порядку полей.
+  section_num?: number;
+  section_title?: string;
+  section_hints?: string[];
+  optional?: boolean;
   min_chars?: number;
   max_chars?: number;
   min_value?: number;

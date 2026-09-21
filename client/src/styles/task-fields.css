@@ -20,3 +20,40 @@
 .personal-task strong {display:block;overflow-wrap:anywhere}
 .personal-task small {display:block;margin-top:8px;color:var(--fresh-text-muted);line-height:1.6}
 @media(max-width:600px){.personal-task{flex-direction:column}.task-field-footer{align-items:stretch;flex-direction:column}}
+
+/* Разделы ежедневника. 28 задач раскрываются по одной: руководитель ведёт день
+   сверху вниз, а не ищет нужное поле в простыне из 95 строк. */
+.task-section { border: 1px solid var(--fresh-border); border-radius: 10px; margin: 10px 0;
+  background: var(--fresh-surface); }
+.task-section > summary { display: flex; align-items: center; gap: 10px; cursor: pointer;
+  padding: 12px 14px; min-height: 44px; list-style: none; font-size: 14px; }
+.task-section > summary::-webkit-details-marker { display: none; }
+.task-section > summary:hover { background: var(--fresh-surface-hover, rgba(127,127,127,.06)); }
+.task-section[open] > summary { border-bottom: 1px solid var(--fresh-border); }
+.task-section-num { flex: 0 0 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 7px; background: var(--fresh-blue); color: #fff; font-size: 12px; font-weight: 600; }
+.task-section-num:empty { display: none; }
+.task-section-title { flex: 1 1 auto; font-weight: 600; line-height: 1.35; }
+.task-section-optional { font-style: normal; font-weight: 400; color: var(--fresh-text-muted); }
+/* Состояние раздела — словом, а не только цветом: цвет один не читается
+   при слабом зрении и на плохом экране в салоне. */
+.task-section-state { flex: 0 0 auto; font-size: 12px; color: var(--fresh-text-muted); white-space: nowrap; }
+.task-section[data-state="done"] .task-section-state { color: var(--fresh-success, #1c8f4b); font-weight: 600; }
+.task-section[data-state="skipped"] .task-section-state { color: var(--fresh-warning, #b26a00); font-weight: 600; }
+.task-section[data-state="done"] .task-section-num { background: var(--fresh-success, #1c8f4b); }
+.task-section[data-state="skipped"] .task-section-num { background: var(--fresh-warning, #b26a00); }
+.task-section-hints { margin: 12px 14px 0; padding-left: 18px; font-size: 13px; line-height: 1.45;
+  color: var(--fresh-text-muted); }
+.task-section > .task-field { padding-left: 14px; padding-right: 14px; }
+@media (max-width: 560px) {
+  .task-section > summary { flex-wrap: wrap; padding: 10px 12px; }
+  .task-section-title { flex: 1 1 100%; order: 2; }
+  .task-section-state { order: 3; flex: 1 1 100%; }
+  .task-section-hints { margin: 10px 12px 0; }
+  .task-section > .task-field { padding-left: 12px; padding-right: 12px; }
+}
+/* Просроченная задача от руководителя помечается и рамкой, и словом
+   «просрочена» в описании: одним цветом сообщать о просрочке нельзя. */
+.personal-task[data-overdue] { border-color: var(--fresh-danger, #c0392b); }
+.personal-task[data-overdue] strong::after { content: ' · просрочена'; color: var(--fresh-danger, #c0392b);
+  font-weight: 600; font-size: 12px; }
