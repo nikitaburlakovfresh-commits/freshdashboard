@@ -39,8 +39,9 @@ async function assertPlatformOwner(c: PoolClient, user: AuthedUser): Promise<voi
 export async function registrationDirectory() {
   return withTransaction(async (c) => {
     const roles = (await c.query(
-      `SELECT code, display_name FROM roles
-        WHERE code NOT IN ('SUPER_ADMIN','SHARED_LOGIN') ORDER BY display_name`,
+      `SELECT code, display_name, scope_kind FROM roles
+        WHERE code NOT IN ('SUPER_ADMIN','SHARED_LOGIN') AND NOT hidden_in_registration
+        ORDER BY display_name`,
     )).rows;
     const branches = (await c.query(
       `SELECT u.id, n.display_name
@@ -54,6 +55,9 @@ export async function registrationDirectory() {
   });
 }
 
+/** Значение выбора «ГК Fresh, управляющая компания» в поле подразделения. */
+export const UC_CHOICE = 'FRESH_UC';
+
 export async function submitRegistration(raw: unknown) {
   const b = (raw ?? {}) as Record<string, unknown>;
   const text = (v: unknown) => typeof v === 'string' ? v.trim() : '';
@@ -62,7 +66,12 @@ export async function submitRegistration(raw: unknown) {
   const email = text(b.primary_email).toLowerCase();
   const phone = text(b.phone);
   const roleCode = text(b.requested_role_code);
-  const orgUnitId = text(b.requested_org_unit_id) || null;
+  // Подразделение: идентификатор филиала из справочника либо признак УК.
+  // Роль сетевого уровня работает без филиала (role_grants: NETWORK + NULL),
+  // роль уровня филиала без филиала не имеет области видимости.
+  const unitChoice = text(b.requested_org_unit_id);
+  const isHeadOffice = unitChoice === UC_CHOICE;
+  const orgUnitId = isHeadOffice ? null : (unitChoice || null);
   const comment = text(b.comment) || null;
   const password = typeof b.password === 'string' ? b.password : '';
 
@@ -89,7 +98,14 @@ export async function submitRegistration(raw: unknown) {
     if (role.rowCount === 0 || roleCode === 'SUPER_ADMIN') {
       throw new ApiError('VALIDATION_ERROR', 'Выберите должность из списка.');
     }
-    if (orgUnitId) {
+    const scopeKind = role.rows[0].scope_kind as string;
+    if (scopeKind === 'NETWORK' && !isHeadOffice) {
+      throw new ApiError('VALIDATION_ERROR', 'Для этой должности подразделение — ГК Fresh (управляющая компания).');
+    }
+    if (scopeKind === 'ORG_UNIT') {
+      if (isHeadOffice || !orgUnitId) {
+        throw new ApiError('VALIDATION_ERROR', 'Для этой должности выберите филиал из списка.');
+      }
       const unit = await c.query(`SELECT 1 FROM org_directory_units WHERE id = $1 AND kind = 'ORG_UNIT'`, [orgUnitId]);
       if (unit.rowCount === 0) throw new ApiError('VALIDATION_ERROR', 'Выберите филиал из списка.');
     }
@@ -198,14 +214,21 @@ export async function decideRegistration(
     }
 
     const roleCode = roleOverride ?? req.requested_role_code;
-    const orgUnitId = unitOverride ?? req.requested_org_unit_id;
+    // Администратор может сменить подразделение при подтверждении: выбор УК
+    // означает именно «без филиала», а не «взять из заявки».
+    const orgUnitId = unitOverride === UC_CHOICE ? null
+      : unitOverride ?? req.requested_org_unit_id;
 
     const role = await c.query(`SELECT scope_kind FROM roles WHERE code = $1`, [roleCode]);
     if (role.rowCount === 0 || roleCode === 'SUPER_ADMIN') {
       throw new ApiError('VALIDATION_ERROR', 'Роль недопустима для подтверждения заявки.');
     }
-    if (!orgUnitId) {
+    const approveScope = role.rows[0].scope_kind as string;
+    if (approveScope === 'ORG_UNIT' && !orgUnitId) {
       throw new ApiError('VALIDATION_ERROR', 'Укажите филиал: без области видимости сотрудник не увидит ни одного показателя.');
+    }
+    if (approveScope === 'NETWORK' && orgUnitId) {
+      throw new ApiError('VALIDATION_ERROR', 'Должность уровня управляющей компании не закрепляется за филиалом.');
     }
     if ((await c.query(`SELECT 1 FROM app_users WHERE lower(login) = $1`, [req.login])).rowCount) {
       throw new ApiError('SUBMISSION_CONFLICT', 'Логин уже занят действующей учётной записью. Заявку нужно отклонить.');
@@ -223,8 +246,8 @@ export async function decideRegistration(
 
     await c.query(
       `INSERT INTO role_grants (user_id, role_code, scope_kind, org_unit_id, valid_from)
-       VALUES ($1,$2,'ORG_UNIT',$3,now())`,
-      [created.id, roleCode, orgUnitId],
+       VALUES ($1,$2,$3,$4,now())`,
+      [created.id, roleCode, approveScope, approveScope === 'NETWORK' ? null : orgUnitId],
     );
 
     await c.query(

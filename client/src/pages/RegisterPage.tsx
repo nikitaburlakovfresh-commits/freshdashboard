@@ -12,7 +12,7 @@ import Logo from '../components/Logo';
  * подтверждения никому не нужно передавать пароль — ни в переписке, ни голосом.
  */
 export default function RegisterPage() {
-  const [roles, setRoles] = useState<{ code: string; display_name: string }[]>([]);
+  const [roles, setRoles] = useState<{ code: string; display_name: string; scope_kind: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; display_name: string }[]>([]);
   const [form, setForm] = useState({
     full_name: '', login: '', primary_email: '', phone: '',
@@ -28,6 +28,15 @@ export default function RegisterPage() {
       .then(r => { setRoles(r.roles); setBranches(r.branches); })
       .catch(() => setError('Не удалось загрузить перечень должностей и филиалов. Обновите страницу.'));
   }, []);
+
+  // Подсказка о подразделении: должность уровня управляющей компании за филиалом
+  // не закрепляется, должность уровня филиала без филиала не имеет области
+  // видимости. Правило то же, что проверяет сервер, — здесь оно только видно раньше.
+  const chosenRole = roles.find(r => r.code === form.requested_role_code);
+  const scopeHint = !chosenRole ? null
+    : chosenRole.scope_kind === 'NETWORK'
+      ? 'Эта должность относится к управляющей компании: выберите «ГК Fresh · управляющая компания».'
+      : 'Эта должность относится к филиалу: выберите свой филиал из списка.';
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(p => ({ ...p, [k]: e.target.value }));
@@ -76,11 +85,13 @@ export default function RegisterPage() {
         <option value="">— выберите должность —</option>
         {roles.map(r => <option key={r.code} value={r.code}>{r.display_name}</option>)}
       </select></label>
-    <label className="role-view-field"><span>Филиал</span>
+    <label className="role-view-field"><span>Подразделение</span>
       <select value={form.requested_org_unit_id} onChange={set('requested_org_unit_id')}>
-        <option value="">— выберите филиал —</option>
+        <option value="">— выберите подразделение —</option>
+        <option value="FRESH_UC">ГК Fresh · управляющая компания</option>
         {branches.map(b => <option key={b.id} value={b.id}>{b.display_name}</option>)}
       </select></label>
+    {scopeHint && <p className="role-view-hint">{scopeHint}</p>}
     <label className="role-view-field"><span>Пароль (не короче 12 знаков)</span>
       <input type="password" value={form.password} onChange={set('password')} autoComplete="new-password" /></label>
     <label className="role-view-field"><span>Пароль ещё раз</span>

@@ -6,7 +6,7 @@ import { ApiError } from '../util/errors';
 import { uuid } from '../reporting/storage';
 import { evaluateRag, resolveThresholds, thresholdFor, type Rag } from './thresholds';
 import { computeBranchScore, monthProgress, resolveScoringModel } from './scoring';
-import { funnelConversions, buyback45Shares } from './derived';
+import { funnelConversions, buyback45Shares, stockTurnover } from './derived';
 import { resolveFocusConfiguration } from './focus';
 import { branchAffiliations } from './orgHierarchy';
 
@@ -132,6 +132,8 @@ export async function branchOverview(auth:AuthedUser,query:any) {
           :b.metrics.some(m=>m.rag==='GREEN')?'GREEN':'NONE';
       const values=new Map<string,number>(b.metrics.map(m=>[m.metric,m.value]));
       for(const [k,v] of funnelConversions(values))values.set(k,v);
+      const turnover=stockTurnover(values);
+      if(turnover!==null)values.set('stockTurnover',turnover);
       const bb=buyback45.get(b.org_unit_id);
       if(bb)values.set('buyback45Share',bb.share);
       const score=computeBranchScore(model,values,q.end);

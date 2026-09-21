@@ -14,7 +14,11 @@ export function dailyDate(raw: unknown): string {
   return raw;
 }
 export function dailyRole(raw: unknown): string {
-  if(typeof raw!=='string'||!ROLES.includes(raw)) throw new ApiError('VALIDATION_ERROR','Beta ежедневника поддерживает РФ, РОП и РОО.');
+  // Ежедневник существует для РФ, РОП и РОО. У линейных должностей его нет по
+  // решению владельца: у них личная запись дня, и итог задачи в неё
+  // автоматически не переносится — связка задача↔ежедневник к ней не относится.
+  if(typeof raw!=='string'||!ROLES.includes(raw)) throw new ApiError('VALIDATION_ERROR',
+    'Ежедневник ведут РФ, РОП и РОО. Для линейной должности снимите перенос итога в ежедневник: у неё личная запись дня.');
   return raw;
 }
 export async function liveFence(c:PoolClient,ctx:ActorContext) {
@@ -100,7 +104,9 @@ export async function ensureDailyLog(c:PoolClient,ctx:ActorContext,org:string,ro
     [date,policy.base_open_time,policy.base_close_time,policy.early_open_hours,policy.late_close_hours])).rows[0];
   const now=(await c.query('SELECT now() AS time')).rows[0].time;
   if(now<window.window_open||now>window.window_close) throw new ApiError('VALIDATION_ERROR','Вне окна заполнения выбранного дня.',{issues:[{path:'business_date',issue:'outside_fill_window'}]});
-  const template=await getTemplateByCode(c,`personal_daily_${role.toLowerCase()}_v1`);
+  // Ежедневник с 28 жёсткими задачами (миграция 045). Записи, созданные по
+  // версии _v1, остаются на своей версии шаблона — история не переписывается.
+  const template=await getTemplateByCode(c,`personal_daily_${role.toLowerCase()}_v2`);
   if(!template) throw new ApiError('TEMPORARILY_UNAVAILABLE','Шаблон ежедневника не установлен.');
   const created=await c.query(`INSERT INTO work_items(org_unit_id,template_version_id,title,due_at,status,assignee_user_id,created_by)
     VALUES($1,$2,$3,$4,'ASSIGNED',$5,$5) RETURNING id`,[org,template.id,`Ежедневник ${role} · ${date}`,window.base_close,ctx.authUser.userId]);
@@ -128,8 +134,32 @@ export async function getPersonalDay(ctx:ActorContext,org:string,roleRaw:unknown
     const policy=await policyFor(c,org,role,date);
     const current=(await c.query("SELECT to_char(now() AT TIME ZONE 'Europe/Moscow','YYYY-MM-DD') AS day")).rows[0].day;
     return {business_date:date,current_business_date:current,record:rec?{...rec,...await dailyMetadata(c,rec.work_item_id)}:null,policy,
+      assigned_tasks:await assignedTasksForDay(c,org,ctx.authUser.userId,date),
       links:rec?await dailyLinks(c,rec.work_item_id,['SUBMITTED','COMPLETED'].includes(rec.status)?rec.current_submission_id:undefined):[],primary_storage:'POSTGRESQL',external_sync_status:'NOT_APPLICABLE'};
   });
+}
+/**
+ * Задачи, поставленные исполнителю руководителем, — блок «Задачи от
+ * руководителя» в ежедневнике дня. Это не жёсткие задачи ежедневника: они
+ * приходят извне, поэтому показываются отдельным списком ещё до выполнения.
+ * Берём открытые задачи филиала, назначенные этому пользователю, кроме самих
+ * ежедневников, со сроком на этот день или раньше (просроченные видны тоже).
+ */
+export async function assignedTasksForDay(c:PoolClient,org:string,userId:string,date:string) {
+  return (await c.query(`SELECT w.id,w.title,w.status,w.entity_version,
+      to_char(w.due_at AT TIME ZONE 'Europe/Moscow','YYYY-MM-DD HH24:MI') due_at_local,
+      t.display_name template_name,w.created_by,
+      author.full_name AS created_by_name,
+      EXISTS(SELECT 1 FROM daily_log_links l JOIN submissions s ON s.id=l.submission_id
+        WHERE s.work_item_id=w.id) AS in_daily_log
+    FROM work_items w
+    JOIN templates t ON t.id=w.template_version_id
+    LEFT JOIN app_users author ON author.id=w.created_by
+    WHERE w.org_unit_id=$1 AND w.assignee_user_id=$2
+      AND t.code NOT LIKE 'personal_daily_%'
+      AND w.status IN ('ASSIGNED','IN_PROGRESS','SUBMITTED')
+      AND (w.due_at IS NULL OR (w.due_at AT TIME ZONE 'Europe/Moscow')::date<=$3::date)
+    ORDER BY w.due_at NULLS LAST,w.created_at`,[org,userId,date])).rows;
 }
 export async function dailyLinks(c:PoolClient,id:string,submissionId?:string) {
   return (await c.query(`SELECT s.id submission_id,s.work_item_id,s.revision,s.completion_summary,s.submitted_at,

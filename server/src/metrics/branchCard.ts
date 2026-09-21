@@ -5,7 +5,8 @@ import { METRIC_NAMES } from '../reporting/shared/reportModel';
 import { uuid } from '../reporting/storage';
 import { ApiError } from '../util/errors';
 import { evaluateRag, resolveThresholds, thresholdFor, type Rag } from './thresholds';
-import { funnelConversions, buyback45Shares, upwardRepricing, DERIVED_METRICS } from './derived';
+import { funnelConversions, buyback45Shares, upwardRepricing, stockTurnover,
+  DERIVED_METRICS } from './derived';
 import { resolveScoringModel, computeBranchScore } from './scoring';
 
 /** Окно переоценок: как на старом портале — 30 дней. */
@@ -102,6 +103,8 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
     const values=new Map<string,number>(metrics.map(m=>[m.metric,m.value]));
     const conversions=funnelConversions(values);
     for(const [k,v] of conversions)values.set(k,v);
+    const turnover=stockTurnover(values);
+    if(turnover!==null)values.set('stockTurnover',turnover);
     const buyback=(await buyback45Shares(c,[orgUnitId],q.end)).get(orgUnitId)??null;
     if(buyback)values.set('buyback45Share',buyback.share);
     const repricing=(await upwardRepricing(c,[orgUnitId],q.end,REPRICING_WINDOW_DAYS)).get(orgUnitId)??null;
@@ -112,7 +115,9 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
        WHERE org_unit_id=$1 AND observed_on<=$2::date
          AND observed_on>$2::date-($3::int||' days')::interval`,
       [orgUnitId,q.end,REPRICING_WINDOW_DAYS])).rows[0].n);
-    const derived=[...conversions.entries()].map(([metric,value])=>({metric,
+    const derivedValues=new Map(conversions);
+    if(turnover!==null)derivedValues.set('stockTurnover',turnover);
+    const derived=[...derivedValues.entries()].map(([metric,value])=>({metric,
       metric_name:(METRIC_NAMES as Record<string,string>)[metric]??metric,value,unit:'PCT',
       formula:DERIVED_METRICS[metric]?.formula??null,
       components:DERIVED_METRICS[metric]?.components??[]}));

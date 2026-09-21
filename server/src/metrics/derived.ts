@@ -22,6 +22,10 @@ export const DERIVED_METRICS: Record<string, DerivedBasis> = {
     metric: 'funnelTrafficToDeal', formula: 'сделки / трафик',
     components: ['funnelDeals', 'funnelTraffic'],
   },
+  stockTurnover: {
+    metric: 'stockTurnover', formula: 'прогноз продаж за месяц / склад на 1 число месяца',
+    components: ['forecast', 'stockStart'],
+  },
   funnelTrafficToVisit: {
     metric: 'funnelTrafficToVisit', formula: 'визиты / трафик',
     components: ['funnelVisits', 'funnelTraffic'],
@@ -51,6 +55,19 @@ function share(numerator: number | null | undefined, denominator: number | null 
  * Конверсии воронки из опубликованных трафика, визитов и сделок.
  * Значения возвращаются долей (0..1), как и остальные показатели-доли портала.
  */
+/**
+ * Оборачиваемость склада: прогноз продаж за месяц, делённый на склад на 1 число
+ * этого месяца. Обе части — опубликованные показатели. Если склад на 1 число не
+ * опубликован или равен нулю, показателя нет: делить не на что, и нулём это не
+ * подменяется.
+ */
+export function stockTurnover(values: Map<string, number>): number | null {
+  const forecast = values.get('forecast');
+  const stockStart = values.get('stockStart');
+  if (forecast === undefined || stockStart === undefined || stockStart <= 0) return null;
+  return forecast / stockStart;
+}
+
 export function funnelConversions(values: Map<string, number>): Map<string, number> {
   const out = new Map<string, number>();
   const get = (k: string) => values.has(k) ? values.get(k)! : null;

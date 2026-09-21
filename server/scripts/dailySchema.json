@@ -1,0 +1,3169 @@
+{
+ "RF": [
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_focus",
+   "label": "Фокус внимания дня",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_sales_pct",
+   "label": "План/факт продажи",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_supply_pct",
+   "label": "План/факт поставки",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_sales_plan",
+   "label": "План на день, продажи",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_supply_plan",
+   "label": "План на день, поставки",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_km",
+   "label": "План по кумулятивной марже (КМ)",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 4,
+   "section_title": "Анализ данных (Факт с QLIK за прошедший период)",
+   "section_hints": [
+    "Сопоставить показатели с данными QLIK."
+   ],
+   "optional": false,
+   "field_path": "t4_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 4,
+   "section_title": "Анализ данных (Факт с QLIK за прошедший период)",
+   "section_hints": [
+    "Сопоставить показатели с данными QLIK."
+   ],
+   "optional": false,
+   "field_path": "t4_sales",
+   "label": "Продажи, штуки",
+   "type": "select",
+   "required": false,
+   "options": [
+    "Совпадает",
+    "Не совпадает"
+   ]
+  },
+  {
+   "section_num": 4,
+   "section_title": "Анализ данных (Факт с QLIK за прошедший период)",
+   "section_hints": [
+    "Сопоставить показатели с данными QLIK."
+   ],
+   "optional": false,
+   "field_path": "t4_gross",
+   "label": "Валовая прибыль",
+   "type": "select",
+   "required": false,
+   "options": [
+    "Совпадает",
+    "Не совпадает"
+   ]
+  },
+  {
+   "section_num": 4,
+   "section_title": "Анализ данных (Факт с QLIK за прошедший период)",
+   "section_hints": [
+    "Сопоставить показатели с данными QLIK."
+   ],
+   "optional": false,
+   "field_path": "t4_supply",
+   "label": "Поставки",
+   "type": "select",
+   "required": false,
+   "options": [
+    "Совпадает",
+    "Не совпадает"
+   ]
+  },
+  {
+   "section_num": 4,
+   "section_title": "Анализ данных (Факт с QLIK за прошедший период)",
+   "section_hints": [
+    "Сопоставить показатели с данными QLIK."
+   ],
+   "optional": false,
+   "field_path": "t4_stock",
+   "label": "Склад",
+   "type": "select",
+   "required": false,
+   "options": [
+    "Совпадает",
+    "Не совпадает"
+   ]
+  },
+  {
+   "section_num": 4,
+   "section_title": "Анализ данных (Факт с QLIK за прошедший период)",
+   "section_hints": [
+    "Сопоставить показатели с данными QLIK."
+   ],
+   "optional": false,
+   "field_path": "t4_credits",
+   "label": "Количество кредитов",
+   "type": "select",
+   "required": false,
+   "options": [
+    "Совпадает",
+    "Не совпадает"
+   ]
+  },
+  {
+   "section_num": 4,
+   "section_title": "Анализ данных (Факт с QLIK за прошедший период)",
+   "section_hints": [
+    "Сопоставить показатели с данными QLIK."
+   ],
+   "optional": false,
+   "field_path": "t4_status",
+   "label": "Статус",
+   "type": "select",
+   "required": false,
+   "options": [
+    "Актуализировано"
+   ]
+  },
+  {
+   "section_num": 4,
+   "section_title": "Анализ данных (Факт с QLIK за прошедший период)",
+   "section_hints": [
+    "Сопоставить показатели с данными QLIK."
+   ],
+   "optional": false,
+   "field_path": "t4_fix",
+   "label": "Что исправили",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 5,
+   "section_title": "Анализ доли 45+",
+   "section_hints": [
+    "Зафиксировать долю ТС 45+, возраст стока старше 30 дней и решения по конкретным машинам."
+   ],
+   "optional": true,
+   "field_path": "t5_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 5,
+   "section_title": "Анализ доли 45+",
+   "section_hints": [
+    "Зафиксировать долю ТС 45+, возраст стока старше 30 дней и решения по конкретным машинам."
+   ],
+   "optional": true,
+   "field_path": "t5_share_pct",
+   "label": "Доля 45+",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 5,
+   "section_title": "Анализ доли 45+",
+   "section_hints": [
+    "Зафиксировать долю ТС 45+, возраст стока старше 30 дней и решения по конкретным машинам."
+   ],
+   "optional": true,
+   "field_path": "t5_share_rub",
+   "label": "Доля 45+ в деньгах",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 5,
+   "section_title": "Анализ доли 45+",
+   "section_hints": [
+    "Зафиксировать долю ТС 45+, возраст стока старше 30 дней и решения по конкретным машинам."
+   ],
+   "optional": true,
+   "field_path": "t5_age",
+   "label": "Средний возраст ТС старше 30 дней",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "дн"
+  },
+  {
+   "section_num": 5,
+   "section_title": "Анализ доли 45+",
+   "section_hints": [
+    "Зафиксировать долю ТС 45+, возраст стока старше 30 дней и решения по конкретным машинам."
+   ],
+   "optional": true,
+   "field_path": "t5_market",
+   "label": "% к рынку по ТС старше 30 дней",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 5,
+   "section_title": "Анализ доли 45+",
+   "section_hints": [
+    "Зафиксировать долю ТС 45+, возраст стока старше 30 дней и решения по конкретным машинам."
+   ],
+   "optional": true,
+   "field_path": "t5_rows",
+   "label": "ТС — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "link",
+     "label": "Ссылка на ТС в CRM",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "act",
+     "label": "Решение по ТС",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 6,
+   "section_title": "Анализ трафика",
+   "section_hints": [
+    "Разобрать Strike-Rate по четырём воронкам, динамику лидов и качество звонков МОП."
+   ],
+   "optional": true,
+   "field_path": "t6_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 6,
+   "section_title": "Анализ трафика",
+   "section_hints": [
+    "Разобрать Strike-Rate по четырём воронкам, динамику лидов и качество звонков МОП."
+   ],
+   "optional": true,
+   "field_path": "t6_sr_lead",
+   "label": "Лид — сделка",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 6,
+   "section_title": "Анализ трафика",
+   "section_hints": [
+    "Разобрать Strike-Rate по четырём воронкам, динамику лидов и качество звонков МОП."
+   ],
+   "optional": true,
+   "field_path": "t6_sr_call",
+   "label": "Звонок — сделка",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 6,
+   "section_title": "Анализ трафика",
+   "section_hints": [
+    "Разобрать Strike-Rate по четырём воронкам, динамику лидов и качество звонков МОП."
+   ],
+   "optional": true,
+   "field_path": "t6_sr_visit",
+   "label": "Визит — сделка",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 6,
+   "section_title": "Анализ трафика",
+   "section_hints": [
+    "Разобрать Strike-Rate по четырём воронкам, динамику лидов и качество звонков МОП."
+   ],
+   "optional": true,
+   "field_path": "t6_sr_chat",
+   "label": "Чат — сделка",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 6,
+   "section_title": "Анализ трафика",
+   "section_hints": [
+    "Разобрать Strike-Rate по четырём воронкам, динамику лидов и качество звонков МОП."
+   ],
+   "optional": true,
+   "field_path": "t6_leads_growth",
+   "label": "Прирост лидов к прошлому месяцу",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 6,
+   "section_title": "Анализ трафика",
+   "section_hints": [
+    "Разобрать Strike-Rate по четырём воронкам, динамику лидов и качество звонков МОП."
+   ],
+   "optional": true,
+   "field_path": "t6_conclusion",
+   "label": "Выводы и действия",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 6,
+   "section_title": "Анализ трафика",
+   "section_hints": [
+    "Разобрать Strike-Rate по четырём воронкам, динамику лидов и качество звонков МОП."
+   ],
+   "optional": true,
+   "field_path": "t6_rows",
+   "label": "Звонок — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "link",
+     "label": "Ссылка на звонок или рабочий лист",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "note",
+     "label": "Комментарий к звонку",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_share_buy",
+   "label": "Доля выкупных ТС",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_share_com",
+   "label": "Доля комиссионных ТС",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_price_buy",
+   "label": "Средняя стоимость выкупного ТС",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_price_com",
+   "label": "Средняя стоимость комиссионного ТС",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_noads",
+   "label": "Доля авто не в рекламе",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_ads_days",
+   "label": "Средний срок выхода в рекламу",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "дн"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_age_all",
+   "label": "Общий",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "дн"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_age_buy",
+   "label": "Выкуп",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "дн"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_age_com",
+   "label": "Комиссия",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "дн"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_sold_age_all",
+   "label": "Общий",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "дн"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_sold_age_buy",
+   "label": "Выкуп",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "дн"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_sold_age_com",
+   "label": "Комиссия",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "дн"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_sold_price",
+   "label": "Средняя стоимость проданного авто",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_stock_price",
+   "label": "Средняя стоимость ТС на складе",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_diff",
+   "label": "Разница: склад минус проданное",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_roi_stock",
+   "label": "Рентабельность ТС на складе — общая",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_roi_buy",
+   "label": "Рентабельность ТС на складе — выкуп",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_roi_com",
+   "label": "Рентабельность ТС на складе — комиссия",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_sale_roi",
+   "label": "Рентабельность продаж без КСО — общая",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_sale_roi_buy",
+   "label": "Рентабельность продаж — выкуп",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_sale_roi_com",
+   "label": "Рентабельность продаж — комиссия",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 7,
+   "section_title": "Анализ склада",
+   "section_hints": [
+    "Разобрать структуру склада, рекламу, возраст стока и разницу цен со проданными ТС."
+   ],
+   "optional": true,
+   "field_path": "t7_rows",
+   "label": "ТС — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "link",
+     "label": "Ссылка на комиссионное ТС в CRM",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "note",
+     "label": "Комментарий по ТС",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 8,
+   "section_title": "Анализ КСО",
+   "section_hints": [
+    "Разобрать воронку КСО, ПТЗ, АФБ и кумулятивную маржу с автоматическим RunRate."
+   ],
+   "optional": true,
+   "field_path": "t8_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 8,
+   "section_title": "Анализ КСО",
+   "section_hints": [
+    "Разобрать воронку КСО, ПТЗ, АФБ и кумулятивную маржу с автоматическим RunRate."
+   ],
+   "optional": true,
+   "field_path": "t8_share",
+   "label": "Доля КСО (розница без аукциона)",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 8,
+   "section_title": "Анализ КСО",
+   "section_hints": [
+    "Разобрать воронку КСО, ПТЗ, АФБ и кумулятивную маржу с автоматическим RunRate."
+   ],
+   "optional": true,
+   "field_path": "t8_approved",
+   "label": "Одобрен / выдан",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 8,
+   "section_title": "Анализ КСО",
+   "section_hints": [
+    "Разобрать воронку КСО, ПТЗ, АФБ и кумулятивную маржу с автоматическим RunRate."
+   ],
+   "optional": true,
+   "field_path": "t8_check",
+   "label": "Средний чек по КСО",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 8,
+   "section_title": "Анализ КСО",
+   "section_hints": [
+    "Разобрать воронку КСО, ПТЗ, АФБ и кумулятивную маржу с автоматическим RunRate."
+   ],
+   "optional": true,
+   "field_path": "t8_yield",
+   "label": "Доходность на сумму кредита",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 8,
+   "section_title": "Анализ КСО",
+   "section_hints": [
+    "Разобрать воронку КСО, ПТЗ, АФБ и кумулятивную маржу с автоматическим RunRate."
+   ],
+   "optional": true,
+   "field_path": "t8_afb",
+   "label": "Выдач АФБ",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 8,
+   "section_title": "Анализ КСО",
+   "section_hints": [
+    "Разобрать воронку КСО, ПТЗ, АФБ и кумулятивную маржу с автоматическим RunRate."
+   ],
+   "optional": true,
+   "field_path": "t8_ptz_plan",
+   "label": "План по ПТЗ",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 8,
+   "section_title": "Анализ КСО",
+   "section_hints": [
+    "Разобрать воронку КСО, ПТЗ, АФБ и кумулятивную маржу с автоматическим RunRate."
+   ],
+   "optional": true,
+   "field_path": "t8_ptz_fact",
+   "label": "Факт по ПТЗ",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 8,
+   "section_title": "Анализ КСО",
+   "section_hints": [
+    "Разобрать воронку КСО, ПТЗ, АФБ и кумулятивную маржу с автоматическим RunRate."
+   ],
+   "optional": true,
+   "field_path": "t8_ptz_pct",
+   "label": "Выполнение",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 8,
+   "section_title": "Анализ КСО",
+   "section_hints": [
+    "Разобрать воронку КСО, ПТЗ, АФБ и кумулятивную маржу с автоматическим RunRate."
+   ],
+   "optional": true,
+   "field_path": "t8_km_plan",
+   "label": "План по КМ КСО",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 8,
+   "section_title": "Анализ КСО",
+   "section_hints": [
+    "Разобрать воронку КСО, ПТЗ, АФБ и кумулятивную маржу с автоматическим RunRate."
+   ],
+   "optional": true,
+   "field_path": "t8_km_fact",
+   "label": "Факт по КМ КСО",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 8,
+   "section_title": "Анализ КСО",
+   "section_hints": [
+    "Разобрать воронку КСО, ПТЗ, АФБ и кумулятивную маржу с автоматическим RunRate."
+   ],
+   "optional": true,
+   "field_path": "t8_runrate",
+   "label": "RunRate на конец месяца",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 8,
+   "section_title": "Анализ КСО",
+   "section_hints": [
+    "Разобрать воронку КСО, ПТЗ, АФБ и кумулятивную маржу с автоматическим RunRate."
+   ],
+   "optional": true,
+   "field_path": "t8_runrate_pct",
+   "label": "RunRate к плану",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 9,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок и конверсии.",
+    "Оценить необходимость встречи с контактным центром."
+   ],
+   "optional": false,
+   "field_path": "t9_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 9,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок и конверсии.",
+    "Оценить необходимость встречи с контактным центром."
+   ],
+   "optional": false,
+   "field_path": "t9_conv_kc",
+   "label": "Конверсия от КЦ",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 9,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок и конверсии.",
+    "Оценить необходимость встречи с контактным центром."
+   ],
+   "optional": false,
+   "field_path": "t9_reach_kc",
+   "label": "Доезжаемость от КЦ",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 9,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок и конверсии.",
+    "Оценить необходимость встречи с контактным центром."
+   ],
+   "optional": false,
+   "field_path": "t9_conv_deal",
+   "label": "Конверсия наработка — сделка",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 9,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок и конверсии.",
+    "Оценить необходимость встречи с контактным центром."
+   ],
+   "optional": false,
+   "field_path": "t9_onsite",
+   "label": "Поставки выезд",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 9,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок и конверсии.",
+    "Оценить необходимость встречи с контактным центром."
+   ],
+   "optional": false,
+   "field_path": "t9_street",
+   "label": "Выкуп улица",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 9,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок и конверсии.",
+    "Оценить необходимость встречи с контактным центром."
+   ],
+   "optional": false,
+   "field_path": "t9_turnover",
+   "label": "Оборачиваемость комиссии",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 9,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок и конверсии.",
+    "Оценить необходимость встречи с контактным центром."
+   ],
+   "optional": false,
+   "field_path": "t9_tradeup",
+   "label": "Доля Trade-UP",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 9,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок и конверсии.",
+    "Оценить необходимость встречи с контактным центром."
+   ],
+   "optional": false,
+   "field_path": "t9_meet",
+   "label": "Встреча с КЦ",
+   "type": "select",
+   "required": false,
+   "options": [
+    "Да",
+    "Нет"
+   ]
+  },
+  {
+   "section_num": 9,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок и конверсии.",
+    "Оценить необходимость встречи с контактным центром."
+   ],
+   "optional": false,
+   "field_path": "t9_mgoal",
+   "label": "Цель встречи",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 9,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок и конверсии.",
+    "Оценить необходимость встречи с контактным центром."
+   ],
+   "optional": false,
+   "field_path": "t9_msummary",
+   "label": "Резюме встречи",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 9,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок и конверсии.",
+    "Оценить необходимость встречи с контактным центром."
+   ],
+   "optional": false,
+   "field_path": "t9_mowner",
+   "label": "Ответственный",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 9,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок и конверсии.",
+    "Оценить необходимость встречи с контактным центром."
+   ],
+   "optional": false,
+   "field_path": "t9_mdue",
+   "label": "Срок исполнения",
+   "type": "date",
+   "required": false
+  },
+  {
+   "section_num": 9,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок и конверсии.",
+    "Оценить необходимость встречи с контактным центром."
+   ],
+   "optional": false,
+   "field_path": "t9_mnext",
+   "label": "Промежуточная точка или следующая встреча",
+   "type": "date",
+   "required": false
+  },
+  {
+   "section_num": 14,
+   "section_title": "Сделать ежедневный обход склада",
+   "section_hints": [
+    "Контроль экспозиции.",
+    "Проверка качества склада по стандартам."
+   ],
+   "optional": false,
+   "field_path": "t14_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 14,
+   "section_title": "Сделать ежедневный обход склада",
+   "section_hints": [
+    "Контроль экспозиции.",
+    "Проверка качества склада по стандартам."
+   ],
+   "optional": false,
+   "field_path": "t14_notes",
+   "label": "Автомобили и замечания к складу",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 14,
+   "section_title": "Сделать ежедневный обход склада",
+   "section_hints": [
+    "Контроль экспозиции.",
+    "Проверка качества склада по стандартам."
+   ],
+   "optional": false,
+   "field_path": "t14_goal",
+   "label": "Цель на день",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 14,
+   "section_title": "Сделать ежедневный обход склада",
+   "section_hints": [
+    "Контроль экспозиции.",
+    "Проверка качества склада по стандартам."
+   ],
+   "optional": false,
+   "field_path": "t14_result",
+   "label": "Итог / факт",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 14,
+   "section_title": "Сделать ежедневный обход склада",
+   "section_hints": [
+    "Контроль экспозиции.",
+    "Проверка качества склада по стандартам."
+   ],
+   "optional": false,
+   "field_path": "t14_action",
+   "label": "Принятое решение или действие",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 27,
+   "section_title": "Проведение встречи",
+   "section_hints": [
+    "Отдельная встреча с блоком или подразделением вне утренней планёрки."
+   ],
+   "optional": false,
+   "field_path": "t27_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 27,
+   "section_title": "Проведение встречи",
+   "section_hints": [
+    "Отдельная встреча с блоком или подразделением вне утренней планёрки."
+   ],
+   "optional": false,
+   "field_path": "t27_rows",
+   "label": "Встреча — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "people",
+     "label": "Участники встречи",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    },
+    {
+     "field_path": "other",
+     "label": "Другое — кто именно",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    },
+    {
+     "field_path": "goal",
+     "label": "Цель встречи",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    },
+    {
+     "field_path": "summary",
+     "label": "Резюме встречи",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    },
+    {
+     "field_path": "owner",
+     "label": "Ответственный",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    },
+    {
+     "field_path": "due",
+     "label": "Срок исполнения",
+     "type": "date",
+     "required": false
+    },
+    {
+     "field_path": "next",
+     "label": "Промежуточная точка или следующая встреча",
+     "type": "date",
+     "required": false
+    }
+   ]
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_issues",
+   "label": "Факт выдач",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_supply",
+   "label": "Факт поставок",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_credit_req",
+   "label": "Заявок в кредит",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_credit_out",
+   "label": "Выдач в кредит",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_gross",
+   "label": "Факт по валовой прибыли",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_summary",
+   "label": "Выводы по итогам дня",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 99,
+   "section_title": "Закрытие дня",
+   "section_hints": [],
+   "optional": false,
+   "field_path": "completion_summary",
+   "label": "Итог дня и следующий шаг",
+   "type": "text",
+   "required": true,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 99,
+   "section_title": "Закрытие дня",
+   "section_hints": [],
+   "optional": false,
+   "field_path": "day_notes",
+   "label": "Комментарии за день",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  }
+ ],
+ "ROP": [
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_sales_plan",
+   "label": "План на день, продажи",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_supply_plan",
+   "label": "План на день, поставки",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_km",
+   "label": "План по кумулятивной марже (КМ)",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 2,
+   "section_title": "Провести планёрку с МОП",
+   "section_hints": [
+    "Разобрать наработки менеджеров, выполнение плана продаж и тему тренировки отдела продаж."
+   ],
+   "optional": false,
+   "field_path": "t2_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 2,
+   "section_title": "Провести планёрку с МОП",
+   "section_hints": [
+    "Разобрать наработки менеджеров, выполнение плана продаж и тему тренировки отдела продаж."
+   ],
+   "optional": false,
+   "field_path": "t2_works",
+   "label": "Наработки менеджеров (выдача)",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 2,
+   "section_title": "Провести планёрку с МОП",
+   "section_hints": [
+    "Разобрать наработки менеджеров, выполнение плана продаж и тему тренировки отдела продаж."
+   ],
+   "optional": false,
+   "field_path": "t2_plan_pct",
+   "label": "% выполнения плана продаж на дату",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 2,
+   "section_title": "Провести планёрку с МОП",
+   "section_hints": [
+    "Разобрать наработки менеджеров, выполнение плана продаж и тему тренировки отдела продаж."
+   ],
+   "optional": false,
+   "field_path": "t2_plan",
+   "label": "План продаж на день",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 2,
+   "section_title": "Провести планёрку с МОП",
+   "section_hints": [
+    "Разобрать наработки менеджеров, выполнение плана продаж и тему тренировки отдела продаж."
+   ],
+   "optional": false,
+   "field_path": "t2_training",
+   "label": "Тема тренировки ОП",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 10,
+   "section_title": "Согласовать ППП по выкупным ТС",
+   "section_hints": [
+    "По каждому зашедшему выкупному ТС зафиксировать ссылку, дату, себестоимость и согласованный ППП."
+   ],
+   "optional": false,
+   "field_path": "t10_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 10,
+   "section_title": "Согласовать ППП по выкупным ТС",
+   "section_hints": [
+    "По каждому зашедшему выкупному ТС зафиксировать ссылку, дату, себестоимость и согласованный ППП."
+   ],
+   "optional": false,
+   "field_path": "t10_rows",
+   "label": "ТС — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "link",
+     "label": "Ссылка на карточку ТС в CRM",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "date",
+     "label": "Срок выхода в рекламу",
+     "type": "date",
+     "required": false
+    },
+    {
+     "field_path": "cost",
+     "label": "Прогноз вложений",
+     "type": "number",
+     "required": false,
+     "min": 0,
+     "unit": "₽"
+    },
+    {
+     "field_path": "ppp",
+     "label": "Согласованная ППП — что делаем",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 11,
+   "section_title": "Контроль качества ТС на складе старше 30 дней (выкуп)",
+   "section_hints": [
+    "Проверить описания и качество карточек по выкупным ТС старше 30 дней.",
+    "Назначить ответственного и срок по каждому ТС."
+   ],
+   "optional": false,
+   "field_path": "t11_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 11,
+   "section_title": "Контроль качества ТС на складе старше 30 дней (выкуп)",
+   "section_hints": [
+    "Проверить описания и качество карточек по выкупным ТС старше 30 дней.",
+    "Назначить ответственного и срок по каждому ТС."
+   ],
+   "optional": false,
+   "field_path": "t11_share",
+   "label": "Доля ТС 45+ (выкуп)",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 11,
+   "section_title": "Контроль качества ТС на складе старше 30 дней (выкуп)",
+   "section_hints": [
+    "Проверить описания и качество карточек по выкупным ТС старше 30 дней.",
+    "Назначить ответственного и срок по каждому ТС."
+   ],
+   "optional": false,
+   "field_path": "t11_rows",
+   "label": "ТС — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "link",
+     "label": "Ссылка на ТС в CRM",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "eo",
+     "label": "Ответственный ЭО",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    },
+    {
+     "field_path": "other",
+     "label": "Иной ответственный",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    },
+    {
+     "field_path": "due",
+     "label": "Срок исполнения",
+     "type": "date",
+     "required": false
+    },
+    {
+     "field_path": "note",
+     "label": "Комментарий по ТС",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 12,
+   "section_title": "Контроль описания и качества ТС на складе до 30 дней (выкуп)",
+   "section_hints": [
+    "Проверить описания и фото по выкупным ТС на складе до 30 дней.",
+    "Задача считается выполненной только при проверке минимум трёх ТС."
+   ],
+   "optional": false,
+   "field_path": "t12_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 12,
+   "section_title": "Контроль описания и качества ТС на складе до 30 дней (выкуп)",
+   "section_hints": [
+    "Проверить описания и фото по выкупным ТС на складе до 30 дней.",
+    "Задача считается выполненной только при проверке минимум трёх ТС."
+   ],
+   "optional": false,
+   "field_path": "t12_rows",
+   "label": "ТС — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "link",
+     "label": "Ссылка на ТС в CRM",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "appraiser",
+     "label": "Ответственный оценщик",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    },
+    {
+     "field_path": "note",
+     "label": "Комментарий по ТС",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 15,
+   "section_title": "Прослушать минимум 3 звонка и сверить результаты с DataLens",
+   "section_hints": [
+    "Оценить качество коммуникации команды.",
+    "Сопоставить выводы с аналитикой команды в DataLens."
+   ],
+   "optional": false,
+   "field_path": "t15_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 15,
+   "section_title": "Прослушать минимум 3 звонка и сверить результаты с DataLens",
+   "section_hints": [
+    "Оценить качество коммуникации команды.",
+    "Сопоставить выводы с аналитикой команды в DataLens."
+   ],
+   "optional": false,
+   "field_path": "t15_action",
+   "label": "Принятое решение или действие",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 15,
+   "section_title": "Прослушать минимум 3 звонка и сверить результаты с DataLens",
+   "section_hints": [
+    "Оценить качество коммуникации команды.",
+    "Сопоставить выводы с аналитикой команды в DataLens."
+   ],
+   "optional": false,
+   "field_path": "t15_rows",
+   "label": "Запись — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "link",
+     "label": "Ссылка на рабочий лист",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "mgr",
+     "label": "Менеджер",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    },
+    {
+     "field_path": "note",
+     "label": "Комментарий к звонку",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 16,
+   "section_title": "Прослушка исходящих звонков МОП",
+   "section_hints": [
+    "Прослушать исходящие звонки менеджеров и разобрать качество коммуникации."
+   ],
+   "optional": false,
+   "field_path": "t16_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 16,
+   "section_title": "Прослушка исходящих звонков МОП",
+   "section_hints": [
+    "Прослушать исходящие звонки менеджеров и разобрать качество коммуникации."
+   ],
+   "optional": false,
+   "field_path": "t16_rows",
+   "label": "Звонок — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "link",
+     "label": "Ссылка на рабочий лист",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "mgr",
+     "label": "Менеджер",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    },
+    {
+     "field_path": "note",
+     "label": "Комментарий к звонку",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 17,
+   "section_title": "Контроль воронки «одобрен / не выдан»",
+   "section_hints": [
+    "Проверить клиентов с одобрением без выдачи и обзвонить их."
+   ],
+   "optional": false,
+   "field_path": "t17_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 17,
+   "section_title": "Контроль воронки «одобрен / не выдан»",
+   "section_hints": [
+    "Проверить клиентов с одобрением без выдачи и обзвонить их."
+   ],
+   "optional": false,
+   "field_path": "t17_approved",
+   "label": "Одобрен / выдан",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 17,
+   "section_title": "Контроль воронки «одобрен / не выдан»",
+   "section_hints": [
+    "Проверить клиентов с одобрением без выдачи и обзвонить их."
+   ],
+   "optional": false,
+   "field_path": "t17_rows",
+   "label": "Клиент — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "link",
+     "label": "Ссылка на рабочий лист клиента в CRM",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "result",
+     "label": "Результат исходящего звонка",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    },
+    {
+     "field_path": "note",
+     "label": "Комментарий",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 18,
+   "section_title": "Работа с классифайдами и переоценкой выкупного склада",
+   "section_hints": [
+    "Проверить размещение на классифайдах и провести переоценку выкупных ТС."
+   ],
+   "optional": false,
+   "field_path": "t18_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 18,
+   "section_title": "Работа с классифайдами и переоценкой выкупного склада",
+   "section_hints": [
+    "Проверить размещение на классифайдах и провести переоценку выкупных ТС."
+   ],
+   "optional": false,
+   "field_path": "t18_rows",
+   "label": "ТС — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "link",
+     "label": "Ссылка на ТС со склада",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "sum",
+     "label": "Сумма переоценки",
+     "type": "number",
+     "required": false,
+     "min": 0,
+     "unit": "₽"
+    },
+    {
+     "field_path": "promo",
+     "label": "Продвижение",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Да",
+      "Нет"
+     ]
+    }
+   ]
+  },
+  {
+   "section_num": 26,
+   "section_title": "Контроль трафика прошедшего дня",
+   "section_hints": [
+    "Зафиксировать трафик отдела продаж и факт выдач за прошедший день."
+   ],
+   "optional": false,
+   "field_path": "t26_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 26,
+   "section_title": "Контроль трафика прошедшего дня",
+   "section_hints": [
+    "Зафиксировать трафик отдела продаж и факт выдач за прошедший день."
+   ],
+   "optional": false,
+   "field_path": "t26_visits_op",
+   "label": "Визиты ОП",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 26,
+   "section_title": "Контроль трафика прошедшего дня",
+   "section_hints": [
+    "Зафиксировать трафик отдела продаж и факт выдач за прошедший день."
+   ],
+   "optional": false,
+   "field_path": "t26_calls_op",
+   "label": "Звонки ОП",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 26,
+   "section_title": "Контроль трафика прошедшего дня",
+   "section_hints": [
+    "Зафиксировать трафик отдела продаж и факт выдач за прошедший день."
+   ],
+   "optional": false,
+   "field_path": "t26_chats_op",
+   "label": "Чаты ОП",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 26,
+   "section_title": "Контроль трафика прошедшего дня",
+   "section_hints": [
+    "Зафиксировать трафик отдела продаж и факт выдач за прошедший день."
+   ],
+   "optional": false,
+   "field_path": "t26_issues_yst",
+   "label": "Факт выдач за вчера",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_issues",
+   "label": "Факт выдач",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_supply",
+   "label": "Факт поставок",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_credit_req",
+   "label": "Заявок в кредит",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_credit_out",
+   "label": "Выдач в кредит",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_gross",
+   "label": "Факт по валовой прибыли",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_summary",
+   "label": "Выводы по итогам дня",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 99,
+   "section_title": "Закрытие дня",
+   "section_hints": [],
+   "optional": false,
+   "field_path": "completion_summary",
+   "label": "Итог дня и следующий шаг",
+   "type": "text",
+   "required": true,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 99,
+   "section_title": "Закрытие дня",
+   "section_hints": [],
+   "optional": false,
+   "field_path": "day_notes",
+   "label": "Комментарии за день",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  }
+ ],
+ "ROO": [
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_sales_plan",
+   "label": "План на день, продажи",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_supply_plan",
+   "label": "План на день, поставки",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 1,
+   "section_title": "Провести планёрку с РОП, РОО, руководителем КСО и сток-менеджером",
+   "section_hints": [
+    "Разобрать план и факт дня по продажам, поставкам и кумулятивной марже, задать фокус внимания."
+   ],
+   "optional": false,
+   "field_path": "t1_km",
+   "label": "План по кумулятивной марже (КМ)",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 3,
+   "section_title": "Провести планёрку с экспертами отдела оценки",
+   "section_hints": [
+    "Разобрать наработки экспертов, выполнение плана поставок и тему тренировки отдела оценки."
+   ],
+   "optional": false,
+   "field_path": "t3_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 3,
+   "section_title": "Провести планёрку с экспертами отдела оценки",
+   "section_hints": [
+    "Разобрать наработки экспертов, выполнение плана поставок и тему тренировки отдела оценки."
+   ],
+   "optional": false,
+   "field_path": "t3_works",
+   "label": "Наработки экспертов (ЭО)",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 3,
+   "section_title": "Провести планёрку с экспертами отдела оценки",
+   "section_hints": [
+    "Разобрать наработки экспертов, выполнение плана поставок и тему тренировки отдела оценки."
+   ],
+   "optional": false,
+   "field_path": "t3_plan_pct",
+   "label": "% выполнения плана поставок на дату",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 3,
+   "section_title": "Провести планёрку с экспертами отдела оценки",
+   "section_hints": [
+    "Разобрать наработки экспертов, выполнение плана поставок и тему тренировки отдела оценки."
+   ],
+   "optional": false,
+   "field_path": "t3_plan",
+   "label": "План поставок на день",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 3,
+   "section_title": "Провести планёрку с экспертами отдела оценки",
+   "section_hints": [
+    "Разобрать наработки экспертов, выполнение плана поставок и тему тренировки отдела оценки."
+   ],
+   "optional": false,
+   "field_path": "t3_training",
+   "label": "Тема тренировки ОО",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 13,
+   "section_title": "Согласовать ППП по комиссионным ТС",
+   "section_hints": [
+    "По каждому зашедшему комиссионному ТС зафиксировать ссылку, дату, себестоимость и согласованный ППП."
+   ],
+   "optional": false,
+   "field_path": "t13_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 13,
+   "section_title": "Согласовать ППП по комиссионным ТС",
+   "section_hints": [
+    "По каждому зашедшему комиссионному ТС зафиксировать ссылку, дату, себестоимость и согласованный ППП."
+   ],
+   "optional": false,
+   "field_path": "t13_rows",
+   "label": "ТС — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "link",
+     "label": "Ссылка на карточку ТС в CRM",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "date",
+     "label": "Срок выхода в рекламу",
+     "type": "date",
+     "required": false
+    },
+    {
+     "field_path": "cost",
+     "label": "Прогноз вложений",
+     "type": "number",
+     "required": false,
+     "min": 0,
+     "unit": "₽"
+    },
+    {
+     "field_path": "ppp",
+     "label": "Согласованная ППП — что делаем",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 19,
+   "section_title": "Провести аудит карточек ТС",
+   "section_hints": [
+    "Проверить минимум 3 карточки ТС на складе.",
+    "Проверить минимум 3 карточки ТС из раздела «Наработки».",
+    "Сверить содержание карточек с чек-листом."
+   ],
+   "optional": false,
+   "field_path": "t19_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 19,
+   "section_title": "Провести аудит карточек ТС",
+   "section_hints": [
+    "Проверить минимум 3 карточки ТС на складе.",
+    "Проверить минимум 3 карточки ТС из раздела «Наработки».",
+    "Сверить содержание карточек с чек-листом."
+   ],
+   "optional": false,
+   "field_path": "t19_goal",
+   "label": "Цель на день",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 19,
+   "section_title": "Провести аудит карточек ТС",
+   "section_hints": [
+    "Проверить минимум 3 карточки ТС на складе.",
+    "Проверить минимум 3 карточки ТС из раздела «Наработки».",
+    "Сверить содержание карточек с чек-листом."
+   ],
+   "optional": false,
+   "field_path": "t19_result",
+   "label": "Итог / факт",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 19,
+   "section_title": "Провести аудит карточек ТС",
+   "section_hints": [
+    "Проверить минимум 3 карточки ТС на складе.",
+    "Проверить минимум 3 карточки ТС из раздела «Наработки».",
+    "Сверить содержание карточек с чек-листом."
+   ],
+   "optional": false,
+   "field_path": "t19_action",
+   "label": "Принятое решение или действие",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 19,
+   "section_title": "Провести аудит карточек ТС",
+   "section_hints": [
+    "Проверить минимум 3 карточки ТС на складе.",
+    "Проверить минимум 3 карточки ТС из раздела «Наработки».",
+    "Сверить содержание карточек с чек-листом."
+   ],
+   "optional": false,
+   "field_path": "t19_rows",
+   "label": "ТС на складе — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "stock",
+     "label": "Ссылка на карточку ТС в CRM",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "stockc",
+     "label": "Комментарий по карточке",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 19,
+   "section_title": "Провести аудит карточек ТС",
+   "section_hints": [
+    "Проверить минимум 3 карточки ТС на складе.",
+    "Проверить минимум 3 карточки ТС из раздела «Наработки».",
+    "Сверить содержание карточек с чек-листом."
+   ],
+   "optional": false,
+   "field_path": "t19_rows2",
+   "label": "ТС из наработок — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "work",
+     "label": "Ссылка на карточку ТС в CRM",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "workc",
+     "label": "Комментарий по карточке",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 20,
+   "section_title": "Проверка состояния комиссионного склада",
+   "section_hints": [
+    "Осмотреть комиссионные ТС на складе и зафиксировать состояние по каждому.",
+    "Назначить ответственного эксперта оценки по замечаниям."
+   ],
+   "optional": false,
+   "field_path": "t20_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 20,
+   "section_title": "Проверка состояния комиссионного склада",
+   "section_hints": [
+    "Осмотреть комиссионные ТС на складе и зафиксировать состояние по каждому.",
+    "Назначить ответственного эксперта оценки по замечаниям."
+   ],
+   "optional": false,
+   "field_path": "t20_rows",
+   "label": "ТС — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "link",
+     "label": "Ссылка на карточку ТС в CRM",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "eo",
+     "label": "Ответственный ЭО",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    },
+    {
+     "field_path": "note",
+     "label": "Результаты осмотра и комментарий",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 21,
+   "section_title": "Контроль диагностики для продажи на комиссионных ТС",
+   "section_hints": [
+    "Проверить наличие и качество диагностики по комиссионным ТС перед продажей."
+   ],
+   "optional": false,
+   "field_path": "t21_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 21,
+   "section_title": "Контроль диагностики для продажи на комиссионных ТС",
+   "section_hints": [
+    "Проверить наличие и качество диагностики по комиссионным ТС перед продажей."
+   ],
+   "optional": false,
+   "field_path": "t21_rows",
+   "label": "ТС — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "link",
+     "label": "Ссылка на ТС в CRM",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "note",
+     "label": "Что необходимо исправить",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 22,
+   "section_title": "День работы с комиссией",
+   "section_hints": [
+    "Разобрать показатели эксперта по комиссионному направлению и зафиксировать выводы."
+   ],
+   "optional": false,
+   "field_path": "t22_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 22,
+   "section_title": "День работы с комиссией",
+   "section_hints": [
+    "Разобрать показатели эксперта по комиссионному направлению и зафиксировать выводы."
+   ],
+   "optional": false,
+   "field_path": "t22_expert",
+   "label": "ФИО эксперта",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 22,
+   "section_title": "День работы с комиссией",
+   "section_hints": [
+    "Разобрать показатели эксперта по комиссионному направлению и зафиксировать выводы."
+   ],
+   "optional": false,
+   "field_path": "t22_stock",
+   "label": "Кол-во ТС на складе",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 22,
+   "section_title": "День работы с комиссией",
+   "section_hints": [
+    "Разобрать показатели эксперта по комиссионному направлению и зафиксировать выводы."
+   ],
+   "optional": false,
+   "field_path": "t22_sold",
+   "label": "Кол-во проданных комиссий",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 22,
+   "section_title": "День работы с комиссией",
+   "section_hints": [
+    "Разобрать показатели эксперта по комиссионному направлению и зафиксировать выводы."
+   ],
+   "optional": false,
+   "field_path": "t22_turnover",
+   "label": "Оборачиваемость комиссий",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 22,
+   "section_title": "День работы с комиссией",
+   "section_hints": [
+    "Разобрать показатели эксперта по комиссионному направлению и зафиксировать выводы."
+   ],
+   "optional": false,
+   "field_path": "t22_runrate",
+   "label": "RunRate по комиссии",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 22,
+   "section_title": "День работы с комиссией",
+   "section_hints": [
+    "Разобрать показатели эксперта по комиссионному направлению и зафиксировать выводы."
+   ],
+   "optional": false,
+   "field_path": "t22_market",
+   "label": "Цена к рынку по ТС оценщика",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 22,
+   "section_title": "День работы с комиссией",
+   "section_hints": [
+    "Разобрать показатели эксперта по комиссионному направлению и зафиксировать выводы."
+   ],
+   "optional": false,
+   "field_path": "t22_index",
+   "label": "Индекс эффективности работы с комиссией",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "коэф."
+  },
+  {
+   "section_num": 22,
+   "section_title": "День работы с комиссией",
+   "section_hints": [
+    "Разобрать показатели эксперта по комиссионному направлению и зафиксировать выводы."
+   ],
+   "optional": false,
+   "field_path": "t22_summary",
+   "label": "Выводы по дню работы с комиссией",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 23,
+   "section_title": "Проанализировать наработки на корректность оценки и аудит ЭО",
+   "section_hints": [
+    "Проверить корректность оценки.",
+    "Провести аудит минимум 3 событий ЭО."
+   ],
+   "optional": false,
+   "field_path": "t23_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 23,
+   "section_title": "Проанализировать наработки на корректность оценки и аудит ЭО",
+   "section_hints": [
+    "Проверить корректность оценки.",
+    "Провести аудит минимум 3 событий ЭО."
+   ],
+   "optional": false,
+   "field_path": "t23_action",
+   "label": "Принятое решение или действие",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 23,
+   "section_title": "Проанализировать наработки на корректность оценки и аудит ЭО",
+   "section_hints": [
+    "Проверить корректность оценки.",
+    "Провести аудит минимум 3 событий ЭО."
+   ],
+   "optional": false,
+   "field_path": "t23_rows",
+   "label": "Рабочий лист ЭО — список",
+   "type": "repeatable_group",
+   "required": false,
+   "min_items": 0,
+   "max_items": 50,
+   "child_fields": [
+    {
+     "field_path": "link",
+     "label": "Ссылка на рабочий лист",
+     "type": "url",
+     "required": false
+    },
+    {
+     "field_path": "note",
+     "label": "Комментарий по оценке",
+     "type": "text",
+     "required": false,
+     "max_chars": 4000
+    }
+   ]
+  },
+  {
+   "section_num": 24,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок.",
+    "Проверить непринятые заявки контактного центра."
+   ],
+   "optional": false,
+   "field_path": "t24_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 24,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок.",
+    "Проверить непринятые заявки контактного центра."
+   ],
+   "optional": false,
+   "field_path": "t24_conv",
+   "label": "Конверсия КЦ — сделка",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 24,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок.",
+    "Проверить непринятые заявки контактного центра."
+   ],
+   "optional": false,
+   "field_path": "t24_tradeup",
+   "label": "Доля Trade-Up",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 24,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок.",
+    "Проверить непринятые заявки контактного центра."
+   ],
+   "optional": false,
+   "field_path": "t24_onsite",
+   "label": "Поставки выездной оценки",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 24,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок.",
+    "Проверить непринятые заявки контактного центра."
+   ],
+   "optional": false,
+   "field_path": "t24_unaccepted",
+   "label": "Проверка непринятых заявок",
+   "type": "select",
+   "required": false,
+   "options": [
+    "Нарушений нет",
+    "Нарушение"
+   ]
+  },
+  {
+   "section_num": 24,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок.",
+    "Проверить непринятые заявки контактного центра."
+   ],
+   "optional": false,
+   "field_path": "t24_goal",
+   "label": "Цель на день",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 24,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок.",
+    "Проверить непринятые заявки контактного центра."
+   ],
+   "optional": false,
+   "field_path": "t24_result",
+   "label": "Итог / факт",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 24,
+   "section_title": "Контроль каналов поставок",
+   "section_hints": [
+    "Проверить показатели каналов поставок.",
+    "Проверить непринятые заявки контактного центра."
+   ],
+   "optional": false,
+   "field_path": "t24_action",
+   "label": "Принятое решение или действие",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 25,
+   "section_title": "Проверить использование приложения по комитентам",
+   "section_hints": [
+    "Проверить активность и показатели в Grafana."
+   ],
+   "optional": false,
+   "field_path": "t25_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 25,
+   "section_title": "Проверить использование приложения по комитентам",
+   "section_hints": [
+    "Проверить активность и показатели в Grafana."
+   ],
+   "optional": false,
+   "field_path": "t25_usage",
+   "label": "Актуальный процент использования ЛК комитента",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "%"
+  },
+  {
+   "section_num": 25,
+   "section_title": "Проверить использование приложения по комитентам",
+   "section_hints": [
+    "Проверить активность и показатели в Grafana."
+   ],
+   "optional": false,
+   "field_path": "t25_action",
+   "label": "Принятое решение или действие",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_done",
+   "label": "Отметка выполнения",
+   "type": "select",
+   "options": [
+    "Выполнено",
+    "Не выполнено"
+   ],
+   "required": false
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_issues",
+   "label": "Факт выдач",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_supply",
+   "label": "Факт поставок",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_credit_req",
+   "label": "Заявок в кредит",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_credit_out",
+   "label": "Выдач в кредит",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "шт"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_gross",
+   "label": "Факт по валовой прибыли",
+   "type": "number",
+   "required": false,
+   "min": 0,
+   "unit": "₽"
+  },
+  {
+   "section_num": 28,
+   "section_title": "Сверка факт/план дня и закрытие дня",
+   "section_hints": [
+    "Сверить факт с планом дня.",
+    "Проверить статусы наработок.",
+    "Отработать просроченные события.",
+    "Убедиться, что все сделки переведены в статус «Оформлено»."
+   ],
+   "optional": false,
+   "field_path": "t28_summary",
+   "label": "Выводы по итогам дня",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 99,
+   "section_title": "Закрытие дня",
+   "section_hints": [],
+   "optional": false,
+   "field_path": "completion_summary",
+   "label": "Итог дня и следующий шаг",
+   "type": "text",
+   "required": true,
+   "max_chars": 4000
+  },
+  {
+   "section_num": 99,
+   "section_title": "Закрытие дня",
+   "section_hints": [],
+   "optional": false,
+   "field_path": "day_notes",
+   "label": "Комментарии за день",
+   "type": "text",
+   "required": false,
+   "max_chars": 4000
+  }
+ ]
+}

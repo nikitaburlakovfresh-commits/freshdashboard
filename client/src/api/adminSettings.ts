@@ -40,8 +40,8 @@ export const decideRegistration = (
 
 // Открытый контур: вызывается со страницы регистрации до входа в портал.
 export const getRegistrationDirectory = () =>
-  apiFetch<{ roles: { code: string; display_name: string }[]; branches: { id: string; display_name: string }[] }>(
-    '/registration/directory');
+  apiFetch<{ roles: { code: string; display_name: string; scope_kind: string }[];
+    branches: { id: string; display_name: string }[] }>('/registration/directory');
 
 export const submitRegistration = (body: Record<string, string>) =>
   apiFetch<{ ok: true; message: string }>('/registration', { method: 'POST', body });

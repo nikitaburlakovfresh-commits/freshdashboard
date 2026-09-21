@@ -1083,7 +1083,11 @@ export async function submitWorkItem(ctx: ActorContext, workItemId: string, idem
 
 // ---------- acceptWorkItem / reworkWorkItem ----------
 async function reviewGuard(client: PoolClient, workItem: WorkItemRow, actorUserId: string, rmOrgs: Set<string>) {
-  if (!rmOrgs.has(workItem.org_unit_id)) throw new ApiError('NOT_FOUND', 'Объект не найден.');
+  // Принимает либо региональный менеджер филиала, либо тот, кто задачу поставил
+  // (решение владельца 21.09.2026): выполненная задача обязана вернуться на
+  // проверку автору поручения, иначе поручение остаётся без приёмки.
+  if (!rmOrgs.has(workItem.org_unit_id) && workItem.created_by !== actorUserId)
+    throw new ApiError('NOT_FOUND', 'Объект не найден.');
   if (workItem.status !== 'SUBMITTED') {
     throw new ApiError('INVALID_TRANSITION', 'Переход из текущего состояния запрещён.', { current_status: workItem.status as any });
   }
@@ -1147,7 +1151,11 @@ export async function acceptWorkItem(
         aggregateVersion: newRow.entity_version,
         requestId: ctx.requestId,
         beforeState: { status: workItem.status },
-        afterState: { status: 'COMPLETED' },
+        // Кем принято: региональным менеджером филиала или автором поручения.
+        // Столбец actor_role оставляем прежним, различие фиксируем в состоянии,
+        // чтобы в истории было видно основание приёмки.
+        afterState: { status: 'COMPLETED',
+          accepted_as: rmOrgs.has(workItem.org_unit_id) ? 'REGIONAL_MANAGER' : 'TASK_AUTHOR' },
         resolution: 'APPLIED',
         retentionClass: 'WORK_ITEM_STANDARD',
         ip: ctx.ip,
