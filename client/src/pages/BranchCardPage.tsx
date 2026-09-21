@@ -94,20 +94,22 @@ export default function BranchCardPage() {
         {FOCUS_TILES.map(tile=>{
           const cell=byMetric.get(tile.metric);
           if(tile.kind==='STOCK') {
-            // План на конец месяца — отдельный показатель. Если его нет,
-            // выполнение не выдумывается: показывается только факт.
+            // Факт склада — из точечного среза на дату, план на конец месяца —
+            // показатель периода. Отсутствующую часть не подменяем.
+            const snap=data.stock_snapshot;
+            const fact=snap?.stock??null;
             const plan=byMetric.get('stockPlanMonthEnd');
-            const cost=byMetric.get('stockCost');
+            const cost=snap?.stock_cost??null;
             return <article key={tile.metric} className="card-tile">
               <h3>{tile.label}</h3>
-              <p className="card-tile-value">{!cell?'—':`${Math.round(cell.value)}`}
+              <p className="card-tile-value">{fact===null?'—':Math.round(fact)}
                 {plan&&<span className="card-tile-plan"> / {Math.round(plan.value)}</span>}</p>
-              <p className="card-tile-note">{!cell?'склад не опубликован'
-                :plan?<>план на конец месяца {Math.round(plan.value)} шт ·
-                  {' '}{pct(cell.value/plan.value)} плана
-                  {cost&&<> · себестоимость {rub(cost.value)}</>}</>
-                  :<>план на конец месяца не опубликован
-                    {cost&&<> · себестоимость {rub(cost.value)}</>}</>}</p>
+              <p className="card-tile-note">{fact===null
+                ?(plan?<>план на конец месяца {Math.round(plan.value)} шт · факт склада не опубликован</>
+                  :'склад не опубликован')
+                :<>{plan?<>{pct(fact/plan.value)} плана на конец месяца</>:'план не опубликован'}
+                  {cost!==null&&<> · себестоимость {rub(cost)}</>}
+                  {snap&&<> · срез {snap.observed_on}</>}</>}</p>
             </article>;
           }
           return <article key={tile.metric} className="card-tile">

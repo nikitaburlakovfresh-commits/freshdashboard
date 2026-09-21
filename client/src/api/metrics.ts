@@ -91,6 +91,8 @@ export interface BranchCardData {
   // опубликованного и помечает расчётными.
   derived:{metric:string;metric_name:string;value:number;unit:string;
     formula:string|null;components:string[]}[];
+  // Склад — состояние на дату: точечный срез, не итог периода.
+  stock_snapshot:{observed_on:string;stock:number|null;stock_cost:number|null}|null;
   buyback45:{share:number;aged:number;total:number;
     aged_cost:number|null;total_cost:number|null;observed_on:string}|null;
   repricing:{window_days:number;snapshots:number;vehicles:number|null;events:number|null};

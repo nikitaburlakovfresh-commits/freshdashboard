@@ -76,6 +76,25 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
         direction:t?.direction??null,revision:r.revision,published_at:r.created_at,snapshot_id:r.snapshot_id};
     });
 
+    // Склад — состояние на дату, а не итог периода: он публикуется точечным
+    // срезом (период из одного дня), тогда как план на конец месяца приходит
+    // за период. Поэтому факт склада читается отдельно — последним срезом не
+    // позднее конца выбранного периода.
+    const stockRows=(await c.query(`SELECT s.metric,s.value::text value,s.unit,
+      to_char(s.period_end,'YYYY-MM-DD') observed_on
+      FROM report_fact_snapshots s JOIN report_fact_current p ON p.snapshot_id=s.id
+      WHERE s.org_unit_id=$1 AND s.period_start=s.period_end AND s.period_end<=$2::date
+        AND s.metric=ANY($3::text[]) AND s.metric=ANY($4::text[])
+      ORDER BY s.period_end DESC`,
+    [orgUnitId,q.end,['stock','stockCost'],grant.metrics])).rows;
+    const stockSnapshot=stockRows.length?{observed_on:stockRows[0].observed_on,
+      stock:null as number|null,stock_cost:null as number|null}:null;
+    if(stockSnapshot)for(const r of stockRows) {
+      if(r.observed_on!==stockSnapshot.observed_on)continue;
+      if(r.metric==='stock')stockSnapshot.stock=Number(r.value);
+      if(r.metric==='stockCost')stockSnapshot.stock_cost=Number(r.value);
+    }
+
     // Производные показатели карточки: конверсии воронки из опубликованных
     // трафика, визитов и сделок, доля 45+ в выкупе и переоценки вверх по
     // реестру VIN. Источника-ячейки у них нет, поэтому они не публикуются как
@@ -149,6 +168,7 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
       metrics,metrics_without_threshold:metrics.filter(m=>!m.threshold_id).map(m=>m.metric),
       deviations,metric_names:METRIC_NAMES,thresholds_configured:thresholds.length>0,
       derived,
+      stock_snapshot:stockSnapshot,
       buyback45:buyback,
       repricing:{window_days:REPRICING_WINDOW_DAYS,snapshots,
         vehicles:repricing?.vehicles??null,events:repricing?.events??null},
