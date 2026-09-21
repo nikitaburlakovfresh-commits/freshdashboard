@@ -1,7 +1,8 @@
 import React,{useEffect,useState} from 'react';
 import { Link,useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { getDay,openDay,moscowToday,type PersonalDay } from '../api/dailyLogs';
+import { getDay,openDay,getNote,openNote,moscowToday,LINE_ROLES,LINE_ROLE_NAMES,
+  type PersonalDay,type PersonalNoteDay } from '../api/dailyLogs';
 import { getOrganizationTree,type DirectoryUnit } from '../api/organization';
 import { listWorkItems } from '../api/endpoints';
 import type { WorkItem } from '../api/types';
@@ -9,39 +10,71 @@ import StatusBadge from '../components/StatusBadge';
 import '../styles/beta-workspace.css';
 export default function PersonalDayPage() {
   const {me}=useAuth(),navigate=useNavigate();
-  const scopes=(me?.grants??[]).filter(g=>g.org_unit_id&&['RF','ROP','ROO'].includes(g.role));
+  // Линейные должности заводят личную запись дня — она тоже открывается с этой
+  // страницы. Раньше страница пускала только РФ, РОП и РОО, и сотрудник МОП или
+  // ЭО не мог попасть к своей записи вообще, хотя сервер её создавал.
+  const DIARY_ROLES=['RF','ROP','ROO'];
+  const scopes=(me?.grants??[]).filter(g=>g.org_unit_id&&
+    (DIARY_ROLES.includes(g.role)||(LINE_ROLES as readonly string[]).includes(g.role)));
   const [scope,setScope]=useState(scopes[0]?`${scopes[0].org_unit_id}:${scopes[0].role}`:'');
   const [org,role]=scope.split(':');
+  const isLine=(LINE_ROLES as readonly string[]).includes(role);
   const [date,setDate]=useState(moscowToday),[day,setDay]=useState<PersonalDay|null>(null);
+  const [note,setNote]=useState<PersonalNoteDay|null>(null);
   const [units,setUnits]=useState<DirectoryUnit[]>([]),[items,setItems]=useState<WorkItem[]>([]);
   const [busy,setBusy]=useState(false),[opening,setOpening]=useState(false),[error,setError]=useState(''),[revision,reload]=useState(0);
   const [cursor,setCursor]=useState<string|null>(null),[changed,setChanged]=useState(false);
   useEffect(()=>{
-    let live=true;setDay(null);setItems([]);setCursor(null);setError('');
+    let live=true;setDay(null);setNote(null);setItems([]);setCursor(null);setError('');
     if(!scope)return;
     setBusy(true);
-    Promise.all([getDay(org,role,date),listWorkItems({org_unit_id:org,mine:true,role,limit:100}),getOrganizationTree(date)])
-      .then(([d,t,u])=>{if(live){setDay(d);setItems(t.items.filter(t=>!t.template_code.startsWith('personal_daily_')));setCursor(t.next_cursor);setUnits(u.items);setChanged(false);}})
+    Promise.all([isLine?getNote(org,role,date):getDay(org,role,date),
+      listWorkItems({org_unit_id:org,mine:true,role,limit:100}),getOrganizationTree(date)])
+      .then(([d,t,u])=>{if(live){
+        if(isLine)setNote(d as PersonalNoteDay);else setDay(d as PersonalDay);
+        setItems(t.items.filter(t=>!t.template_code.startsWith('personal_daily_')&&!t.template_code.startsWith('personal_note_')));
+        setCursor(t.next_cursor);setUnits(u.items);setChanged(false);}})
       .catch(e=>{if(live)setError(e.message);}).finally(()=>{if(live)setBusy(false);});
     return()=>{live=false;};
   },[scope,date,revision]);
-  useEffect(()=>{if(!day)return;const id=window.setInterval(()=>{if(moscowToday()!==day.current_business_date)setChanged(true);},30000);return()=>window.clearInterval(id);},[day]);
+  const current=day?.current_business_date??note?.current_business_date??null;
+  useEffect(()=>{if(!current)return;const id=window.setInterval(()=>{if(moscowToday()!==current)setChanged(true);},30000);return()=>window.clearInterval(id);},[current]);
   async function open() {
     setOpening(true);setError('');
-    try{const r=await openDay(org,role,date);navigate(`/tasks/${r.id}`);}catch(e:any){setError(e.message);}finally{setOpening(false);}
+    try{const r=isLine?await openNote(org,role,date):await openDay(org,role,date);
+      navigate(`/tasks/${r.id}`);}catch(e:any){setError(e.message);}finally{setOpening(false);}
   }
   return <div className="portal-dashboard beta-workspace">
     <header className="portal-heading"><div><span className="portal-eyebrow">ЛИЧНАЯ РАБОТА · BETA</span><h1>Мой ежедневник</h1>
       <p>Отдельная запись сотрудника, роли, филиала и даты. Сохранение в PostgreSQL портала, без зависимости от Диска.</p></div></header>
-    {!scopes.length?<section className="portal-panel"><h2>Нет назначения РФ, РОП или РОО</h2><p>Руководитель проверяет записи в <Link to="/">обзоре сети</Link> или в карточке доступного филиала. Общего логина для заполнения нет.</p></section>:<>
+    {!scopes.length?<section className="portal-panel"><h2>Нет назначения на филиал</h2><p>Руководитель проверяет записи в <Link to="/">обзоре сети</Link> или в карточке доступного филиала. Общего логина для заполнения нет.</p></section>:<>
       <section className="portal-panel beta-filters">
         <label>Филиал и моя роль<select aria-label="Филиал и моя роль" value={scope} onChange={e=>setScope(e.target.value)}>
-          {scopes.map(s=><option key={s.id} value={`${s.org_unit_id}:${s.role}`}>{units.find(u=>u.id===s.org_unit_id)?.display_name??s.org_unit_id} · {s.role}</option>)}</select></label>
+          {scopes.map(s=><option key={s.id} value={`${s.org_unit_id}:${s.role}`}>{units.find(u=>u.id===s.org_unit_id)?.display_name??s.org_unit_id} · {LINE_ROLE_NAMES[s.role]??s.role}</option>)}</select></label>
         <label>Дата ежедневника<input aria-label="Дата ежедневника" type="date" value={date} onChange={e=>{if(e.target.value)setDate(e.target.value);}}/></label>
         <button className="btn" disabled={busy} onClick={()=>reload(n=>n+1)}>Обновить</button>
       </section>
       {changed&&<p role="status" className="beta-notice">В Москве наступил новый день. Текущая запись не переключена. <button className="btn" onClick={()=>setDate(moscowToday())}>Перейти на сегодня</button></p>}
       {error&&<p role="alert" className="portal-panel">{error}</p>}{busy&&<p role="status">Читаю ежедневник и задачи…</p>}
+      {note&&<section className="portal-panel"><div className="portal-section-head">
+        <div><h2>Личная запись дня · {date}</h2>
+          <p className="portal-muted">{LINE_ROLE_NAMES[role]??role} · {note.record?'Сохранена на сервере':'Ещё не создана'}</p></div>
+        <button className="portal-primary" disabled={opening} onClick={open}>
+          {opening?'Открываю…':note.record?'Открыть запись':'Создать запись за дату'}</button></div>
+        {note.record&&<p>Состояние: <StatusBadge status={note.record.status as any}/></p>}
+        <p className="portal-muted">Это не ежедневник. Окна заполнения нет, опоздать нельзя, на балл филиала
+          запись не влияет и источником показателей не является. Прошлые дни открыты, будущая дата — нет.</p>
+      </section>}
+      {note&&<section className="portal-panel"><h2>Задачи от руководителя</h2>
+        <p className="portal-muted">Поставлены вам на этот день и ранее. Просроченные остаются в списке.</p>
+        {note.assigned_tasks.length?<div className="personal-task-list">{note.assigned_tasks.map(t=>{
+          const overdue=!!t.due_at_local&&t.due_at_local.slice(0,10)<date;
+          return <Link className="personal-task" to={`/tasks/${t.id}`} key={t.id} data-overdue={overdue?'1':undefined}>
+            <div><strong>{t.title}</strong><small>{t.created_by_name&&<>поставил {t.created_by_name} · </>}
+              {t.due_at_local?<>срок {t.due_at_local} МСК</>:<>срок не задан</>}</small></div>
+            <StatusBadge status={t.status as any}/></Link>;})}</div>
+          :<p>Задач от руководителя на этот день нет.</p>}
+      </section>}
       {day&&<section className="portal-panel"><div className="portal-section-head"><div><h2>Дневная запись · {date}</h2><p className="portal-muted">Роль {role} · Москва · {day.record?'Сохранена на сервере':'Ещё не создана'}</p></div>
         <button className="portal-primary" disabled={opening||(!day.record&&!day.policy)} onClick={open}>{opening?'Открываю…':day.record?'Открыть ежедневник':'Создать ежедневник за дату'}</button></div>
         {day.record?<><p>Состояние: <StatusBadge status={day.record.status as any}/></p><p>Окно: {new Date(day.record.window_open).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} — {new Date(day.record.window_close).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК.</p>

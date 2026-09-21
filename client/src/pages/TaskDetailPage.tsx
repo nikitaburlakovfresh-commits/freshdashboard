@@ -19,6 +19,7 @@ import StatusBadge from '../components/StatusBadge';
 import { apiFetch } from '../api/client';
 import TaskFields from '../components/TaskFields';
 import { hasUnsavedFields, mergeSavedFields, requiredFieldsPresent } from '../domain/taskForm';
+import { saveLocalDraft, restoreLocalDraft, clearLocalDraft } from '../domain/draftStorage';
 import type { FieldDrafts } from '../domain/taskForm';
 
 const EVENT_LABELS: Record<string, string> = {
@@ -49,6 +50,14 @@ export default function TaskDetailPage() {
   const [dailyDate,setDailyDate]=useState(moscowToday);
   const [assigneeId, setAssigneeId] = useState('');
   const [assignees, setAssignees] = useState<Array<{id: string; full_name: string; login: string}>>([]);
+  // Конфликт версии поля: значение с сервера рядом с набранным. Молча выбирать
+  // одно из двух нельзя — портал не знает, какое из них верное.
+  const [conflicts, setConflicts] = useState<Array<{field_path:string;current_value:string|null;current_version:number}>>([]);
+  // Связь и незавершённая отправка. «Не сохранено» должно быть видно словами, а
+  // не выглядеть как сохранённое.
+  const [offline, setOffline] = useState(!navigator.onLine);
+  const [retryAt, setRetryAt] = useState<number|null>(null);
+  const [restoredPaths, setRestoredPaths] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -59,7 +68,13 @@ export default function TaskDetailPage() {
       setItem(wi);
       setDailyDate(wi.current_business_date??moscowToday());
       setHistory(hist.items);
-      setDrafts(mergeSavedFields({}, wi.fields));
+      // Черновик этого браузера восстанавливается поверх серверных значений:
+      // набранный, но не отправленный текст не должен пропадать после
+      // перезагрузки страницы или обрыва связи.
+      const fresh = mergeSavedFields({}, wi.fields);
+      const restored = me?.user.id ? restoreLocalDraft(wi.id, me.user.id, fresh) : { drafts: fresh, restored: [] };
+      setDrafts(restored.drafts);
+      setRestoredPaths(restored.restored);
     } catch (err: any) {
       setError(err?.message ?? 'Не удалось загрузить задачу.');
     } finally {
@@ -85,16 +100,34 @@ export default function TaskDetailPage() {
       && item.assignee_user_id === me?.user.id
     : false;
   const dirty = hasUnsavedFields(drafts);
+  // Черновик пишется в браузер на каждое изменение: между вводом и отправкой на
+  // сервер есть окно, в котором раньше терялось всё набранное.
+  useEffect(()=>{
+    if(!item?.id||!me?.user.id)return;
+    saveLocalDraft(item.id,me.user.id,drafts);
+  },[drafts,item?.id,me?.user.id]);
+  // Состояние связи: при обрыве отправка не выполняется, но и текст не теряется.
+  useEffect(()=>{
+    const on=()=>{setOffline(false);setRetryAt(Date.now());};
+    const off=()=>setOffline(true);
+    window.addEventListener('online',on);window.addEventListener('offline',off);
+    return()=>{window.removeEventListener('online',on);window.removeEventListener('offline',off);};
+  },[]);
   // Personal diary autosaves one independently versioned field at a time.
   // Empty required text remains visibly unsaved instead of generating failures.
   useEffect(()=>{
-    if(!item?.daily_log?.can_fill||!isOwnExecutor||!['ASSIGNED','IN_PROGRESS'].includes(item.status)||actionBusy||error)return;
+    // Раньше любая ошибка выключала автосохранение до перезагрузки страницы:
+    // пропал интернет на минуту — и дальше человек печатал в пустоту. Теперь
+    // отправка останавливается только на время обрыва связи и на неразрешённом
+    // конфликте версий, а после возврата связи возобновляется сама.
+    if(!item?.daily_log?.can_fill||!isOwnExecutor||!['ASSIGNED','IN_PROGRESS'].includes(item.status)
+      ||actionBusy||offline||conflicts.length)return;
     const entry=Object.entries(drafts).find(([,d])=>d.value!==d.baseValue&&d.value.trim().length>0);
     if(!entry)return;
     const [path,draft]=entry;
     const timer=window.setTimeout(()=>{runAction(()=>patchWorkItemFields(item.id,{changes:[{field_path:path,expected_version:draft.version,new_value:draft.value}]}),path);},700);
     return()=>window.clearTimeout(timer);
-  },[drafts,item?.id,item?.daily_log?.can_fill,item?.status,isOwnExecutor,actionBusy,error]);
+  },[drafts,item?.id,item?.daily_log?.can_fill,item?.status,isOwnExecutor,actionBusy,offline,conflicts.length,retryAt]);
   useEffect(() => {
     if (!dirty) return;
     const unload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
@@ -123,14 +156,50 @@ export default function TaskDetailPage() {
     try {
       const updated = await fn();
       setItem(updated);
+      // Сданную или закрытую задачу черновик в браузере переживать не должен:
+      // иначе при следующем открытии подставится текст уже закрытого дня.
+      if(me?.user.id&&['SUBMITTED','COMPLETED','CANCELLED'].includes(updated.status))
+        clearLocalDraft(updated.id,me.user.id);
       setDrafts(current => mergeSavedFields(current, updated.fields, savedPath));
       const hist = await getWorkItemHistory(updated.id, { limit: 100 });
       setHistory(hist.items);
     } catch (err: any) {
-      setError(err?.message ?? 'Действие не удалось выполнить.');
+      // Конфликт версии поля — не ошибка сети и не повод терять набранное:
+      // показываем оба значения и даём выбрать человеку.
+      const raw=err?.details?.conflicts;
+      if (err?.code==='FIELD_VERSION_CONFLICT' && Array.isArray(raw)) {
+        setConflicts(raw as Array<{field_path:string;current_value:string|null;current_version:number}>);
+        setError('Поле изменилось на сервере. Сравните значения и выберите, какое оставить.');
+      } else if (!navigator.onLine) {
+        setOffline(true);
+        setError('Нет связи с сервером. Введённое сохранено в этом браузере и будет отправлено, когда связь вернётся.');
+      } else {
+        setError(err?.message ?? 'Действие не удалось выполнить.');
+      }
     } finally {
       setActionBusy(false);
     }
+  }
+
+  /** Разрешение конфликта: оставить своё значение или взять серверное. */
+  async function resolveConflict(path:string, keepMine:boolean) {
+    const conflict=conflicts.find(c=>c.field_path===path);
+    if(!conflict||!item)return;
+    if(!keepMine){
+      const value=conflict.current_value??'';
+      setDrafts(cur=>({...cur,[path]:{value,baseValue:value,version:conflict.current_version}}));
+      setConflicts(cur=>cur.filter(c=>c.field_path!==path));
+      setError(null);
+      return;
+    }
+    // Своё значение отправляется с версией, которую сервер только что назвал:
+    // это осознанная перезапись, а не молчаливая потеря чужой правки.
+    const mine=drafts[path];
+    if(!mine)return;
+    setConflicts(cur=>cur.filter(c=>c.field_path!==path));
+    setDrafts(cur=>({...cur,[path]:{...cur[path],version:conflict.current_version}}));
+    await runAction(()=>patchWorkItemFields(item.id,
+      {changes:[{field_path:path,expected_version:conflict.current_version,new_value:mine.value}]}),path);
   }
 
   if (loading) return <div style={{ color: 'var(--fresh-text-muted)' }}>Загрузка…</div>;
@@ -171,6 +240,35 @@ export default function TaskDetailPage() {
         {!item.daily_log.can_fill&&<p>Окно закрыто: запись доступна для чтения, отправка и сохранение запрещены.</p>}
         <Link to="/diary">Вернуться к ежедневникам →</Link>
         {item.daily_links?.map(l=><article key={l.submission_id}><h3><Link to={`/tasks/${l.work_item_id}`}>{l.title}</Link> · сдача v{l.revision}</h3><p style={{whiteSpace:'pre-wrap'}}>{l.completion_summary}</p><small>Текущий статус задачи: {l.current_task_status}. Текст снимка неизменен.</small></article>)}
+      </section>}
+
+      {(offline||restoredPaths.length>0)&&<section style={card} role="status">
+        <h2 style={cardTitle}>{offline?'Нет связи с сервером':'Восстановлен черновик этого браузера'}</h2>
+        {offline?<p style={{fontSize:13}}>Введённое сохраняется в этом браузере и уйдёт на сервер, когда связь
+          вернётся. Пока этого не произошло, поля помечены как не сохранённые — считать их сданными нельзя.</p>
+          :<p style={{fontSize:13}}>Значения, набранные раньше и не отправленные на сервер, подставлены обратно:
+            {' '}{restoredPaths.length} {restoredPaths.length===1?'поле':'полей'}. Они ещё не сохранены на сервере.</p>}
+      </section>}
+
+      {conflicts.length>0&&<section style={card} role="alert">
+        <h2 style={cardTitle}>Поле изменилось на сервере</h2>
+        <p style={{fontSize:13}}>За время работы это поле сохранили ещё раз — возможно, с другого устройства.
+          Портал не выбирает за вас: сравните значения и решите, какое верно.</p>
+        {conflicts.map(c=>{
+          const label=item.field_schema.find(f=>f.field_path===c.field_path)?.label??c.field_path;
+          return <div key={c.field_path} style={{borderTop:'1px solid var(--fresh-border)',paddingTop:12,marginTop:12}}>
+            <h3 style={{fontSize:14,margin:'0 0 8px'}}>{label}</h3>
+            <p style={{fontSize:12,color:'var(--fresh-text-muted)',margin:'0 0 4px'}}>Ваше значение</p>
+            <p style={{whiteSpace:'pre-wrap',margin:'0 0 10px'}}>{drafts[c.field_path]?.value||'Пусто'}</p>
+            <p style={{fontSize:12,color:'var(--fresh-text-muted)',margin:'0 0 4px'}}>На сервере · версия {c.current_version}</p>
+            <p style={{whiteSpace:'pre-wrap',margin:'0 0 10px'}}>{c.current_value||'Пусто'}</p>
+            <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+              <button type="button" disabled={actionBusy} onClick={()=>resolveConflict(c.field_path,true)}>
+                Оставить моё и перезаписать</button>
+              <button type="button" disabled={actionBusy} onClick={()=>resolveConflict(c.field_path,false)}>
+                Взять значение с сервера</button>
+            </div>
+          </div>;})}
       </section>}
 
       <section style={card}>

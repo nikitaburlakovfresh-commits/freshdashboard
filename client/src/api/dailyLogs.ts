@@ -39,5 +39,22 @@ export interface OperationalOverview {
 }
 export const getDay=(org:string,role:string,date:string)=>apiFetch<PersonalDay>('/daily-logs/day',{query:{org_unit_id:org,role,business_date:date}});
 export const openDay=(org:string,role:string,date:string)=>apiFetch<{id:string}>('/daily-logs/open',{method:'POST',body:{org_unit_id:org,role,business_date:date}});
+/**
+ * Личная запись дня линейной должности — не ежедневник: окна заполнения нет,
+ * опоздать нельзя, на балл филиала запись не влияет.
+ */
+export const LINE_ROLES=['MOP','EO','KSO_STAFF','SMOP','SMOO'] as const;
+export const LINE_ROLE_NAMES:Record<string,string>={MOP:'Менеджер отдела продаж',EO:'Эксперт по оценке',
+  KSO_STAFF:'Сотрудник КСО',SMOP:'Старший менеджер отдела продаж',SMOO:'Старший менеджер отдела оценки'};
+export interface PersonalNoteDay {
+  business_date:string;current_business_date:string;role:string;
+  record:{work_item_id:string;status:string;entity_version:number;current_submission_id:string|null}|null;
+  assigned_tasks:AssignedTask[];fill_window:null;affects_branch_score:boolean;
+}
+export const getNote=(org:string,role:string,date:string)=>
+  apiFetch<PersonalNoteDay>('/daily-logs/note',{query:{org_unit_id:org,role,business_date:date}});
+export const openNote=(org:string,role:string,date:string)=>
+  apiFetch<{id:string}>('/daily-logs/note/open',{method:'POST',body:{org_unit_id:org,role,business_date:date}});
+
 export const getOverview=(date:string,org?:string)=>apiFetch<OperationalOverview>('/daily-logs/overview',{query:{business_date:date,org_unit_id:org}});
 export const savePolicy=(org:string,body:unknown)=>apiFetch<{id:string;version:number}>(`/daily-logs/policies/${org}`,{method:'POST',body});
