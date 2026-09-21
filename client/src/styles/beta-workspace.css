@@ -36,3 +36,13 @@
 .diary-progress-row[data-rag="red"] strong {color:var(--fresh-danger,#c0392b)}
 .diary-progress-note {font-size:13px;margin-top:10px}
 @media(max-width:560px){.diary-progress-row{flex-direction:column;gap:2px}.diary-progress-row strong{text-align:left}}
+
+/* Кнопка «Глазами роли» в шапке: подпись словами, потому что безымянная иконка
+   глаза среди других иконок шапки не находится. На узком экране подпись
+   скрывается — там на неё нет места, и остаётся иконка с подсказкой. */
+.role-view-open { display: inline-flex; align-items: center; gap: 6px; width: auto; padding: 0 10px; }
+.role-view-open-text { font-size: 13px; font-weight: 600; white-space: nowrap; }
+@media (max-width: 900px) {
+  .role-view-open-text { display: none; }
+  .role-view-open { padding: 0; }
+}

@@ -126,9 +126,13 @@ export default function RoleViewBar({ isOwner, slot }: { isOwner: boolean; slot:
   if (!isOwner || slot !== 'button') return null;
 
   return <>
-    <button type="button" className="shell-icon-button" onClick={openPicker}
-      aria-label="Просмотр глазами роли" title="Просмотр глазами роли">
+    {/* Кнопка была безымянной иконкой глаза среди прочих иконок шапки, и
+        владелец портала решил, что режима просмотра в портале нет вообще.
+        Иконка без подписи не находится: подписываем словами. */}
+    <button type="button" className="shell-icon-button role-view-open" onClick={openPicker}
+      aria-label="Просмотр глазами роли" title="Просмотр глазами роли: увидеть портал так, как его видит сотрудник">
       <Icon name="eye" />
+      <span className="role-view-open-text">Глазами роли</span>
     </button>
     {pickerOpen && <div className="role-view-modal" role="dialog" aria-modal="true"
       aria-label="Просмотр глазами роли"
