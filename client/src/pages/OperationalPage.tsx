@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import { Link,useParams } from 'react-router-dom';
-import { getOverview,savePolicy,moscowToday,type OperationalOverview,type BranchSummary,type DailyPolicy,type DiaryCompletion} from '../api/dailyLogs';
+import { getOverview,savePolicy,savePolicyForAll,moscowToday,type OperationalOverview,type BranchSummary,type DailyPolicy,type DiaryCompletion} from '../api/dailyLogs';
 import StatusBadge from '../components/StatusBadge';
 import LocalBusinessData from '../components/LocalBusinessData';
 import PublishedFacts from '../components/PublishedFacts';
@@ -48,6 +48,7 @@ export default function OperationalPage() {
       {branch?.can_manage&&<PolicyEditor key={`${orgId}:${revision}`} org={orgId!} policies={data.policies} onSaved={()=>reload(n=>n+1)}/>}
       <p className="portal-muted">Серверный срез: {new Date(data.server_time).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК. Источник операционных данных: PostgreSQL нового портала.</p>
     </>}
+    {!orgId&&<BulkPolicy onSaved={()=>reload(n=>n+1)}/>}
     {!orgId&&<details className="portal-panel" open={new URLSearchParams(window.location.search).has('import')}><summary>Локальный просмотр QLIK · отдельно от рабочих показателей</summary><LocalBusinessData/></details>}
   </div>;
 }
@@ -74,6 +75,50 @@ function Branch({branch:b,detailed}:{branch:BranchSummary;detailed:boolean}) {
  * настроены, обязанности сдавать ежедневник нет, и «0%» был бы неправдой.
  * Поэтому такой филиал прямо говорит, что окна не настроены.
  */
+/**
+ * Одинаковое окно заполнения на все филиалы и роли.
+ *
+ * Настраивать окна по одному — 117 форм, и до пилота так не дойти. Решение
+ * владельца: окно одинаковое, открытие в начале суток, закрытие в конце.
+ * Допуски «раньше» и «позже» при таком окне бессмысленны и не спрашиваются.
+ */
+function BulkPolicy({onSaved}:{onSaved:()=>void}) {
+  const [open,setOpen]=useState('00:00'),[close,setClose]=useState('23:59');
+  const [date,setDate]=useState(moscowToday),[reason,setReason]=useState('');
+  const [busy,setBusy]=useState(false),[error,setError]=useState('');
+  const [result,setResult]=useState<Awaited<ReturnType<typeof savePolicyForAll>>|null>(null);
+  async function save(e:React.FormEvent) {
+    e.preventDefault();
+    if(!window.confirm(`Применить окно ${open}–${close} ко всем вашим филиалам и трём ролям с ${date}? `+
+      'Ранее созданные ежедневники сохранят своё прежнее окно.'))return;
+    setBusy(true);setError('');setResult(null);
+    try{setResult(await savePolicyForAll({effective_from:date,base_open_time:open,base_close_time:close,reason}));onSaved();}
+    catch(e:any){setError(e.message);}finally{setBusy(false);}
+  }
+  return <details className="portal-panel">
+    <summary>Окно заполнения ежедневников для всей сети · одинаковое для всех филиалов и ролей</summary>
+    <p className="portal-muted">Открытие — начало суток, закрытие — конец суток. Настройка версионная: ранее
+      созданные ежедневники сохраняют своё прежнее окно.</p>
+    <p role="alert">Время московское. Часовые пояса филиалов ещё не реализованы, поэтому для Владивостока
+      «конец суток по Москве» наступит в 07:00 следующего местного дня. Это временный компромисс.</p>
+    <form onSubmit={save}><div className="beta-filters">
+      <label>Действует с<input aria-label="Действует с" required type="date" value={date}
+        onChange={e=>setDate(e.target.value)}/></label>
+      <label>Открытие<input aria-label="Открытие" required type="time" value={open}
+        onChange={e=>setOpen(e.target.value)}/></label>
+      <label>Закрытие<input aria-label="Закрытие" required type="time" value={close}
+        onChange={e=>setClose(e.target.value)}/></label>
+      <label>Основание изменения<input aria-label="Основание изменения" required minLength={5} maxLength={500}
+        value={reason} onChange={e=>setReason(e.target.value)}/></label>
+    </div>{error&&<p role="alert">{error}</p>}
+    <button className="btn" disabled={busy}>{busy?'Применяю…':'Применить ко всем филиалам и ролям'}</button></form>
+    {result&&<div><p role="status">Филиалов в вашей зоне: {result.branches}. Новых версий окна:
+      {' '}{result.applied.length}. Уже было таким: {result.unchanged.length}.</p>
+      {result.applied.length>0&&<p className="portal-muted">Настроено: {[...new Set(result.applied
+        .map(a=>a.display_name??a.org_unit_id))].join(', ')}.</p>}</div>}
+  </details>;
+}
+
 function DiaryProgress({c}:{c?:DiaryCompletion}) {
   if(!c)return null;
   if(!c.expected_roles)return <p className="portal-muted diary-progress-note">

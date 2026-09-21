@@ -84,6 +84,84 @@ export async function setDailyPolicy(ctx:ActorContext,org:string,body:any) {
     return result.rows[0];
   });
 }
+/**
+ * Одно и то же окно на все филиалы и роли сразу.
+ *
+ * Настраивать окна по одному — 39 филиалов на три роли, 117 форм: до пилота так
+ * не дойти. Владелец решил, что окно одинаковое: открытие в начале суток,
+ * закрытие в конце. Допуски «раньше» и «позже» при таком окне не нужны — сутки и
+ * так целиком внутри, — поэтому здесь они нулевые.
+ *
+ * ВАЖНО: время пока московское. Часовые пояса филиалов не реализованы, и для
+ * Владивостока «конец суток по МСК» наступает в 07:00 следующего местного дня.
+ * Это осознанный временный компромисс до внедрения часовых поясов, а не
+ * достигнутое требование.
+ *
+ * Уже настроенное окно с такими же временами не переписывается новой версией:
+ * повторное нажатие кнопки не должно плодить версии политики без изменений.
+ */
+export async function setDailyPolicyForAll(ctx:ActorContext,body:any) {
+  const date=dailyDate(body?.effective_from);
+  const roles:string[]=Array.isArray(body?.roles)&&body.roles.length?body.roles.map(dailyRole):['RF','ROP','ROO'];
+  for(const key of ['base_open_time','base_close_time']) {
+    if(typeof body?.[key]!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(body[key]))
+      throw new ApiError('VALIDATION_ERROR','Время должно иметь формат ЧЧ:ММ.');
+  }
+  if(body.base_close_time<=body.base_open_time)
+    throw new ApiError('VALIDATION_ERROR','Закрытие должно быть позже открытия в тот же день.');
+  if(typeof body?.reason!=='string'||body.reason.trim().length<5||body.reason.length>500)
+    throw new ApiError('VALIDATION_ERROR','Укажите основание изменения, 5–500 символов.');
+  return withTransaction(async c=>{
+    await liveFence(c,ctx);
+    const today=(await c.query("SELECT to_char(now() AT TIME ZONE 'Europe/Moscow','YYYY-MM-DD') AS day")).rows[0].day;
+    if(date<today) throw new ApiError('VALIDATION_ERROR','Новая политика не может вступать в силу задним числом.');
+    // Только филиалы, на которых у пользователя есть право регионального
+    // менеджера: массовое действие не расширяет область видимости.
+    const branches=(await c.query(
+      `SELECT DISTINCT g.org_unit_id id,n.display_name
+         FROM role_grants g
+         JOIN org_directory_units u ON u.id=g.org_unit_id AND u.kind='ORG_UNIT'
+         LEFT JOIN org_directory_name_history n ON n.org_unit_id=u.id AND n.effective_to IS NULL
+        WHERE g.user_id=$1 AND g.role_code='REGIONAL_MANAGER' AND g.revoked_at IS NULL
+          AND g.valid_from<=now() AND (g.valid_until IS NULL OR g.valid_until>now())
+          AND org_lifecycle_at(u.id,$2::date)='ACTIVE'
+        ORDER BY n.display_name`,[ctx.authUser.userId,date])).rows as {id:string;display_name:string|null}[];
+    if(!branches.length)
+      throw new ApiError('FORBIDDEN','Нет филиалов, на которых вы региональный менеджер: массовая настройка недоступна.');
+    const applied:{org_unit_id:string;display_name:string|null;role:string;version:number}[]=[];
+    const unchanged:{org_unit_id:string;display_name:string|null;role:string}[]=[];
+    for(const b of branches) {
+      for(const role of roles) {
+        await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`daily-policy:${b.id}:${role}`]);
+        const previous=(await c.query(
+          `SELECT * FROM daily_log_policies WHERE org_unit_id=$1 AND role_code=$2 ORDER BY version DESC LIMIT 1`,
+          [b.id,role])).rows[0];
+        if(previous&&previous.base_open_time.slice(0,5)===body.base_open_time
+          &&previous.base_close_time.slice(0,5)===body.base_close_time
+          &&Number(previous.early_open_hours)===0&&Number(previous.late_close_hours)===0) {
+          unchanged.push({org_unit_id:b.id,display_name:b.display_name,role});continue;
+        }
+        const version=(previous?.version??0)+1;
+        const result=await c.query(
+          `INSERT INTO daily_log_policies(org_unit_id,role_code,version,effective_from,base_open_time,
+             base_close_time,early_open_hours,late_close_hours,reason,created_by)
+           VALUES($1,$2,$3,$4,$5,$6,0,0,$7,$8) RETURNING version`,
+          [b.id,role,version,date,body.base_open_time,body.base_close_time,body.reason,ctx.authUser.userId]);
+        await writeAuditAndOutbox(c,{actorUserId:ctx.authUser.userId,actorRole:'REGIONAL_MANAGER',orgUnitId:b.id,
+          workItemId:null,action:'DAILY_POLICY_SET',aggregateType:'org_change',aggregateId:b.id,
+          aggregateVersion:version,requestId:ctx.requestId,beforeState:previous??null,
+          afterState:{role,effective_from:date,base_open_time:body.base_open_time,
+            base_close_time:body.base_close_time,early_open_hours:0,late_close_hours:0,version,bulk:true},
+          reason:body.reason,resolution:'APPLIED',retentionClass:'WORK_ITEM_STANDARD'});
+        applied.push({org_unit_id:b.id,display_name:b.display_name,role,version:result.rows[0].version});
+      }
+    }
+    return {effective_from:date,roles,base_open_time:body.base_open_time,base_close_time:body.base_close_time,
+      branches:branches.length,applied,unchanged,timezone:'Europe/Moscow',
+      timezone_note:'Время московское: часовые пояса филиалов ещё не реализованы.'};
+  });
+}
+
 // Called in the SAME transaction as task submit. Unique natural key + advisory
 // lock makes open/create safe under retries and concurrent browser tabs.
 export async function ensureDailyLog(c:PoolClient,ctx:ActorContext,org:string,role:string,date:string) {

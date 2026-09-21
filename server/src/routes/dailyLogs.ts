@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { requireSession, requireCsrf } from '../auth/session';
 import { requireOrigin } from '../middleware/origin';
 import { enforceSessionRateLimit } from '../auth/rateLimit';
-import { getPersonalDay, openDailyLog, setDailyPolicy } from '../domain/dailyLogs';
+import { getPersonalDay, openDailyLog, setDailyPolicy, setDailyPolicyForAll } from '../domain/dailyLogs';
 import { operationalOverview } from '../domain/operationalOverview';
 import { getPersonalNoteDay, openPersonalNote } from '../domain/personalNotes';
 export const dailyRouter=Router();
@@ -17,4 +17,6 @@ dailyRouter.post('/open',requireOrigin,requireCsrf,wrap(async(req,res)=>{res.jso
 dailyRouter.get('/note',wrap(async(req,res)=>{res.json(await getPersonalNoteDay(ctx(req),req.query.org_unit_id as string,req.query.role,req.query.business_date));}));
 dailyRouter.post('/note/open',requireOrigin,requireCsrf,wrap(async(req,res)=>{res.json(await openPersonalNote(ctx(req),req.body??{}));}));
 dailyRouter.get('/overview',wrap(async(req,res)=>{res.json(await operationalOverview(ctx(req),req.query.business_date,req.query.org_unit_id as string|undefined));}));
+// Одинаковое окно на все филиалы и роли: настраивать 117 форм по одной нельзя.
+dailyRouter.post('/policies-bulk',requireOrigin,requireCsrf,wrap(async(req,res)=>{res.json(await setDailyPolicyForAll(ctx(req),req.body??{}));}));
 dailyRouter.post('/policies/:org',requireOrigin,requireCsrf,wrap(async(req,res)=>{res.json(await setDailyPolicy(ctx(req),req.params.org,req.body??{}));}));

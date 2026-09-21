@@ -68,4 +68,18 @@ export const openNote=(org:string,role:string,date:string)=>
   apiFetch<{id:string}>('/daily-logs/note/open',{method:'POST',body:{org_unit_id:org,role,business_date:date}});
 
 export const getOverview=(date:string,org?:string)=>apiFetch<OperationalOverview>('/daily-logs/overview',{query:{business_date:date,org_unit_id:org}});
+/**
+ * Одинаковое окно на все филиалы и роли сразу. Время пока московское: часовые
+ * пояса филиалов не реализованы.
+ */
+export interface BulkPolicyResult {
+  effective_from:string;roles:string[];base_open_time:string;base_close_time:string;branches:number;
+  applied:{org_unit_id:string;display_name:string|null;role:string;version:number}[];
+  unchanged:{org_unit_id:string;display_name:string|null;role:string}[];
+  timezone:string;timezone_note:string;
+}
+export const savePolicyForAll=(body:{roles?:string[];effective_from:string;base_open_time:string;
+  base_close_time:string;reason:string})=>
+  apiFetch<BulkPolicyResult>('/daily-logs/policies-bulk',{method:'POST',body});
+
 export const savePolicy=(org:string,body:unknown)=>apiFetch<{id:string;version:number}>(`/daily-logs/policies/${org}`,{method:'POST',body});
