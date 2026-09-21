@@ -60,16 +60,23 @@ function monthEnd(monthFirst: string): string {
  * числом менять уже согласованное МБО прошлого периода.
  */
 export async function mboZoneBranches(c: PoolClient, subjectUserId: string, on: string) {
+  // Подчинённость филиала зоне лежит в истории привязок, а название — в истории
+  // названий: в самом справочнике колонки display_name нет, и обе истории
+  // читаются на дату, иначе переименование или перевод филиала задним числом
+  // изменит уже согласованное МБО.
   return (await c.query(
-    `SELECT DISTINCT o.id,o.display_name
+    `SELECT DISTINCT u.id,n.display_name
        FROM role_grants g
-       JOIN org_directory_edges e ON e.parent_id=g.org_unit_id
-         AND e.valid_from<=$2::date AND (e.valid_until IS NULL OR e.valid_until>$2::date)
-       JOIN org_directory_units o ON o.id=e.child_id
+       JOIN org_directory_affiliation_history a ON a.parent_id=g.org_unit_id
+         AND $2::date >= a.effective_from AND (a.effective_to IS NULL OR $2::date < a.effective_to)
+       JOIN org_directory_units u ON u.id=a.org_unit_id
+       LEFT JOIN org_directory_name_history n ON n.org_unit_id=u.id
+         AND $2::date >= n.effective_from AND (n.effective_to IS NULL OR $2::date < n.effective_to)
       WHERE g.user_id=$1 AND g.role_code='REGIONAL_MANAGER' AND g.revoked_at IS NULL
         AND g.valid_from<=$2::date AND (g.valid_until IS NULL OR g.valid_until>$2::date)
-        AND o.kind='ORG_UNIT' AND o.lifecycle_state='ACTIVE'
-      ORDER BY o.display_name`, [subjectUserId, on])).rows as { id: string; display_name: string }[];
+        AND u.kind='ORG_UNIT' AND u.lifecycle_state='ACTIVE'
+        AND $2::date >= u.effective_from AND (u.effective_to IS NULL OR $2::date < u.effective_to)
+      ORDER BY n.display_name`, [subjectUserId, on])).rows as { id: string; display_name: string }[];
 }
 
 /**
@@ -236,12 +243,12 @@ export async function getMboCard(auth: AuthedUser, subjectUserId: string, period
       `SELECT k.id,k.horizon,k.org_unit_id,o.display_name org_unit_name,k.kpi_code,k.kpi_name,k.unit,
               k.weight::float8 weight,k.plan_value::float8 plan_value,
               k.manual_fact_value::float8 manual_fact_value,k.manual_fact_comment,k.fact_source,
-              COALESCE(t.metric_code,NULL) metric_code,t.metric_code_base,t.ratio_as_percent,
+              t.metric_code,t.metric_code_base,t.ratio_as_percent,
               COALESCE(t.year_aggregation,'SUM') year_aggregation,
               COALESCE(t.direction,'HIGHER_IS_BETTER') direction
          FROM mbo_card_kpis k
          LEFT JOIN mbo_kpi_template t ON t.kpi_code=k.kpi_code
-         LEFT JOIN org_directory_units o ON o.id=k.org_unit_id
+         LEFT JOIN org_directory_name_history o ON o.org_unit_id=k.org_unit_id AND o.effective_to IS NULL
         WHERE k.card_id=$1 ORDER BY k.horizon DESC,k.sort_order,k.id`, [card.id])).rows;
     const kpis: MboKpiRow[] = [];
     for (const r of rows) {
@@ -276,7 +283,7 @@ export async function getMboCard(auth: AuthedUser, subjectUserId: string, period
               d.to_user_id delegated_to,du.full_name delegated_to_name,d.reason delegation_reason
          FROM mbo_card_task_links l
          JOIN work_items w ON w.id=l.work_item_id
-         LEFT JOIN org_directory_units o ON o.id=w.org_unit_id
+         LEFT JOIN org_directory_name_history o ON o.org_unit_id=w.org_unit_id AND o.effective_to IS NULL
          LEFT JOIN app_users au ON au.id=w.assignee_user_id
          LEFT JOIN app_users cu ON cu.id=w.accountable_user_id
          LEFT JOIN work_item_delegations d ON d.work_item_id=w.id AND d.revoked_at IS NULL
