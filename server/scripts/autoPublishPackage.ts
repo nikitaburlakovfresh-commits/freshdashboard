@@ -7,7 +7,12 @@ import { randomUUID } from 'crypto';
 import { autoPublishPackage } from '../src/reporting/autoPublish';
 import { serviceAuthedUser } from '../src/domain/serviceActor';
 import { withTransaction, closePool } from '../src/db/pool';
-const [actorCode, networkCode, start, end, dir, ...extra] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+// Канал воронки объявляется явно: --funnel-channel APPEALS|CALLS
+const channelAt = argv.indexOf('--funnel-channel');
+const funnelChannel = channelAt >= 0 ? argv[channelAt + 1] : undefined;
+if (channelAt >= 0) argv.splice(channelAt, 2);
+const [actorCode, networkCode, start, end, dir, ...extra] = argv;
 async function main() {
   if (extra.length || !actorCode || !networkCode || !start || !end || !dir)
     throw new Error('Usage: autoPublishPackage <actor-code> <network-code> <start> <end> <dir>');
@@ -31,7 +36,8 @@ async function main() {
     network_id: networkId,
     period: { state: 'CONFIRMED', start, end, planStart: start, planEnd: end,
       confirmation: `Период объявлен администратором сети при публикации пакета ${start} — ${end}.` },
-  }, files, randomUUID());
+  }, files, randomUUID(),
+  funnelChannel ? { funnel: funnelChannel as any } : {});
   console.log(JSON.stringify(result, null, 2));
 }
 main().catch(e => { console.error(String(e?.message ?? e)); process.exitCode = 1; }).finally(closePool);

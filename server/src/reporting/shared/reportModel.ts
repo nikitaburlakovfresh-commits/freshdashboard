@@ -131,6 +131,31 @@ export const REPORT_SPECS: Record<ReportKind, ReportSpec> = {
     columns: { funnelTraffic: 'B', funnelVisits: 'C', funnelDeals: 'E' },
   },
 };
+/**
+ * Каналы воронки. Две выгрузки QLIK — обращения и звонки — имеют одинаковые
+ * заголовки, поэтому канал по файлу неотличим и объявляется загружающим.
+ * Каждый канал пишется в свои показатели: складывать обращения со звонками
+ * в один показатель нельзя, это разные воронки.
+ */
+export const FUNNEL_CHANNELS = {
+  APPEALS: {
+    label: 'Обращения',
+    metrics: { funnelTraffic: 'funnelTraffic', funnelVisits: 'funnelVisits', funnelDeals: 'funnelDeals' },
+  },
+  CALLS: {
+    label: 'Звонки',
+    metrics: { funnelTraffic: 'callTraffic', funnelVisits: 'callVisits', funnelDeals: 'callDeals' },
+  },
+} as const;
+export type FunnelChannel = keyof typeof FUNNEL_CHANNELS;
+export const FUNNEL_CHANNEL_KEYS = Object.keys(FUNNEL_CHANNELS) as FunnelChannel[];
+/** Показатель источника, из которого берётся значение для выбранного показателя канала. */
+export function funnelSourceMetric(channel: FunnelChannel, target: string): string | null {
+  const map = FUNNEL_CHANNELS[channel].metrics as Record<string, string>;
+  const found = Object.entries(map).find(([, v]) => v === target);
+  return found ? found[0] : null;
+}
+
 export function validDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < '1900-01-01' || value > '2199-12-31') return false;
   const date = new Date(`${value}T00:00:00Z`);

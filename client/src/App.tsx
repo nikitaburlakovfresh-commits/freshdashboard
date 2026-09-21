@@ -22,6 +22,7 @@ import SourceNamingPage from './pages/SourceNamingPage';
 import NotificationSettingsPage from './pages/NotificationSettingsPage';
 import DivisionSummaryPage from './pages/DivisionSummaryPage';
 import BranchCardPage from './pages/BranchCardPage';
+import VehicleStockPage from './pages/VehicleStockPage';
 import MyDeviationTasksPage from './pages/MyDeviationTasksPage';
 import MetricAccessPage from './pages/MetricAccessPage';
 import ActivateAccountPage from './pages/ActivateAccountPage';
@@ -82,6 +83,7 @@ export default function App() {
         <Route path="/settings/source-naming" element={<SourceNamingPage />} />
         <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
         <Route path="/branch-card/:id" element={<BranchCardPage />} />
+        <Route path="/branch-card/:id/vin" element={<VehicleStockPage />} />
         <Route path="/my-deviations" element={<MyDeviationTasksPage />} />
         <Route path="/prepared-reports" element={<PreparedReportsPage />} />
         <Route path="/prepared-reports/:id/review" element={<ReportReviewPage />} />

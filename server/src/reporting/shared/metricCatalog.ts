@@ -110,6 +110,20 @@ export const METRICS = {
   funnelTrafficToVisit: { name: 'Конверсия трафик → визит', unit: 'PCT', count: false, additive: false },
   funnelVisitToDeal: { name: 'Конверсия визит → сделка', unit: 'PCT', count: false, additive: false },
   funnelTrafficToDeal: { name: 'Конверсия трафик → сделка', unit: 'PCT', count: false, additive: false },
+
+  // Канал «звонки» хранится отдельными показателями. Заголовки двух выгрузок
+  // воронки совпадают, канал объявляет загружающий, и складывать обращения со
+  // звонками в один показатель нельзя — это разные воронки.
+  callTraffic: { name: 'Звонки: трафик', unit: 'COUNT', count: true, additive: true },
+  callVisits: { name: 'Звонки: визиты', unit: 'COUNT', count: true, additive: true },
+  callDeals: { name: 'Звонки: сделки', unit: 'COUNT', count: true, additive: true },
+  callTrafficToDeal: { name: 'Конверсия звонок → сделка', unit: 'PCT', count: false, additive: false },
+
+  // --- реестр VIN ---
+  // Доля автомобилей с хранением 45 дней и более среди машин выкупа,
+  // считается в штуках по реестру VIN. Это не `agedShare` из сводного
+  // отчёта: там доля по среднему возрасту остатка, другая величина.
+  buyback45Share: { name: 'Доля 45+ в выкупе (шт)', unit: 'PCT', count: false, additive: false },
 } as const satisfies Record<string, MetricSpec>;
 
 export type MetricKey = keyof typeof METRICS;

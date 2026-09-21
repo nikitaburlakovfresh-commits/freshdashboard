@@ -10,3 +10,7 @@ pilot-users*
 coverage/
 .DS_Store
 *.tsbuildinfo
+
+# Предпросмотр карточки: сборка со зафиксированными данными, не часть портала.
+client/preview/card.json
+client/preview/stock.json

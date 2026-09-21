@@ -14,7 +14,8 @@ import { factAccess,publisher } from './factAccess';
 import { isServiceActor } from '../domain/serviceActor';
 import { readSource,uuid } from './storage';
 import { scanSource,SourceScanResult } from './scanner';
-import { reconcile,validDate,REPORT_KINDS,REPORT_SPECS,type ReportKind } from './shared/reportModel';
+import { reconcile,validDate,REPORT_KINDS,REPORT_SPECS,FUNNEL_CHANNEL_KEYS,funnelSourceMetric,
+  type ReportKind,type FunnelChannel } from './shared/reportModel';
 import { METRIC_NAMES,METRIC_KEYS,METRICS,isMetricKey,type MetricKey } from './shared/metricCatalog';
 
 const invalid=(s:string)=>new ApiError('VALIDATION_ERROR',s);
@@ -29,7 +30,7 @@ export function closed(raw:any,keys:string[]) {
   if(!raw||typeof raw!=='object'||Array.isArray(raw)||Object.keys(raw).some(k=>!keys.includes(k)))throw invalid('Неизвестные поля команды.');
   return raw;
 }
-type Choice={metric:MetricKey;source:ReportKind;methodology:string};
+type Choice={metric:MetricKey;source:ReportKind;methodology:string;channel?:FunnelChannel};
 type Command={review_version:number;choices:Choice[];reason:string;confirm_source_aggregates:true};
 function command(raw:any):Command {
   const b=closed(raw,['review_version','choices','reason','confirm_source_aggregates']);
@@ -38,15 +39,22 @@ function command(raw:any):Command {
     throw invalid('Нужны сохранённая версия, явный выбор метрик, подтверждение и основание 16–500 символов.');
   const seen=new Set<string>();
   for(const item of b.choices) {
-    const x=closed(item,['metric','source','methodology']);
+    const x=closed(item,['metric','source','methodology','channel']);
     if(!isMetricKey(x.metric)||!(REPORT_KINDS as string[]).includes(x.source)||seen.has(x.metric)||
       typeof x.methodology!=='string'||x.methodology.trim().length<20||x.methodology.length>1000)
       throw invalid('Для каждой метрики выберите один источник и опишите утверждённую методику/состав агрегата (20–1000 символов).');
-    // Summary revenue header is not validated by legacy parser; fail closed.
-    // Воронка приходит двумя файлами с идентичными заголовками (обращения и звонки).
-    // Канал по файлу неотличим, поэтому публикация закрыта до ввода объявления канала.
-    if(REPORT_SPECS[x.source as ReportKind].channelRequired)
-      throw invalid('Воронка доступна для просмотра, но публикация требует объявления канала (обращения или звонки): заголовки двух выгрузок совпадают.');
+    // Воронка приходит двумя файлами с идентичными заголовками (обращения и
+    // звонки). Канал по файлу неотличим, поэтому его объявляет загружающий, и
+    // каждый канал пишется в свои показатели: складывать обращения со звонками
+    // в один показатель нельзя.
+    if(REPORT_SPECS[x.source as ReportKind].channelRequired) {
+      if(typeof x.channel!=='string'||!(FUNNEL_CHANNEL_KEYS as string[]).includes(x.channel))
+        throw invalid('Для воронки объявите канал: обращения или звонки. По файлу канал неотличим.');
+      if(!funnelSourceMetric(x.channel as FunnelChannel,x.metric))
+        throw invalid('Выбранный показатель не относится к объявленному каналу воронки.');
+    } else if(x.channel!==undefined) {
+      throw invalid('Канал объявляется только для воронки.');
+    }
     seen.add(x.metric);
   }
   return b;
@@ -130,8 +138,11 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
   const allTargets=new Set<string>();
   for(const choice of b.choices) {
     const report=reports.find(r=>r.kind===choice.source);
-    if(!report||!report.columns[choice.metric]){blockers.push(`${METRIC_NAMES[choice.metric]}: отсутствует выбранный источник.`);continue;}
-    const control=reconcile(report).find(r=>r.metric===choice.metric);
+    // Для воронки столбец источника называется иначе, чем публикуемый
+    // показатель канала: звонки пишутся в отдельные показатели.
+    const src=(choice.channel?funnelSourceMetric(choice.channel,choice.metric):choice.metric) as MetricKey;
+    if(!report||!src||!report.columns[src]){blockers.push(`${METRIC_NAMES[choice.metric]}: отсутствует выбранный источник.`);continue;}
+    const control=reconcile(report).find(r=>r.metric===src);
     // «Сумма строк = итог» проверяется только для аддитивных показателей:
     // доли, удельные величины и сроки по филиалам не складываются.
     if(!control)blockers.push(`${METRIC_NAMES[choice.metric]}: показатель отсутствует в разобранном отчёте.`);
@@ -167,7 +178,7 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
           AND (a.effective_to IS NULL OR a.effective_to>$3::date)
         ) SELECT 1 FROM ancestry WHERE id=$4 AND parent_id IS NULL`,[org,start,end,context.b.network_id]);
       if(!historical.rowCount){blockers.push(`Строка ${report.kind}:${row.row}: историческая структура не покрывает весь период.`);continue;}
-      const value=row.values[choice.metric];
+      const value=row.values[src];
       // Пропуск значения — не ноль и не повод остановить весь пакет: показатель
       // для этого филиала просто не публикуется, а пропуск фиксируется явно.
       if(value==null||!Number.isFinite(value)){
@@ -184,7 +195,8 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
         provenance:{kind:'APPROVED_SOURCE_AGGREGATE',channel,producer:'QLIK',batch_id:context.b.id,
           file_id:sourceFile.id,file_hash:sourceFile.content_hash,scan_id:sourceFile.scan_id??null,
           scan_status:sourceFile.result??'NOT_SCANNED',scan_mode:config.reportScanMode,
-          report_kind:report.kind,sheet:report.sheet,address:report.columns[choice.metric]!+row.row,
+          report_kind:report.kind,sheet:report.sheet,address:report.columns[src]!+row.row,
+          funnel_channel:choice.channel??null,
           parser_version:context.b.parser_version,review_hash:view.current.revision_hash,
           extraction:'SOURCE_CELL_V1',methodology:choice.methodology,source_selection_reason:b.reason,
           period_basis:period?.basis,aggregation_across_scope:'NOT_AGGREGATED',null_handling:'HOLD',

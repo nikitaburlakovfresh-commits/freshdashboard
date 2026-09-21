@@ -6,6 +6,7 @@ import { ApiError } from '../util/errors';
 import { uuid } from '../reporting/storage';
 import { evaluateRag, resolveThresholds, thresholdFor, type Rag } from './thresholds';
 import { computeBranchScore, monthProgress, resolveScoringModel } from './scoring';
+import { funnelConversions, buyback45Shares } from './derived';
 import { resolveFocusConfiguration } from './focus';
 import { branchAffiliations } from './orgHierarchy';
 
@@ -122,11 +123,17 @@ export async function branchOverview(auth:AuthedUser,query:any) {
     const model=await resolveScoringModel(c,q.end);
     const focus=await resolveFocusConfiguration(c,q.end);
     const affiliations=await branchAffiliations(c,[...byOrg.keys()],q.end);
+    // Производные показатели: у них нет ячейки источника, поэтому они не
+    // публикуются как факты, а считаются из опубликованного и из реестра VIN.
+    const buyback45=await buyback45Shares(c,[...byOrg.keys()],q.end);
     const branches=[...byOrg.values()].map(b=>{
       const worst:Rag=b.metrics.some(m=>m.rag==='RED')?'RED'
         :b.metrics.some(m=>m.rag==='AMBER')?'AMBER'
           :b.metrics.some(m=>m.rag==='GREEN')?'GREEN':'NONE';
       const values=new Map<string,number>(b.metrics.map(m=>[m.metric,m.value]));
+      for(const [k,v] of funnelConversions(values))values.set(k,v);
+      const bb=buyback45.get(b.org_unit_id);
+      if(bb)values.set('buyback45Share',bb.share);
       const score=computeBranchScore(model,values,q.end);
       const aff=affiliations.get(b.org_unit_id);
       return {...b,rag:worst,
@@ -134,7 +141,8 @@ export async function branchOverview(auth:AuthedUser,query:any) {
         division_id:aff?.division_id??null,division_name:aff?.division_name??null,
         manager_user_id:aff?.manager_user_id??null,manager_name:aff?.manager_name??null,
         group_key:aff?.group_key??'none',group_label:aff?.group_label??'Филиал без зоны РМ',metrics_without_threshold:b.metrics.filter(m=>!m.threshold_id).map(m=>m.metric),
-        score:score.score,score_rag:score.rag,score_components:score.components,score_reasons:score.reasons};
+        score:score.score,score_rag:score.rag,score_components:score.components,score_reasons:score.reasons,
+        buyback45:bb?{share:bb.share,aged:bb.aged,total:bb.total,observed_on:bb.observed_on}:null};
     });
     // Сетевые суммы для плиток run-rate: только по показателям, доступным
     // пользователю; отсутствующий показатель остаётся отсутствующим.
@@ -146,7 +154,12 @@ export async function branchOverview(auth:AuthedUser,query:any) {
     return {mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:q.start,period_end:q.end,
       metric_names:METRIC_NAMES,branches,thresholds_configured:thresholds.length>0,
       scoring:{configured:!!model,model_id:model?.id??null,
-        month_progress:model?monthProgress(q.end):null},
+        month_progress:model?monthProgress(q.end):null,
+        // Границы цвета публикуются вместе с баллом: список руководителей
+        // окрашивается по тому же правилу, что и филиал, без второй копии
+        // порогов в клиенте.
+        green_score_from:model?.green_score_from??null,
+        amber_score_from:model?.amber_score_from??null},
       // Средний балл сети считается только по филиалам с определённым баллом.
       network:{branches_with_score:scored.length,
         average_score:scored.length?scored.reduce((s,b)=>s+(b.score as number),0)/scored.length:null,

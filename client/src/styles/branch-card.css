@@ -1,0 +1,33 @@
+/* Карточка филиала: плитки ежедневного контроля, разбивка балла, реестр. */
+.card-tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));margin:8px 0 20px;}
+.card-tile{border:1px solid var(--line,#e3e6ea);border-radius:10px;padding:12px 14px;background:#fff;}
+.card-tile h3{margin:0 0 6px;font-size:.82rem;font-weight:600;color:#5a6470;line-height:1.25;}
+.card-tile-value{margin:0;font-size:1.55rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1;}
+.card-tile-note{margin:6px 0 0;font-size:.72rem;color:#6b7580;line-height:1.35;}
+
+.card-metric-pick{border:1px solid var(--line,#e3e6ea);border-radius:10px;padding:10px 12px;margin:0 0 14px;
+  display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;}
+.card-metric-pick legend{font-size:.78rem;color:#5a6470;padding:0 4px;}
+.card-metric-pick label{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;}
+
+.card-bars{list-style:none;margin:0 0 20px;padding:0;display:grid;gap:8px;}
+.card-bars li{display:grid;grid-template-columns:minmax(150px,240px) 1fr 44px 104px;gap:10px;align-items:center;}
+.card-bar-label{font-size:.85rem;}
+.card-bar-track{height:10px;border-radius:5px;background:#eef1f4;overflow:hidden;}
+.card-bar-fill{display:block;height:100%;border-radius:5px;background:#1f8a4c;}
+.card-bar-score{font-weight:600;text-align:right;}
+.card-bar-weight{font-size:.74rem;}
+
+.card-full{margin:0 0 20px;}
+.card-full summary{cursor:pointer;font-weight:600;padding:8px 0;}
+.card-table-scroll{overflow-x:auto;}
+.card-table-scroll td[data-aged="yes"]{color:#b3261e;font-weight:600;}
+/* Кнопки и ссылки фильтров не должны слипаться. */
+.beta-filters{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:center;}
+.beta-filters>.btn{flex:0 0 auto;}
+/* Числа в реестре читаются только выровненными по правому краю и с зазором:
+   иначе «Рынок» и «Разница» сливаются в одно число. */
+.card-table-scroll .tabnum{text-align:right;padding-left:14px;white-space:nowrap;}
+.card-table-scroll th{white-space:nowrap;}
+/* План рядом с фактом — тем же числом, но тише. */
+.card-tile-plan{color:#8a929b;font-weight:600;}

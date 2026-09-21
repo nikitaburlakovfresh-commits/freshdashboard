@@ -11,7 +11,7 @@ import { resolveSourceAliases, resolveSourceExclusions } from '../domain/sourceN
 import { uploadBatch, probeBatch } from './service';
 import { getReview, saveReview } from './review';
 import { scanBatch, previewPublication, commitPublication, publicationState } from './factPublication';
-import { REPORT_SPECS, type ReportKind } from './shared/reportModel';
+import { REPORT_SPECS, FUNNEL_CHANNELS, type ReportKind, type FunnelChannel } from './shared/reportModel';
 import { METRIC_NAMES } from './shared/metricCatalog';
 import type { UploadFile } from './storage';
 
@@ -42,7 +42,11 @@ const empty = (period: { start: string; end: string }): AutoPublishResult => ({
 });
 
 export async function autoPublishPackage(auth: AuthedUser, metadata: any,
-  files: UploadFile[], requestId: string): Promise<AutoPublishResult> {
+  files: UploadFile[], requestId: string,
+  // Объявление канала для отчётов, где канал по файлу неотличим. Для воронки
+  // это обращения или звонки: заголовки двух выгрузок совпадают, поэтому канал
+  // объявляет загружающий, и каждый канал пишется в свои показатели.
+  channels: Partial<Record<ReportKind, FunnelChannel>> = {}): Promise<AutoPublishResult> {
   const period = { start: metadata?.period?.start, end: metadata?.period?.end };
   const out = empty(period);
 
@@ -74,7 +78,11 @@ export async function autoPublishPackage(auth: AuthedUser, metadata: any,
   const edits: { item_id: string; org_unit_id: string }[] = [];
   for (const row of review.rows) {
     if (row.org_unit_id && row.status === 'PROPOSED') continue;
-    const norm = normalizeBranchName(row.source_name);
+    // Часть выгрузок называет точку «Fresh Дагомыс», а справочник — «Дагомыс».
+    // Приставка сети — часть названия точки в источнике, а не отдельный филиал.
+    const bare = row.source_name.replace(/^\s*fresh\s+/i, '').trim();
+    const norm = byName.has(normalizeBranchName(bare)) || aliases.has(normalizeBranchName(bare))
+      ? normalizeBranchName(bare) : normalizeBranchName(row.source_name);
     const exclusion = exclusions.get(norm);
     if (exclusion !== undefined) {
       out.excluded_rows.push({ row: row.source_row, kind: row.report_kind, name: row.source_name, reason: exclusion });
@@ -119,14 +127,25 @@ export async function autoPublishPackage(auth: AuthedUser, metadata: any,
   const kinds = new Set<string>(out.recognized.map(r => r.kind));
   const chosen = new Map<string, ReportKind>();
   for (const kind of SOURCE_PRIORITY) {
-    if (!kinds.has(kind) || REPORT_SPECS[kind]?.channelRequired) continue;
-    for (const metric of Object.keys(REPORT_SPECS[kind].columns)) {
+    if (!kinds.has(kind)) continue;
+    // Отчёт с обязательным каналом публикуется только с объявленным каналом.
+    // Без объявления он остаётся доступным для просмотра и не публикуется:
+    // угадывать канал по файлу нельзя, выгрузки неотличимы.
+    const channel = channels[kind];
+    if (REPORT_SPECS[kind]?.channelRequired && !channel) continue;
+    for (const column of Object.keys(REPORT_SPECS[kind].columns)) {
+      const metric = channel
+        ? ((FUNNEL_CHANNELS[channel].metrics as Record<string, string>)[column] ?? column)
+        : column;
       if (!chosen.has(metric)) chosen.set(metric, kind);
     }
   }
   const choices = [...chosen.entries()].filter(([metric]) => allowed.has(metric))
     .map(([metric, source]) => ({ metric, source,
-      methodology: `Агрегат отчёта «${source}» QLIK за объявленный период без пересчёта на стороне портала.` }));
+      ...(REPORT_SPECS[source]?.channelRequired ? { channel: channels[source] } : {}),
+      methodology: REPORT_SPECS[source]?.channelRequired
+        ? `Агрегат отчёта «${source}» QLIK, канал «${FUNNEL_CHANNELS[channels[source]!].label}», за объявленный период без пересчёта на стороне портала.`
+        : `Агрегат отчёта «${source}» QLIK за объявленный период без пересчёта на стороне портала.` }));
   out.withheld_metrics = [...chosen.keys()].filter(m => !allowed.has(m))
     .map(m => METRIC_NAMES[m as keyof typeof METRIC_NAMES] ?? m);
   if (!choices.length) {

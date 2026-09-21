@@ -39,7 +39,7 @@ export interface Overview {
   mode:string; period_start:string; period_end:string;
   branches:BranchCard[]; thresholds_configured:boolean;
   metric_names:Record<string,string>;
-  scoring:{configured:boolean;model_id:string|null;month_progress:number|null};
+  scoring:{configured:boolean;model_id:string|null;month_progress:number|null;green_score_from:number|null;amber_score_from:number|null};
   run_rates:RunRateTile[];
   network:{branches_with_score:number;average_score:number|null;
     green:number;amber:number;red:number;without_score:number};
@@ -87,7 +87,33 @@ export interface BranchCardData {
   metrics:(Omit<MetricCell,'deviation_task'>&{direction:'HIGHER_IS_BETTER'|'LOWER_IS_BETTER'|null})[];
   metrics_without_threshold:string[]; deviations:DeviationHistoryRow[];
   metric_names:Record<string,string>; thresholds_configured:boolean;
+  // Производные показатели: у них нет ячейки источника, портал считает их из
+  // опубликованного и помечает расчётными.
+  derived:{metric:string;metric_name:string;value:number;unit:string;
+    formula:string|null;components:string[]}[];
+  buyback45:{share:number;aged:number;total:number;
+    aged_cost:number|null;total_cost:number|null;observed_on:string}|null;
+  repricing:{window_days:number;snapshots:number;vehicles:number|null;events:number|null};
+  score:{configured:boolean;value:number|null;rag:'RED'|'AMBER'|'GREEN'|'NONE';
+    components:{metric:string;metric_name?:string;weight:number;
+      fact:number|null;plan:number|null;score:number|null;missing:string|null}[];
+    reasons:string[];model_id:string|null};
 }
+/** Строка реестра автомобилей на дату среза. */
+export interface VehicleStockRow {
+  id:string; org_unit_id:string; vehicle_key:string; key_kind:'VIN'|'FRAME';
+  supply_type:string|null; days_on_stock:number|null; margin_rub:number|null;
+  profitability:number|null; cost_rub:number|null; sale_price_rub:number|null;
+  market_price_rub:number|null; leads:number|null; not_advertised_share:number|null;
+  arrival_date:string|null; advertised_date:string|null;
+  city:string|null; make:string|null; model:string|null; production_year:number|null;
+  color:string|null; mileage:number|null; advertising_status:string|null;
+  market_diff_rub:number|null; price_changes_count:number|null;
+  price_changes_sum_rub:number|null; price_changes_days:number|null;
+}
+export const readVehicleStock=(observed_on:string,org?:string)=>
+  apiFetch<{mode:string;observed_on:string;items:VehicleStockRow[];aggregation:string}>(
+    '/report-detail/stock',{query:org?{observed_on,org}:{observed_on}});
 export type DueState='OVERDUE'|'DUE_SOON'|'ON_TRACK'|'CLOSED';
 export interface MyDeviationTask {
   id:string; work_item_id:string; org_unit_id:string; branch_name:string; metric:string; metric_name:string;
@@ -194,7 +220,8 @@ export { RAG_LABELS,UNIT_LABELS,formatValue,ragReason,thresholdOrderValid } from
 /* ── Балл филиала, светофор и фокусы месяца (шаг C) ─────────────────────────
    Клиент ничего не досчитывает: балл, статус, основания и средний балл сети
    приходят с сервера по модели, настроенной внутри портала. */
-export type Evaluation='RUN_RATE'|'RATIO_X100'|'CONVERSION_BANDS';
+export type Evaluation='RUN_RATE'|'RATIO_X100'|'CONVERSION_BANDS'|'RATIO_TO_PLAN'|'BAND_PCT';
+export type Direction='HIGHER_IS_BETTER'|'LOWER_IS_BETTER';
 export type RuleRole='ORDINARY'|'REVENUE'|'TURNOVER_STOP';
 export interface ScoreComponent {
   metric:string; metric_name:string; weight:number; evaluation:Evaluation; rule_role:RuleRole;
@@ -203,11 +230,16 @@ export interface ScoreComponent {
 }
 export interface ScoringWeight {
   metric:string; weight:number; evaluation:Evaluation; plan_metric:string|null; rule_role:RuleRole;
+  band_green:number|null; band_amber:number|null; direction:Direction|null;
 }
 export const SCORING_MODEL_FIELDS=['score_cap','red_score_below','red_revenue_runrate_below',
   'red_weak_metric_below','red_weak_metric_count','stop_turnover_below','green_score_above',
   'green_revenue_above','green_turnover_above','green_no_metric_below','conversion_green_from',
   'conversion_green_score','conversion_amber_from','conversion_amber_score','conversion_red_score'] as const;
+/** Пороги статуса по баллу. Пустые — работают прежние правила светофора. */
+export const SCORING_SCORE_BAND_FIELDS=['green_score_from','amber_score_from'] as const;
+export const SCORING_SCORE_BAND_LABELS:Record<string,string>={
+  green_score_from:'Зелёный: балл от',amber_score_from:'Жёлтый: балл от'};
 export type ScoringModelField=typeof SCORING_MODEL_FIELDS[number];
 export const SCORING_FIELD_LABELS:Record<ScoringModelField,string>={
   score_cap:'Ограничение балла компонента',
@@ -227,7 +259,10 @@ export const SCORING_FIELD_LABELS:Record<ScoringModelField,string>={
   conversion_red_score:'Конверсия: балл красной полосы',
 };
 export const EVALUATION_LABELS:Record<Evaluation,string>={
-  RUN_RATE:'Run-rate к плану',RATIO_X100:'Коэффициент ×100',CONVERSION_BANDS:'Полосы конверсии'};
+  RUN_RATE:'Run-rate к плану',RATIO_X100:'Коэффициент ×100',CONVERSION_BANDS:'Полосы конверсии',
+  RATIO_TO_PLAN:'Прогноз к плану',BAND_PCT:'Полосы показателя'};
+export const DIRECTION_LABELS:Record<Direction,string>={
+  HIGHER_IS_BETTER:'больше — лучше',LOWER_IS_BETTER:'меньше — лучше'};
 export const RULE_ROLE_LABELS:Record<RuleRole,string>={
   ORDINARY:'Обычный показатель',REVENUE:'Выручка (правила светофора)',TURNOVER_STOP:'Оборачиваемость (стоп-фактор)'};
 export const COMPONENT_MISSING_LABELS:Record<string,string>={
@@ -235,9 +270,13 @@ export const COMPONENT_MISSING_LABELS:Record<string,string>={
   PLAN_NOT_POSITIVE:'План не положителен'};
 export interface ScoringModelRow extends Record<ScoringModelField,string> {
   id:string; effective_from:string; effective_to:string|null; reason:string; created_at:string;
-  weights:(ScoringWeight&{model_id:string;weight:string})[];
+  /** Пороги статуса по баллу. null — работают прежние правила светофора. */
+  green_score_from:string|null; amber_score_from:string|null;
+  weights:(ScoringWeight&{model_id:string;weight:string;
+    band_green:string|null;band_amber:string|null})[];
 }
 export type ScoringModelCommand=Record<ScoringModelField,number>&{
+  green_score_from:number|null; amber_score_from:number|null;
   weights:ScoringWeight[]; effective_from:string; reason:string};
 export const readScoringModels=(history=false)=>
   apiFetch<{items:ScoringModelRow[];metric_names:Record<string,string>;history:boolean}>('/metrics/scoring',

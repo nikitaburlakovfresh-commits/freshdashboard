@@ -2,11 +2,29 @@ import type { PoolClient } from 'pg';
 import type { AuthedUser } from '../auth/session';
 import { ApiError } from '../util/errors';
 import { liveFence } from '../domain/dailyLogs';
+import { isServiceActor, serviceAuthorization } from '../domain/serviceActor';
 import type { DetailKind } from './shared/detailModel';
 
 // Детальный контур — отдельное право. Доступ к агрегатам его не даёт,
 // операторского обхода нет: грант выдаётся человеку и проверяется на живой сессии.
 export async function detailAccess(c:PoolClient,auth:AuthedUser,permission:'report_detail.publish'|'report_detail.read') {
+  // Сервисный субъект приёма: сессии у него нет и быть не может, поэтому
+  // проверяется явная возможность PUBLISH и то же разрешение на детальный
+  // контур, выданное его гранту. Реестр склада приходит ежедневно, и его приём
+  // не должен зависеть от того, зашёл ли человек в портал. Человеческие правила
+  // при этом не ослабляются.
+  if(await isServiceActor(c,auth.userId)) {
+    if(permission!=='report_detail.publish')
+      throw new ApiError('FORBIDDEN','Сервисный субъект читает только через публикацию.');
+    const service=await serviceAuthorization(c,auth.userId,'PUBLISH');
+    if(!service)throw new ApiError('FORBIDDEN','Сервисному субъекту не выдана действующая возможность PUBLISH.');
+    await c.query('LOCK TABLE report_detail_access IN SHARE MODE');
+    const rows=(await c.query(`SELECT a.grant_id,NULL::uuid org_unit_id,a.kinds FROM report_detail_access a
+      WHERE a.grant_id=$1 AND a.permission_code='report_detail.publish' AND a.revoked_at IS NULL
+        AND a.valid_from<=clock_timestamp()
+        AND (a.valid_until IS NULL OR clock_timestamp()<a.valid_until)`,[service.grantId])).rows;
+    return rows as {grant_id:string;org_unit_id:string|null;kinds:DetailKind[]}[];
+  }
   await liveFence(c,{authUser:auth,requestId:'detail-access',ip:null,userAgent:null});
   await c.query('LOCK TABLE report_detail_access IN SHARE MODE');
   return (await c.query(`SELECT g.id grant_id,g.org_unit_id,a.kinds FROM report_detail_access a

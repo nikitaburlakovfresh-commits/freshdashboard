@@ -77,17 +77,26 @@ function focusMonthLabel(month:string):string {
  * Средний балл группы РМ считается только по филиалам с рассчитанным баллом.
  * Если балла нет ни у одного филиала, показывается «—», а не ноль.
  */
-function groupScore(branches:BranchCard[]):string {
+function groupAverage(branches:BranchCard[]):number|null {
   const scored=branches.filter(b=>b.score!==null);
-  if(!scored.length) return '—';
-  return `${Math.round(scored.reduce((sum,b)=>sum+(b.score??0),0)/scored.length)}%`;
+  return scored.length?scored.reduce((sum,b)=>sum+(b.score??0),0)/scored.length:null;
 }
-/** Цвет числа группы: по худшему статусу филиалов, без собственных порогов на клиенте. */
-function groupRag(branches:BranchCard[]):string {
-  if(branches.some(b=>b.score_rag==='RED')) return 'RED';
-  if(branches.some(b=>b.score_rag==='AMBER')) return 'AMBER';
-  if(branches.some(b=>b.score_rag==='GREEN')) return 'GREEN';
-  return 'NONE';
+function groupScore(branches:BranchCard[]):string {
+  const avg=groupAverage(branches);
+  return avg===null?'—':`${Math.round(avg)}%`;
+}
+/**
+ * Цвет руководителя — по его собственному баллу, а не по худшему филиалу:
+ * от зелёной границы зелёный, от жёлтой жёлтый, ниже красный. Границы приходят
+ * из действующей модели балла, своих порогов клиент не держит. Без модели цвет
+ * не назначается.
+ */
+function groupRag(branches:BranchCard[],
+  bands:{green_score_from:number|null;amber_score_from:number|null}):string {
+  const avg=groupAverage(branches);
+  if(avg===null||bands.green_score_from===null||bands.amber_score_from===null) return 'NONE';
+  if(avg>=bands.green_score_from) return 'GREEN';
+  return avg>=bands.amber_score_from?'AMBER':'RED';
 }
 
 export default function NetworkScorePage() {
@@ -218,7 +227,8 @@ export default function NetworkScorePage() {
                   ?list.filter(k=>k!==group.key):[...list,group.key])}>
                 <span className="manager-chevron" data-open={expanded?'1':undefined} aria-hidden="true"/>
                 <strong>{group.title}</strong>
-                <span className="manager-score tabnum" data-rag={groupRag(group.branches)}>
+                <span className="manager-score tabnum" data-rag={groupRag(group.branches,{green_score_from:data?.scoring.green_score_from??null,
+                    amber_score_from:data?.scoring.amber_score_from??null})}>
                   {groupScore(group.branches)}</span>
                 <span className="manager-count">· {group.branches.length} филиалов
                   {group.division&&<> · {group.division}</>}</span>

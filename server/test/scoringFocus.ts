@@ -16,11 +16,15 @@ const model = (patch: any = {}) => ({
   red_weak_metric_count: 2, stop_turnover_below: 75, green_score_above: 85, green_revenue_above: 85,
   green_turnover_above: 85, green_no_metric_below: 70, conversion_green_from: 17, conversion_green_score: 110,
   conversion_amber_from: 14, conversion_amber_score: 90, conversion_red_score: 50,
+  green_score_from: null, amber_score_from: null,
   effective_from: '2026-08-01', reason: 'Synthetic approved scoring model for tests',
   weights: [
-    { metric: 'revenue', weight: 30, evaluation: 'RUN_RATE', plan_metric: 'planMargin', rule_role: 'REVENUE' },
-    { metric: 'margin', weight: 25, evaluation: 'RUN_RATE', plan_metric: 'planMargin', rule_role: 'ORDINARY' },
-    { metric: 'turnoverBuyout', weight: 15, evaluation: 'RATIO_X100', rule_role: 'TURNOVER_STOP' },
+    { metric: 'revenue', weight: 30, evaluation: 'RUN_RATE', plan_metric: 'planMargin', rule_role: 'REVENUE',
+      band_green: null, band_amber: null, direction: null },
+    { metric: 'margin', weight: 25, evaluation: 'RUN_RATE', plan_metric: 'planMargin', rule_role: 'ORDINARY',
+      band_green: null, band_amber: null, direction: null },
+    { metric: 'turnoverBuyout', weight: 15, evaluation: 'RATIO_X100', rule_role: 'TURNOVER_STOP',
+      band_green: null, band_amber: null, direction: null },
   ],
   ...patch,
 });
@@ -135,7 +139,8 @@ describe('расчёт балла без обращения к базе', () => 
   });
   it('применяет полосы конверсии', () => {
     const conv: ScoringModel = { ...base, weights: [
-      { metric: 'creditShareFact', weight: 10, evaluation: 'CONVERSION_BANDS', plan_metric: null, rule_role: 'ORDINARY' }] };
+      { metric: 'creditShareFact', weight: 10, evaluation: 'CONVERSION_BANDS', plan_metric: null,
+        rule_role: 'ORDINARY', band_green: null, band_amber: null, direction: null }] };
     expect(computeBranchScore(conv, new Map([['creditShareFact', 18]]), '2026-08-31').components[0].score).toBe(110);
     expect(computeBranchScore(conv, new Map([['creditShareFact', 15]]), '2026-08-31').components[0].score).toBe(90);
     expect(computeBranchScore(conv, new Map([['creditShareFact', 10]]), '2026-08-31').components[0].score).toBe(50);

@@ -9,11 +9,14 @@ import { beginIdempotent,completeIdempotent } from '../domain/idempotency';
 import { writeAuditAndOutbox } from '../domain/auditOutbox';
 import { reviewContext } from './review';
 import { detailAccess,detailPublisher } from './detailAccess';
+import { factAccess } from './factAccess';
 import { readSource,uuid } from './storage';
 import { parseAnyWorkbook } from './shared/parseWorkbook';
 import { validDate,normalize } from './shared/reportModel';
 import { closed } from './factPublication';
 import { DETAIL_NAMES,type DetailKind,type DetailReport } from './shared/detailModel';
+import { resolveSourceAliases } from '../domain/sourceNaming';
+import { normalizeBranchName } from '../domain/branchNameMatch';
 
 const invalid=(s:string)=>new ApiError('VALIDATION_ERROR',s);
 const conflict=()=>new ApiError('ENTITY_VERSION_CONFLICT','Проверенный состав изменился или срок подтверждения истёк. Выполните новую проверку.');
@@ -46,7 +49,13 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
   const access=await detailPublisher(c,auth,b.kind);
   const file=await sourceFile(c,ctx.b.id,b.file_id);
   const buffer=await readSource(ctx.b.id,file);
-  const parsed=await parseAnyWorkbook(buffer as ArrayBuffer,file.display_name);
+  // Разбор ждёт ArrayBuffer, а хранилище отдаёт Buffer. Прежде здесь стояло
+  // приведение типа, и разбор отказывал с INPUT_TYPE_NOT_SUPPORTED: детальный
+  // путь ни разу не выполнялся целиком, поэтому дефект не проявлялся.
+  const bytes=Buffer.isBuffer(buffer)?buffer:Buffer.from(buffer as ArrayBuffer);
+  const parsed=await parseAnyWorkbook(
+    bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength) as ArrayBuffer,
+    file.display_name);
   if(!parsed||parsed.type!=='DETAIL')throw invalid('Файл не распознан как детальная выгрузка.');
   const report=parsed.report as DetailReport;
   if(report.kind!==b.kind)throw invalid(`Файл распознан как «${DETAIL_NAMES[report.kind]}», а публикация запрошена для другого вида.`);
@@ -54,7 +63,15 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
   const scanOk=file.scan_current===true&&(file.result==='CLEAN'||(file.result==='NOT_SCANNED'&&config.reportScanMode==='off'));
   if(!scanOk)blockers.push(`Оригинал «${file.display_name}»: нужна отметка проверки источника не старше 24 часов.`);
   // Повторный идентификатор или неразличимые строки решает человек до публикации.
-  for(const x of report.conflicts)blockers.push(`Строка ${x.row} (${x.label}): ${x.reason}`);
+  // Повторный идентификатор автомобиля внутри одной выгрузки — дефект
+  // источника. Прежде он останавливал публикацию всего реестра сети: из-за
+  // двух строк не публиковался склад по всем филиалам. Теперь повторные строки
+  // не публикуются и перечисляются как исключённые, а первая строка по этому
+  // автомобилю принимается. Конфликты сохраняются в записи публикации целиком,
+  // поэтому видно, что именно источник прислал дважды.
+  for(const x of report.conflicts)report.excluded.push({row:x.row,label:x.label,
+    reason:`${x.reason} Строка не публикуется, принята первая строка по этому автомобилю.`});
+  const duplicateRows=new Set(report.conflicts.map(x=>x.row));
   const provenance={kind:'APPROVED_SOURCE_DETAIL',producer:'QLIK',batch_id:ctx.b.id,file_id:file.id,
     file_hash:file.content_hash,scan_id:file.scan_id??null,scan_status:file.result??'NOT_SCANNED',
     scan_mode:config.reportScanMode,sheet:report.sheet,parser_version:ctx.b.parser_version,
@@ -65,24 +82,47 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
     // Филиал берётся только из справочника по действующему наименованию на дату
     // среза. Несопоставленная локация блокирует публикацию, а не угадывается.
     const map=new Map<string,string>();
+    // Локация в выгрузке названа «Fresh Дагомыс», а в справочнике филиал
+    // называется «Дагомыс»: приставка сети — часть названия точки в источнике,
+    // а не отдельный филиал. Поэтому она снимается, затем применяются
+    // объявленные в портале алиасы названий источника — те же, что у агрегатов,
+    // — и только потом действующее наименование справочника. Ничего не
+    // угадывается: совпадение либо точное, либо объявленное человеком.
+    const aliases=await resolveSourceAliases(c,b.observed_on);
+    const unmapped:string[]=[];
     for(const location of report.locations) {
+      const bare=location.replace(/^\s*fresh\s+/i,'').trim();
+      const alias=aliases.get(normalizeBranchName(bare))??aliases.get(normalizeBranchName(location));
+      if(alias!==undefined){map.set(normalize(location),alias);continue;}
       const hit=(await c.query(`SELECT n.org_unit_id FROM org_directory_name_history n
         JOIN org_directory_units d ON d.id=n.org_unit_id
-        WHERE lower(btrim(n.display_name))=$1 AND NOT d.is_demo AND NOT d.demo_locked
+        WHERE lower(btrim(translate(n.display_name,'Ёё','Ее')))=lower(btrim(translate($1,'Ёё','Ее')))
+          AND NOT d.is_demo AND NOT d.demo_locked
           AND n.effective_from<=$2::date AND (n.effective_to IS NULL OR n.effective_to>$2::date)
           AND d.effective_from<=$2::date AND (d.effective_to IS NULL OR d.effective_to>$2::date)`,
-      [normalize(location),b.observed_on])).rows;
+      [bare,b.observed_on])).rows;
       if(hit.length===1)map.set(normalize(location),hit[0].org_unit_id);
-      else blockers.push(hit.length?`Локация «${location}»: наименование неоднозначно в справочнике на ${b.observed_on}.`
-        :`Локация «${location}»: нет филиала с таким действующим наименованием на ${b.observed_on}.`);
+      else if(hit.length>1)blockers.push(`Локация «${location}»: наименование неоднозначно в справочнике на ${b.observed_on}.`);
+      // Локация без филиала в справочнике не останавливает весь реестр: её
+      // строки не публикуются и перечисляются отдельно, как это сделано для
+      // агрегатов. Иначе один неизвестный адрес обнулял бы склад всей сети.
+      else unmapped.push(location);
     }
+    if(unmapped.length)report.excluded.push(...unmapped.map(location=>({row:0,label:location,
+      reason:`Нет филиала с таким действующим наименованием на ${b.observed_on} — строки локации не публикуются.`})));
     for(const v of report.vehicles) {
+      if(duplicateRows.has(v.row))continue;
       const org=map.get(v.locationKey);
       if(!org)continue;
       vehicles.push({source_row:v.row,vehicle_key:v.vin,key_kind:v.keyKind,org_unit_id:org,
         supply_type:v.supplyType,days_on_stock:v.daysOnStock,margin_rub:v.marginRub,profitability:v.profitability,
         cost_rub:v.costRub,sale_price_rub:v.salePriceRub,market_price_rub:v.marketPriceRub,leads:v.leads,
-        not_advertised_share:v.notAdvertisedShare,arrival_date:v.arrivalDate,advertised_date:v.advertisedDate});
+        not_advertised_share:v.notAdvertisedShare,arrival_date:v.arrivalDate,advertised_date:v.advertisedDate,
+        city:v.city,make:v.make,model:v.model,production_year:v.productionYear,color:v.color,mileage:v.mileage,
+        advertising_status:v.advertisingStatus,ppp_sum_rub:v.pppSumRub,market_diff_rub:v.marketDiffRub,
+        price_changes_count:v.priceChangesCount,price_changes_sum_rub:v.priceChangesSumRub,
+        price_changes_days:v.priceChangesDays,erk_count:v.erkCount,erk_days:v.erkDays,
+        avito_cost_rub:v.avitoCostRub});
     }
     if(!vehicles.length)blockers.push('Нет ни одной строки склада с подтверждённой привязкой к филиалу.');
   } else {
@@ -174,15 +214,23 @@ export async function commitDetail(auth:AuthedUser,id:string,raw:any,key:string|
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
     [publicationId,v.id,ctx.b.id,v.kind,auth.userId,access.grant_id,p.data.observed_on,p.data.provenance.declaration,
       p.data.source_rows,p.data.accepted_rows,p.data.excluded.length,JSON.stringify(p.data.conflicts),
-      JSON.stringify(p.data.provenance)]);
+      // Запись аудита не передавалась вовсе: 13 значений на 14 столбцов.
+      // Ещё один след того, что детальная публикация никогда не выполнялась.
+      JSON.stringify(p.data.provenance),audit]);
     for(const row of p.data.vehicles) {
       await c.query(`INSERT INTO vehicle_stock_rows(id,publication_id,vehicle_id,org_unit_id,source_row,observed_on,
         supply_type,days_on_stock,margin_rub,profitability,cost_rub,sale_price_rub,market_price_rub,leads,
-        not_advertised_share,arrival_date,advertised_date)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+        not_advertised_share,arrival_date,advertised_date,
+        city,make,model,production_year,color,mileage,advertising_status,ppp_sum_rub,market_diff_rub,
+        price_changes_count,price_changes_sum_rub,price_changes_days,erk_count,erk_days,avito_cost_rub)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
+        $18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)`,
       [randomUUID(),publicationId,await vehicleId(c,row.vehicle_key,row.key_kind),row.org_unit_id,row.source_row,
         p.data.observed_on,row.supply_type,row.days_on_stock,row.margin_rub,row.profitability,row.cost_rub,
-        row.sale_price_rub,row.market_price_rub,row.leads,row.not_advertised_share,row.arrival_date,row.advertised_date]);
+        row.sale_price_rub,row.market_price_rub,row.leads,row.not_advertised_share,row.arrival_date,row.advertised_date,
+        row.city,row.make,row.model,row.production_year,row.color,row.mileage,row.advertising_status,
+        row.ppp_sum_rub,row.market_diff_rub,row.price_changes_count,row.price_changes_sum_rub,
+        row.price_changes_days,row.erk_count,row.erk_days,row.avito_cost_rub]);
     }
     for(const row of p.data.discounts) {
       await c.query(`INSERT INTO manager_discount_rows(id,publication_id,source_row,source_manager_name,vehicle_id,
@@ -205,13 +253,20 @@ export async function readDetailStock(auth:AuthedUser,query:any) {
   if(typeof q.observed_on!=='string'||!validDate(q.observed_on)||
     (q.org!==undefined&&(typeof q.org!=='string'||!uuid.test(q.org))))throw invalid('Укажите дату среза.');
   return withTransaction(async c=>{
-    const grants=await detailAccess(c,auth,'report_detail.read');
-    const allowed=grants.filter(g=>g.kinds.includes('vinInventory')).map(g=>g.org_unit_id!);
-    if(!allowed.length)throw new ApiError('FORBIDDEN','Нет отдельного доступа к детальным строкам склада.');
+    // Реестр виден по обычной видимости филиалов роли — той же, по которой
+    // работают главная страница и карточка филиала. Отдельное право на каждый
+    // филиал не требуется: роли отличаются уровнем видимости, а не набором
+    // отдельных защит. Персональные столбцы источника в портал не переносятся,
+    // поэтому отдельного режима обработки они не требуют.
+    const grants=await factAccess(c,auth,'READ');
+    const allowed=[...new Set(grants.map(g=>g.org_unit_id))];
+    if(!allowed.length)throw new ApiError('FORBIDDEN','Нет доступа к показателям филиалов.');
     if(q.org&&!allowed.includes(q.org))throw new ApiError('NOT_FOUND','Филиал недоступен.');
     const orgs=q.org?[q.org]:allowed;
     const rows=(await c.query(`SELECT r.id,r.org_unit_id,i.vehicle_key,i.key_kind,r.supply_type,r.days_on_stock,
       r.margin_rub,r.profitability,r.cost_rub,r.sale_price_rub,r.market_price_rub,r.leads,r.not_advertised_share,
+      r.city,r.make,r.model,r.production_year,r.color,r.mileage,r.advertising_status,r.market_diff_rub,
+      r.price_changes_count,r.price_changes_sum_rub,r.price_changes_days,
       to_char(r.arrival_date,'YYYY-MM-DD') arrival_date,to_char(r.advertised_date,'YYYY-MM-DD') advertised_date
       FROM vehicle_stock_rows r JOIN vehicle_identity i ON i.id=r.vehicle_id
       WHERE r.observed_on=$1 AND r.org_unit_id=ANY($2::uuid[])

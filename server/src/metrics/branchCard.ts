@@ -5,6 +5,11 @@ import { METRIC_NAMES } from '../reporting/shared/reportModel';
 import { uuid } from '../reporting/storage';
 import { ApiError } from '../util/errors';
 import { evaluateRag, resolveThresholds, thresholdFor, type Rag } from './thresholds';
+import { funnelConversions, buyback45Shares, upwardRepricing, DERIVED_METRICS } from './derived';
+import { resolveScoringModel, computeBranchScore } from './scoring';
+
+/** Окно переоценок: как на старом портале — 30 дней. */
+const REPRICING_WINDOW_DAYS=30;
 
 const invalid=(s:string)=>new ApiError('VALIDATION_ERROR',s);
 const validDate=(v:unknown):v is string=>{
@@ -71,6 +76,36 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
         direction:t?.direction??null,revision:r.revision,published_at:r.created_at,snapshot_id:r.snapshot_id};
     });
 
+    // Производные показатели карточки: конверсии воронки из опубликованных
+    // трафика, визитов и сделок, доля 45+ в выкупе и переоценки вверх по
+    // реестру VIN. Источника-ячейки у них нет, поэтому они не публикуются как
+    // факты, а считаются здесь и помечаются расчётными.
+    const values=new Map<string,number>(metrics.map(m=>[m.metric,m.value]));
+    const conversions=funnelConversions(values);
+    for(const [k,v] of conversions)values.set(k,v);
+    const buyback=(await buyback45Shares(c,[orgUnitId],q.end)).get(orgUnitId)??null;
+    if(buyback)values.set('buyback45Share',buyback.share);
+    const repricing=(await upwardRepricing(c,[orgUnitId],q.end,REPRICING_WINDOW_DAYS)).get(orgUnitId)??null;
+    // Сколько срезов реестра накоплено: по одному срезу переоценку определить
+    // нельзя, и выдавать её отсутствие за ноль нельзя тоже.
+    const snapshots=Number((await c.query(
+      `SELECT count(DISTINCT observed_on)::int n FROM vehicle_stock_rows
+       WHERE org_unit_id=$1 AND observed_on<=$2::date
+         AND observed_on>$2::date-($3::int||' days')::interval`,
+      [orgUnitId,q.end,REPRICING_WINDOW_DAYS])).rows[0].n);
+    const derived=[...conversions.entries()].map(([metric,value])=>({metric,
+      metric_name:(METRIC_NAMES as Record<string,string>)[metric]??metric,value,unit:'PCT',
+      formula:DERIVED_METRICS[metric]?.formula??null,
+      components:DERIVED_METRICS[metric]?.components??[]}));
+    if(buyback)derived.push({metric:'buyback45Share',
+      metric_name:(METRIC_NAMES as Record<string,string>).buyback45Share??'buyback45Share',
+      value:buyback.share,unit:'PCT',formula:DERIVED_METRICS.buyback45Share.formula,
+      components:DERIVED_METRICS.buyback45Share.components});
+
+    // Балл филиала и его разбивка по показателям — та же модель, что на главной.
+    const model=await resolveScoringModel(c,q.end);
+    const score=computeBranchScore(model,values,q.end);
+
     // История отклонений: все задачи филиала по доступным показателям, без
     // ограничения выбранным периодом — руководителю нужен ход работы.
     const hist=(await c.query(`SELECT d.id,d.work_item_id,d.metric,d.rag,d.snapshot_id,
@@ -113,6 +148,12 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
       branch:{org_unit_id:unit.id,code:unit.code,display_name:unit.display_name,lifecycle_state:unit.lifecycle_state},
       metrics,metrics_without_threshold:metrics.filter(m=>!m.threshold_id).map(m=>m.metric),
       deviations,metric_names:METRIC_NAMES,thresholds_configured:thresholds.length>0,
+      derived,
+      buyback45:buyback,
+      repricing:{window_days:REPRICING_WINDOW_DAYS,snapshots,
+        vehicles:repricing?.vehicles??null,events:repricing?.events??null},
+      score:{configured:model!==null,value:score.score,rag:score.rag,
+        components:score.components,reasons:score.reasons,model_id:model?.id??null},
       aggregation:'NONE',freshness:'NOT_EVALUATED'};
   });
 }

@@ -42,6 +42,13 @@ export interface VehicleRow {
   supplyType: string | null; daysOnStock: number | null; marginRub: number | null; profitability: number | null;
   costRub: number | null; salePriceRub: number | null; marketPriceRub: number | null; leads: number | null;
   notAdvertisedShare: number | null; arrivalDate: string | null; advertisedDate: string | null;
+  // Описание автомобиля и счётчики изменений цены из того же отчёта «Анализ
+  // склада». Нужны реестру в том объёме, в каком он работает на старом портале.
+  make: string | null; model: string | null; productionYear: number | null;
+  color: string | null; mileage: number | null; advertisingStatus: string | null;
+  pppSumRub: number | null; marketDiffRub: number | null;
+  priceChangesCount: number | null; priceChangesSumRub: number | null; priceChangesDays: number | null;
+  erkCount: number | null; erkDays: number | null; avitoCostRub: number | null;
 }
 export interface ManagerDiscountRow {
   row: number; manager: string; managerKey: string; carsIssued: number | null; discountCount: number | null;
@@ -134,6 +141,15 @@ export function parseDetail(rows: unknown[][], kind: DetailKind, file: string, s
         salePriceRub: num(raw, 'P', row, false), marketPriceRub: num(raw, 'Q', row, false),
         leads: num(raw, 'AA', row, true), notAdvertisedShare: num(raw, 'AC', row, false),
         arrivalDate: excel(raw[columnIndex('BA')]), advertisedDate: excel(raw[columnIndex('BB')]),
+        make: cell(raw, 'D').trim() || null, model: cell(raw, 'E').trim() || null,
+        productionYear: num(raw, 'F', row, true), color: cell(raw, 'G').trim() || null,
+        mileage: num(raw, 'H', row, true),
+        pppSumRub: num(raw, 'O', row, false), marketDiffRub: num(raw, 'R', row, false),
+        priceChangesCount: num(raw, 'V', row, true), erkCount: num(raw, 'W', row, false),
+        priceChangesDays: num(raw, 'X', row, false), erkDays: num(raw, 'Y', row, false),
+        priceChangesSumRub: num(raw, 'Z', row, false),
+        advertisingStatus: cell(raw, 'AB').trim() || null,
+        avitoCostRub: num(raw, 'AD', row, false),
       });
     }
     report.locations = [...locations].sort((a, b) => a.localeCompare(b, 'ru'));
