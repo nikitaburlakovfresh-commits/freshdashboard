@@ -164,3 +164,29 @@
 @media(max-width:1200px){.branch-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:900px){.branch-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){.branch-tiles{grid-template-columns:1fr}}
+
+/* Плитки светофора как фильтр: нажатие оставляет в списке только филиалы
+   этого статуса. Активная плитка обязана отличаться визуально, иначе
+   руководитель решит, что часть сети пропала. */
+button.score-tile{cursor:pointer;font:inherit;text-align:left;width:100%}
+button.score-tile:hover{border-color:currentColor}
+.score-tile[data-active="1"]{outline:2px solid var(--fresh-accent,#0b6b3a);outline-offset:-2px;
+  box-shadow:0 0 0 3px rgba(11,107,58,.18)}
+.rag-filter-note{margin:6px 0 0;font-size:13px;color:var(--fresh-muted)}
+.rag-filter-reset{border:none;background:none;padding:0;font:inherit;color:#003DFF;
+  cursor:pointer;text-decoration:underline}
+
+/* Сжатое окно филиала внутри списка РМ. */
+.branch-mini-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.branch-mini-open{font-weight:600}
+.branch-mini-score{font-size:13px;color:var(--fresh-muted)}
+.branch-mini-grid{display:grid;gap:8px;margin-bottom:12px;
+  grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+.branch-mini-tile{display:flex;flex-direction:column;gap:3px;padding:10px 12px;
+  border:1px solid var(--fresh-border);border-radius:8px;min-width:0}
+.branch-mini-label{font-size:12px;color:var(--fresh-muted);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.branch-mini-tile strong{font-size:17px;line-height:1.2}
+.branch-mini-tile small{font-size:12px;color:var(--fresh-muted)}
+.branch-mini-details{margin:8px 0}
+.branch-mini-details summary{cursor:pointer;font-size:13px;color:#003DFF}

@@ -21,7 +21,9 @@ const FOCUS_FORMATS:Record<string,string>={COUNT:'шт.',PCT:'%',RUB:'руб.',R
 /** Значение плитки run-rate. Null — «нет данных», а не ноль. */
 function runRateValue(t:RunRateTile):string {
   if(t.value===null) return '—';
-  if(t.format==='PCT') return `${Math.round(t.value*100)}%`;
+  // Сервер уже отдаёт проценты (fact*коэффициент/plan*100). Повторное
+  // умножение на 100 давало «7236%» вместо «82%» — именно это увидел владелец.
+  if(t.format==='PCT') return `${Math.round(t.value)}%`;
   if(t.format==='RATIO') return `${t.value.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})}×`;
   if(t.format==='RUB') return t.value>=1000
     ? `${Math.round(t.value/1000).toLocaleString('ru-RU')} тыс ₽`
@@ -47,6 +49,17 @@ function basisLabel(basis:string|null):string {
   const human=MAP[code];
   if(!human) return basis;
   return metric?`${human} (${metric})`:human;
+}
+/**
+ * Подпись под значением run-rate. Боевой портал показывает «2 220 / 2 703 шт» —
+ * прогноз месяца к плану, а не факт к плану: сравнивать неполный месяц с
+ * месячным планом бессмысленно. Прогноз = факт × (дней в месяце / прошедших),
+ * тот же коэффициент, что в расчёте самого run-rate на сервере.
+ */
+function runRateHint(t:RunRateTile):string {
+  if(t.format!=='PCT'||t.value===null||t.fact===null||t.plan===null||!(t.plan>0)) return t.hint;
+  const forecast=Math.round(t.plan*t.value/100);
+  return `${forecast.toLocaleString('ru-RU')} / ${t.plan.toLocaleString('ru-RU')}`;
 }
 /** Иконка плитки run-rate по её смыслу. */
 const RUNRATE_ICONS:Record<string,'target'|'stock'|'wallet'|'layers'|'chart'>={
@@ -86,6 +99,9 @@ export default function NetworkScorePage() {
   const [managers,setManagers]=useState<DivisionSummary|null>(null);
   const [error,setError]=useState(''),[busy,setBusy]=useState(false),[open,setOpen]=useState<string[]>([]);
   const [openGroups,setOpenGroups]=useState<string[]>([]);
+  // Фильтр по статусу светофора. Как на старом портале: нажатие на плитку
+  // оставляет в списке только филиалы этого статуса. Повторное нажатие снимает.
+  const [ragFilter,setRagFilter]=useState<'GREEN'|'AMBER'|'RED'|null>(null);
 
   const load=useCallback(async(from:string,to:string)=>{
     setBusy(true);setError('');setData(null);setManagers(null);
@@ -107,7 +123,11 @@ export default function NetworkScorePage() {
     {icon:'info',label:'Жёлтые филиалы',value:String(net?.amber??0),hint:'Есть отклонения без красных правил',rag:'AMBER' as const},
     {icon:'shield',label:'Красные филиалы',value:String(net?.red??0),hint:'Сработало правило красного статуса',rag:'RED' as const},
   ];
-  const branchesByManager=groupByManager(data?.branches??[],managers);
+  // Фильтр применяется к филиалам до группировки: у РМ остаются только филиалы
+  // выбранного статуса, а РМ без таких филиалов из списка уходит целиком.
+  const visibleBranches=(data?.branches??[])
+    .filter(b=>ragFilter===null||b.score_rag===ragFilter);
+  const branchesByManager=groupByManager(visibleBranches,managers);
 
   return <div className="portal-page network-kpi">
     <header className="overview-head">
@@ -130,19 +150,31 @@ export default function NetworkScorePage() {
         Модель балла не настроена в портале: балл и светофор по баллу не рассчитываются.{' '}
         <Link to="/settings/scoring">Настроить модель балла</Link>.</p>}
 
-      <div className="score-tiles">{tiles.map(t=><article className="score-tile" key={t.label}
-        data-rag={t.rag??'NEUTRAL'} title={t.hint}>
-        <span className="tile-icon" data-rag={t.rag??'NEUTRAL'} aria-hidden="true"><Icon name={t.icon}/></span>
-        <div><strong className="tabnum">{t.value}</strong><span>{t.label}</span>
-          <small>{t.hint}</small></div>
-      </article>)}</div>
+      <div className="score-tiles">{tiles.map(t=>{
+        const active=t.rag!==undefined&&t.rag===ragFilter;
+        const clickable=t.rag!==undefined;
+        const Tag=clickable?'button':'article';
+        return <Tag className="score-tile" key={t.label} data-rag={t.rag??'NEUTRAL'}
+          data-active={active?'1':undefined} title={t.hint}
+          {...(clickable?{type:'button' as const,'aria-pressed':active,
+            onClick:()=>setRagFilter(prev=>prev===t.rag?null:(t.rag as 'GREEN'|'AMBER'|'RED'))}:{})}>
+          <span className="tile-icon" data-rag={t.rag??'NEUTRAL'} aria-hidden="true"><Icon name={t.icon}/></span>
+          <div><strong className="tabnum">{t.value}</strong><span>{t.label}</span>
+            <small>{t.hint}</small></div>
+        </Tag>;
+      })}</div>
+      {ragFilter&&<p className="rag-filter-note" role="status">
+        Показаны только филиалы со статусом {RAG_LABELS[ragFilter]}: {visibleBranches.length}.{' '}
+        <button type="button" className="rag-filter-reset" onClick={()=>setRagFilter(null)}>
+          Показать все</button>
+      </p>}
 
       <div className="runrate-tiles">{data.run_rates.map(t=><article className="runrate-tile" key={t.code}>
         <span className="runrate-icon" data-code={t.code} aria-hidden="true">
           <Icon name={RUNRATE_ICONS[t.code]??'chart'}/></span>
         <div><strong className="tabnum">{runRateValue(t)}</strong>
           <span>{t.label}</span>
-          <small>{t.value===null?basisLabel(t.basis):t.hint}</small></div>
+          <small>{t.value===null?basisLabel(t.basis):runRateHint(t)}</small></div>
       </article>)}</div>
 
       <section className="focus-block">
@@ -221,7 +253,20 @@ function groupByManager(branches:BranchCard[],_summary:DivisionSummary|null):Gro
       division:b.division_name??null,branches:[]};
     g.branches.push(b);groups.set(key,g);
   }
-  return [...groups.values()].sort((a,b)=>a.title.localeCompare(b.title,'ru'));
+  // Сортировка по собственному проценту от большего к меньшему: руководителю
+  // нужен порядок результата, а не алфавита. Группы без рассчитанного балла
+  // уходят в конец — отсутствие балла не равно нулю.
+  const pct=(g:Group)=>{
+    const scored=g.branches.filter(b=>b.score!==null);
+    return scored.length?scored.reduce((sum,b)=>sum+(b.score??0),0)/scored.length:null;
+  };
+  return [...groups.values()].sort((a,b)=>{
+    const pa=pct(a),pb=pct(b);
+    if(pa===null&&pb===null) return a.title.localeCompare(b.title,'ru');
+    if(pa===null) return 1;
+    if(pb===null) return -1;
+    return pb-pa||a.title.localeCompare(b.title,'ru');
+  });
 }
 
 function BranchRow({branch:b,period,open,onToggle}:{branch:BranchCard;
@@ -239,26 +284,57 @@ function BranchRow({branch:b,period,open,onToggle}:{branch:BranchCard;
       </div>
     </div>
     {open&&<div className="score-row-body">
+      {/* Сжатое окно филиала. Задача — дать руководителю понять состояние за
+          несколько секунд, не открывая полную карточку: ключевые показатели
+          плитками «факт / план», затем причины статуса, и только потом полный
+          разбор. Кнопка открытия карточки стоит первой, чтобы до неё не нужно
+          было прокручивать таблицу. */}
+      <div className="branch-mini-actions">
+        <Link className="btn branch-mini-open"
+          to={`/branch-card/${b.org_unit_id}?start=${period.start}&end=${period.end}`}>
+          Открыть филиал</Link>
+        <span className="branch-mini-score">
+          Балл {b.score===null?'—':`${Math.round(b.score)}%`} · {RAG_LABELS[b.score_rag]}</span>
+      </div>
+
+      {b.score_components.length>0&&<div className="branch-mini-grid">
+        {b.score_components.slice(0,8).map(c=>{
+          const pct=c.fact!==null&&c.plan!==null&&c.plan>0?Math.round(c.fact/c.plan*100):null;
+          return <article className="branch-mini-tile" key={c.metric}>
+            <span className="branch-mini-label" title={c.metric_name}>{c.metric_name}</span>
+            <strong className="tabnum">{c.fact===null
+              ?<span className="portal-muted">{COMPONENT_MISSING_LABELS[c.missing??'']??'нет данных'}</span>
+              :c.fact.toLocaleString('ru-RU')}</strong>
+            <small className="tabnum">{c.plan===null?'план не задан'
+              :`план ${c.plan.toLocaleString('ru-RU')}${pct===null?'':` · ${pct}%`}`}</small>
+          </article>;
+        })}
+      </div>}
+
       {b.score_reasons.length>0&&<ul className="score-reasons">
         {b.score_reasons.map(r=><li key={r}>{r}</li>)}</ul>}
       {b.score_components.length===0&&<p className="portal-muted">Модель балла не настроена: вклад
         показателей не рассчитывается.</p>}
-      {b.score_components.length>0&&<table className="score-table">
-        <thead><tr><th>Показатель</th><th>Расчёт</th><th className="tabnum">Вес</th>
-          <th className="tabnum">Факт</th><th className="tabnum">План</th><th className="tabnum">Балл</th>
-          <th>Роль в правилах</th></tr></thead>
-        <tbody>{b.score_components.map(c=><tr key={c.metric}>
-          <td>{c.metric_name}</td>
-          <td>{EVALUATION_LABELS[c.evaluation]}</td>
-          <td className="tabnum">{c.weight}</td>
-          <td className="tabnum">{c.fact===null?'—':c.fact.toLocaleString('ru-RU')}</td>
-          <td className="tabnum">{c.plan===null?'—':c.plan.toLocaleString('ru-RU')}</td>
-          <td className="tabnum">{c.score===null
-            ?<span className="portal-muted">{COMPONENT_MISSING_LABELS[c.missing??'']??'нет данных'}</span>
-            :num(c.score)}</td>
-          <td>{RULE_ROLE_LABELS[c.rule_role]}</td>
-        </tr>)}</tbody>
-      </table>}
+
+      {b.score_components.length>0&&<details className="branch-mini-details">
+        <summary>Полный разбор балла</summary>
+        <table className="score-table">
+          <thead><tr><th>Показатель</th><th>Расчёт</th><th className="tabnum">Вес</th>
+            <th className="tabnum">Факт</th><th className="tabnum">План</th><th className="tabnum">Балл</th>
+            <th>Роль в правилах</th></tr></thead>
+          <tbody>{b.score_components.map(c=><tr key={c.metric}>
+            <td>{c.metric_name}</td>
+            <td>{EVALUATION_LABELS[c.evaluation]}</td>
+            <td className="tabnum">{c.weight}</td>
+            <td className="tabnum">{c.fact===null?'—':c.fact.toLocaleString('ru-RU')}</td>
+            <td className="tabnum">{c.plan===null?'—':c.plan.toLocaleString('ru-RU')}</td>
+            <td className="tabnum">{c.score===null
+              ?<span className="portal-muted">{COMPONENT_MISSING_LABELS[c.missing??'']??'нет данных'}</span>
+              :num(c.score)}</td>
+            <td>{RULE_ROLE_LABELS[c.rule_role]}</td>
+          </tr>)}</tbody>
+        </table>
+      </details>}
       <p className="portal-muted">Статус по показателям с порогами: {RAG_LABELS[b.rag]}.
         Показатели без настроенного порога: {b.metrics_without_threshold.length||'нет'}.</p>
     </div>}

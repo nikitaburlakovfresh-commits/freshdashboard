@@ -93,6 +93,11 @@ export async function branchOverview(auth:AuthedUser,query:any) {
       WHERE s.period_start=$1 AND s.period_end=$2
         AND EXISTS(SELECT 1 FROM jsonb_to_recordset($3::jsonb) a(org uuid,metric text)
           WHERE a.org=s.org_unit_id AND a.metric=s.metric)
+        -- Закрытые филиалы на рабочих экранах не показываются. Их опубликованные
+        -- значения остаются в базе и в исторической отчётности: филиал был
+        -- в отчётах за свои периоды, и скрывать его задним числом из истории нельзя.
+        AND NOT EXISTS(SELECT 1 FROM org_directory_units d
+          WHERE d.id=s.org_unit_id AND d.lifecycle_state='CLOSED')
       ORDER BY n.display_name,s.metric LIMIT 2001`,[q.start,q.end,JSON.stringify(allowed)])).rows;
     if(rows.length>2000)throw invalid('Слишком много строк: выберите один филиал.');
     const thresholds=await resolveThresholds(c,q.end);
