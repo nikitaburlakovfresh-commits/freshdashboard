@@ -10,7 +10,7 @@ import {
 import { serializeWorkItem } from './serialize';
 import { writeAuditAndOutbox } from './auditOutbox';
 import { beginIdempotent, completeIdempotent, IdempotentOperation } from './idempotency';
-import { assertDailyWindow, dailyMetadata, dailyLinks, dailyDate, ensureDailyLog, liveFence } from './dailyLogs';
+import { assertDailyWindow, dailyMetadata, dailyLinks, dailyDate, ensureDailyLog, liveFence, assertSectionNotTooEarly} from './dailyLogs';
 
 export interface ActorContext {
   authUser: AuthedUser;
@@ -866,6 +866,13 @@ export async function patchWorkItemFields(
         throw new ApiError('FORBIDDEN_FIELD', 'Действие с полем не разрешено.');
       }
       await assertDailyWindow(client,workItemId);
+      // «Закрыть день» в 11 утра портал запрещает: по часам он точно знает, что
+      // день не кончился. Позднее заполнение, наоборот, не запрещается — оно
+      // помечается, потому что время заполнения поля не равно времени события.
+      const dailyRecord=(await client.query(
+        'SELECT business_date::text FROM daily_log_records WHERE work_item_id=$1',[workItemId])).rows[0];
+      if(dailyRecord)
+        await assertSectionNotTooEarly(client,(fieldDef as any).section_num??null,dailyRecord.business_date);
       await liveFence(client,ctx);
       const newValue = validateFieldValue(fieldDef, rawNewValue, 'changes[0].new_value');
 

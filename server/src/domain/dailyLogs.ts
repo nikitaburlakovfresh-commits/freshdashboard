@@ -100,6 +100,68 @@ export async function setDailyPolicy(ctx:ActorContext,org:string,body:any) {
  * Уже настроенное окно с такими же временами не переписывается новой версией:
  * повторное нажатие кнопки не должно плодить версии политики без изменений.
  */
+/**
+ * Разумное время заполнения раздела ежедневника.
+ *
+ * not_before — жёсткий запрет: по часам портал точно знает, что день ещё не
+ * кончился, и «закрыть день» в 11 утра запрещает без всяких допущений.
+ *
+ * not_after — НЕ запрет. Позднее заполнение разрешено и только помечается: портал
+ * знает время заполнения поля, а не время события, и руководитель, реально
+ * проведший планёрку в 9:00 и севший за форму в 14:00, не должен получать отказ.
+ * Отметка считается в sectionFillLateness по updated_at, отдельно не хранится.
+ */
+export async function assertSectionNotTooEarly(c:PoolClient,sectionNum:number|null,businessDate:string) {
+  if(!sectionNum) return;
+  const rule=(await c.query(
+    `SELECT not_before FROM daily_section_time_rules
+      WHERE section_num=$1 AND effective_from<=$2::date
+      ORDER BY effective_from DESC,version DESC LIMIT 1`,[sectionNum,businessDate])).rows[0];
+  if(!rule?.not_before) return;
+  const now=(await c.query("SELECT to_char(now() AT TIME ZONE 'Europe/Moscow','HH24:MI') t, "+
+    "to_char(now() AT TIME ZONE 'Europe/Moscow','YYYY-MM-DD') d")).rows[0];
+  // Правило действует только в свои сутки: вчерашний ежедневник дозаполняют
+  // сегодня, и запрещать это по времени суток было бы уже бессмысленно.
+  if(now.d!==businessDate) return;
+  const limit=String(rule.not_before).slice(0,5);
+  if(now.t<limit)
+    throw new ApiError('VALIDATION_ERROR',
+      `Раздел ${sectionNum} нельзя заполнять раньше ${limit}: день ещё не закончился.`);
+}
+
+/**
+ * Разделы, заполненные позже разумного времени. Считается из updated_at поля —
+ * единственного факта о времени, который есть. Нужно сводке и руководителю:
+ * ежедневник, заполненный целиком в 21:40 одним заходом, виден по этой отметке.
+ */
+export async function sectionFillLateness(c:PoolClient,workItemId:string) {
+  return (await c.query(
+    `WITH fields AS (
+       SELECT (e.value->>'section_num')::int section_num,e.value->>'field_path' field_path,
+              e.value->>'section_title' section_title
+         FROM work_items w JOIN templates t ON t.id=w.template_version_id,
+              jsonb_array_elements(t.field_schema) e
+        WHERE w.id=$1 AND e.value->>'section_num' IS NOT NULL
+     ), rules AS (
+       SELECT DISTINCT ON (section_num) section_num,not_after
+         FROM daily_section_time_rules
+        WHERE not_after IS NOT NULL
+          AND effective_from<=(SELECT business_date FROM daily_log_records WHERE work_item_id=$1)
+        ORDER BY section_num,effective_from DESC,version DESC
+     )
+     SELECT fl.section_num,max(fl.section_title) section_title,
+            to_char(max(f.updated_at) AT TIME ZONE 'Europe/Moscow','HH24:MI') filled_at,
+            to_char(r.not_after,'HH24:MI') not_after
+       FROM fields fl
+       JOIN rules r ON r.section_num=fl.section_num
+       JOIN work_item_fields f ON f.work_item_id=$1 AND f.field_path=fl.field_path
+        AND f.value IS NOT NULL AND btrim(f.value)<>''
+      GROUP BY fl.section_num,r.not_after
+     HAVING (max(f.updated_at) AT TIME ZONE 'Europe/Moscow')::time > r.not_after
+      ORDER BY fl.section_num`,[workItemId])).rows as
+    {section_num:number;section_title:string|null;filled_at:string;not_after:string}[];
+}
+
 export async function setDailyPolicyForAll(ctx:ActorContext,body:any) {
   const date=dailyDate(body?.effective_from);
   const roles:string[]=Array.isArray(body?.roles)&&body.roles.length?body.roles.map(dailyRole):['RF','ROP','ROO'];
