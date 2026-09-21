@@ -1,0 +1,13 @@
+import { Router, Request, Response, NextFunction } from 'express';
+import { requireSession, requireCsrf } from '../auth/session';
+import { requireOrigin } from '../middleware/origin';
+import { enforceSessionRateLimit } from '../auth/rateLimit';
+import { getPanel, setPanelValue, setPanelGrade } from '../domain/deptPanels';
+export const deptPanelRouter=Router();
+deptPanelRouter.use(requireSession);
+deptPanelRouter.use((req,_res,next)=>{try{enforceSessionRateLimit(req.authUser!.sessionId,req.method!=='GET');next();}catch(e){next(e);}});
+const wrap=(fn:(req:Request,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{fn(req,res).catch(next);};
+const ctx=(req:Request)=>({authUser:req.authUser!,requestId:req.ctx.requestId,ip:req.ip??null,userAgent:req.header('user-agent')??null});
+deptPanelRouter.get('/',wrap(async(req,res)=>{res.json(await getPanel(ctx(req),req.query.org_unit_id as string,req.query.panel,req.query.period_month));}));
+deptPanelRouter.post('/value',requireOrigin,requireCsrf,wrap(async(req,res)=>{res.json(await setPanelValue(ctx(req),req.body??{}));}));
+deptPanelRouter.post('/grade',requireOrigin,requireCsrf,wrap(async(req,res)=>{res.json(await setPanelGrade(ctx(req),req.body??{}));}));
