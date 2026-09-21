@@ -34,8 +34,14 @@ export function ReportDateProvider({children}:{children:React.ReactNode}) {
       // Если выбранная дата не совпадает ни с одним опубликованным срезом,
       // экран был бы пустым: подставляем последнюю публикацию и сообщаем это
       // подписью среза. Данные при этом не досчитываются.
-      if(r.periods.length&&!r.periods.some(p=>p.period_end===reportDate))
-        setDate(r.periods[0].period_end);
+      // Будущий срез не подставляется: поле выбора даты ограничено
+      // сегодняшним днём и показало бы пустоту, а руководитель решил бы,
+      // что данных нет. Берём самую свежую публикацию, которая уже наступила.
+      const now=today();
+      const past=r.periods.filter(p=>p.period_end<=now);
+      const pick=(past.length?past:r.periods)[0];
+      if(pick&&!r.periods.some(p=>p.period_end===reportDate))
+        setDate(pick.period_end);
     }).catch(()=>{/* Отсутствие перечня не меняет выбранный срез. */});
     return()=>{alive=false;};
   },[]);
