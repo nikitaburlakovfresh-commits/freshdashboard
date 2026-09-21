@@ -23,3 +23,16 @@
 .beta-workspace details summary {cursor:pointer;min-height:44px;align-content:center;font-weight:600}
 .beta-workspace>.portal-panel {margin-bottom:20px}
 @media(max-width:760px) {.beta-counters,.beta-missing {grid-template-columns:repeat(2,minmax(0,1fr))}.beta-passport{grid-template-columns:1fr}.beta-filters label{flex-basis:100%}}
+
+/* Прогресс заполнения ежедневников. Цвет дублируется числом: в салоне экран
+   часто плохой, и полагаться на один оттенок нельзя. */
+.diary-progress {display:grid;gap:6px;margin-top:10px}
+.diary-progress-row {display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  padding:8px 10px;border:1px solid var(--fresh-border);border-radius:8px;font-size:13px}
+.diary-progress-row span {color:var(--fresh-text-muted)}
+.diary-progress-row strong {text-align:right}
+.diary-progress-row[data-rag="green"] strong {color:var(--fresh-success,#1c8f4b)}
+.diary-progress-row[data-rag="amber"] strong {color:var(--fresh-warning,#b26a00)}
+.diary-progress-row[data-rag="red"] strong {color:var(--fresh-danger,#c0392b)}
+.diary-progress-note {font-size:13px;margin-top:10px}
+@media(max-width:560px){.diary-progress-row{flex-direction:column;gap:2px}.diary-progress-row strong{text-align:left}}

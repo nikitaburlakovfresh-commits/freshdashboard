@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import { Link,useParams } from 'react-router-dom';
-import { getOverview,savePolicy,moscowToday,type OperationalOverview,type BranchSummary,type DailyPolicy } from '../api/dailyLogs';
+import { getOverview,savePolicy,moscowToday,type OperationalOverview,type BranchSummary,type DailyPolicy,type DiaryCompletion} from '../api/dailyLogs';
 import StatusBadge from '../components/StatusBadge';
 import LocalBusinessData from '../components/LocalBusinessData';
 import PublishedFacts from '../components/PublishedFacts';
@@ -56,10 +56,44 @@ function Branch({branch:b,detailed}:{branch:BranchSummary;detailed:boolean}) {
     <span className="portal-chip">{b.is_demo?'Тестовые данные':b.code}</span></div>
     <p className="portal-muted">{b.visibility==='PERSONAL'?'Только ваши записи':'Доступные записи филиала'}</p>
     <dl><div><dt>Черновики</dt><dd>{b.diary_drafts}</dd></div><div><dt>На проверке</dt><dd>{b.diary_submitted}</dd></div><div><dt>Приняты</dt><dd>{b.diary_accepted}</dd></div></dl>
-    {detailed&&b.diaries.map(d=><Link className="portal-task-row" key={d.id} to={`/tasks/${d.id}`}><div><strong>{d.title}</strong><span>Личная запись · {d.role}</span></div><StatusBadge status={d.status as any}/></Link>)}
+    <DiaryProgress c={b.diary_completion}/>
+    {detailed&&b.diaries.map(d=>{
+      const f=b.diary_completion?.by_role.find(r=>r.work_item_id===d.id);
+      return <Link className="portal-task-row" key={d.id} to={`/tasks/${d.id}`}>
+        <div><strong>{d.title}</strong>
+          <span>Личная запись · {d.role}
+            {f&&f.total>0&&<> · заполнено {f.filled} из {f.total} полей{f.fill_pct!==null&&<> ({Math.round(f.fill_pct)}%)</>}</>}</span></div>
+        <StatusBadge status={d.status as any}/></Link>;})}
     {detailed&&!b.diaries.length&&<p>На эту дату записей нет.</p>}
   </article>;
 }
+/**
+ * Прогресс заполнения ежедневников филиала.
+ *
+ * Проценты могут отсутствовать, и это не ноль: если окна заполнения по ролям не
+ * настроены, обязанности сдавать ежедневник нет, и «0%» был бы неправдой.
+ * Поэтому такой филиал прямо говорит, что окна не настроены.
+ */
+function DiaryProgress({c}:{c?:DiaryCompletion}) {
+  if(!c)return null;
+  if(!c.expected_roles)return <p className="portal-muted diary-progress-note">
+    Окна заполнения ежедневников не настроены: обязанности сдавать запись нет, процент не считается.</p>;
+  const rag=(v:number|null)=>v===null?undefined:v>=90?'green':v>=80?'amber':'red';
+  return <div className="diary-progress">
+    <div className="diary-progress-row" data-rag={rag(c.submitted_pct)}>
+      <span>Сдано ролями</span>
+      <strong>{c.submitted} из {c.expected_roles}{c.submitted_pct!==null&&<> · {Math.round(c.submitted_pct)}%</>}</strong>
+    </div>
+    <div className="diary-progress-row" data-rag={rag(c.fill_pct)}>
+      <span>Заполнение полей</span>
+      <strong>{c.fill_pct===null?'нет созданных записей'
+        :<>{Math.round(c.fill_pct)}% · {c.fields_filled} из {c.fields_total}</>}</strong>
+    </div>
+    {c.required_fill_pct!==null&&<div className="diary-progress-row" data-rag={rag(c.required_fill_pct)}>
+      <span>Обязательные поля</span><strong>{Math.round(c.required_fill_pct)}%</strong></div>}
+  </div>;
+}
+
 function PolicyEditor({org,policies,onSaved}:{org:string;policies:DailyPolicy[];onSaved:()=>void}) {
   const [role,setRole]=useState('RF'),[date,setDate]=useState(moscowToday),[open,setOpen]=useState(''),[close,setClose]=useState('');
   const [early,setEarly]=useState(''),[late,setLate]=useState(''),[reason,setReason]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);

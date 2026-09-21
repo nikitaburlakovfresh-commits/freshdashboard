@@ -30,6 +30,17 @@ export interface BranchSummary {
   open_tasks:number;overdue_tasks:number;awaiting_review:number;completed_tasks:number;
   diary_drafts:number;diary_submitted:number;diary_accepted:number;
   diaries:{id:string;title:string;status:string;role:string}[];
+  diary_completion:DiaryCompletion;
+}
+/**
+ * Прогресс заполнения ежедневников филиала за день. Проценты могут быть null:
+ * не настроенные окна заполнения означают отсутствие обязанности, а не провал.
+ */
+export interface DiaryCompletion {
+  expected_roles:number;created:number;submitted:number;
+  submitted_pct:number|null;fill_pct:number|null;required_fill_pct:number|null;
+  fields_filled:number;fields_total:number;
+  by_role:{work_item_id:string;role:string|null;status:string;filled:number;total:number;fill_pct:number|null}[];
 }
 export interface OperationalOverview {
   business_date:string;current_business_date:string;server_time:string;
