@@ -107,11 +107,20 @@ function PolicyEditor({org,policies,onSaved}:{org:string;policies:DailyPolicy[];
     try{await savePolicy(org,{role,effective_from:date,base_open_time:open,base_close_time:close,early_open_hours:Number(early),late_close_hours:Number(late),expected_version:previous?.version??0,reason});onSaved();}
     catch(e:any){setError(e.message);}finally{setBusy(false);}
   }
-  return <details className="portal-panel"><summary>Настроить окно заполнения · только РМ этого филиала</summary>
+  // Пока окон нет, ежедневник на филиале создать нельзя вообще, поэтому блок
+  // раскрыт и называет проблему. Свёрнутый блок с нейтральным заголовком найти
+  // было невозможно: руководитель не знает, что настройка вообще существует.
+  const missing=policies.length===0;
+  return <details className="portal-panel" open={missing}>
+    <summary>{missing?'Окна заполнения ежедневников не настроены · настроить'
+      :'Настроить окно заполнения · только РМ этого филиала'}</summary>
+    {missing&&<p role="alert">Пока окно не настроено, ежедневник на этом филиале создать нельзя —
+      ни руководителю филиала, ни РОП, ни РОО. Настройте окно для каждой роли, которая обязана сдавать запись.</p>}
     <p>Версионные настройки, без изменения ранее созданных записей. Часы не предзаполнены неподтверждёнными правилами.</p>
     {policies.map(p=><p key={p.id}>{p.role_code}: v{p.version} с {p.effective_from} · {p.base_open_time.slice(0,5)}–{p.base_close_time.slice(0,5)} МСК, раньше на {p.early_open_hours} ч., позже на {p.late_close_hours} ч. Основание: {p.reason}</p>)}
     <form onSubmit={save}><div className="beta-filters">
-      <label>Роль окна<select aria-label="Роль окна" value={role} onChange={e=>setRole(e.target.value)}>{['RF','ROP','ROO'].map(r=><option key={r}>{r}</option>)}</select></label>
+      <label>Роль окна<select aria-label="Роль окна" value={role} onChange={e=>setRole(e.target.value)}>{[['RF','Руководитель филиала'],['ROP','Руководитель отдела продаж'],['ROO','Руководитель отдела оценки']]
+        .map(([r,name])=><option key={r} value={r}>{name}</option>)}</select></label>
       <label>Действует с<input aria-label="Действует с" required type="date" value={date} onChange={e=>setDate(e.target.value)}/></label>
       <label>Базовое открытие<input aria-label="Базовое открытие" required type="time" value={open} onChange={e=>setOpen(e.target.value)}/></label>
       <label>Базовое закрытие<input aria-label="Базовое закрытие" required type="time" value={close} onChange={e=>setClose(e.target.value)}/></label>

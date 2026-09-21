@@ -79,7 +79,9 @@ export default function PersonalDayPage() {
         <button className="portal-primary" disabled={opening||(!day.record&&!day.policy)} onClick={open}>{opening?'Открываю…':day.record?'Открыть ежедневник':'Создать ежедневник за дату'}</button></div>
         {day.record?<><p>Состояние: <StatusBadge status={day.record.status as any}/></p><p>Окно: {new Date(day.record.window_open).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} — {new Date(day.record.window_close).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК.</p>
           {!day.record.can_fill&&<p>Окно закрыто. Сохранённую запись можно читать, редактирование заблокировано сервером.</p>}</>:
-          <p>{day.policy?'Окно настроено руководителем. Создание разрешено только внутри него; повторное открытие не создаёт дубль.':'Сначала РМ должен настроить окно заполнения для этой роли в карточке филиала.'}</p>}
+          <p>{day.policy?'Окно настроено руководителем. Создание разрешено только внутри него; повторное открытие не создаёт дубль.'
+            :<>Окно заполнения для этой роли не настроено, и создать ежедневник нельзя.{' '}
+              <Link to={`/branches/${org}`}>Настроить окно на странице филиала →</Link></>}</p>}
         <p className="portal-muted">28 задач дня по вашей роли, разделами. Поля сохраняются сами; отметка
           «Не выполнено» — это ответ, а не пропуск.</p>
         <Link to={`/branches/${org}`}>Карточка филиала →</Link>
