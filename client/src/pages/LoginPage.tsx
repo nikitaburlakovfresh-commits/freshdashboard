@@ -50,7 +50,7 @@ export default function LoginPage() {
       <form className="login-form"
         onSubmit={onSubmit}
         style={{
-          width: 380,
+          width: 'min(380px, 100%)',
           background: 'var(--fresh-surface)',
           borderRadius: 16,
           padding: 32,

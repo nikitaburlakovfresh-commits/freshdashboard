@@ -32,3 +32,16 @@
 .card-table-scroll th{white-space:nowrap;}
 /* План рядом с фактом — тем же числом, но тише. */
 .card-tile-plan{color:var(--fresh-text-muted);font-weight:600;}
+
+/* Телефон и узкий планшет. Строка показателя в четыре колонки требует около
+   350 px только под сетку, поэтому на узком экране название уходит на свою
+   строку, а полоса, знак и значение остаются в одну. Плитки — в один столбец:
+   два столбца по 150 px режут подписи. */
+@media(max-width:760px){
+  .card-tiles{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+}
+@media(max-width:560px){
+  .card-tiles{grid-template-columns:1fr}
+  .card-bars li{grid-template-columns:1fr auto auto;row-gap:4px}
+  .card-bars li>:first-child{grid-column:1/-1}
+}

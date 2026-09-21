@@ -188,3 +188,23 @@
 .intro-skip:hover{border-color:rgba(255,255,255,.6)}
 @keyframes intro-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.intro-enter{animation:none}}
+
+/* Стартовый экран на телефоне: кнопка шире и выше нижней кромки, чтобы её не
+   перекрывала панель браузера, а ролик не обрезался в портретной ориентации. */
+@media(max-width:560px){
+  .intro-overlay{bottom:max(5vh,env(safe-area-inset-bottom,0px))}
+  .intro-enter{min-width:0;width:min(320px,86vw);padding:15px 20px;font-size:17px}
+}
+/* В портретной ориентации кадр 16:9 неизбежно уже экрана. Заполнять его
+   целиком нельзя — знак Fresh обрезается по краям, — поэтому ролик идёт во всю
+   ширину, а фон экрана взят из его собственного кадра (20,24,33 в верхних
+   углах). Полосы сверху и снизу перестают читаться как обрезка: кадр переходит
+   в фон страницы. */
+@media(orientation:portrait) and (max-width:820px){
+  .intro-screen{background:#141821}
+  /* Кромки кадра растворяются в фоне: у ролика верх темнее низа, и без этого
+     нижняя граница читалась как шов поперёк экрана. */
+  .intro-video{height:auto;width:100%;object-fit:contain;background:transparent;
+    -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 9%,#000 91%,transparent 100%);
+    mask-image:linear-gradient(to bottom,transparent 0,#000 9%,#000 91%,transparent 100%)}
+}

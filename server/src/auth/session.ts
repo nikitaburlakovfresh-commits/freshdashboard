@@ -6,9 +6,18 @@ import { ApiError } from '../util/errors';
 import { sha256, constantTimeEqual, deriveCsrfToken, randomToken } from '../util/crypto';
 
 export const SESSION_COOKIE_NAME = '__Host-fresh_session';
-// Contract §7 proposal: idle 30min, absolute 8h.
-export const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-export const ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
+// Сроки сессии по решению владельца: выход по 7 часам БЕЗДЕЙСТВИЯ, а не по
+// получасу, как предлагал контракт §7. Практика портала: руководитель держит
+// вкладку открытой весь день и возвращается к ней между поездками, а повторный
+// вход каждые полчаса он воспринимает как сбой.
+//
+// Абсолютный срок поднят до суток. Он обязан быть больше срока бездействия,
+// иначе выход всё равно наступал бы через 8 часов после входа независимо от
+// работы. Сутки — сознательный компромисс: украденная cookie живёт дольше, чем
+// при 8 часах, поэтому сам выход из портала, смена пароля и отзыв доступа
+// закрывают сессию немедленно и остаются главной защитой.
+export const IDLE_TIMEOUT_MS = 7 * 60 * 60 * 1000;
+export const ABSOLUTE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
 export interface AuthedUser {
   sessionId: string;
