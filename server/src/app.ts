@@ -12,6 +12,7 @@ import { dailyRouter } from './routes/dailyLogs';
 import { reportFactsRouter } from './routes/reportFacts';
 import { reportDetailRouter } from './routes/reportDetail';
 import { metricsRouter } from './routes/metrics';
+import { roleViewRouter } from './routes/roleView';
 import { ApiError, errorBody } from './util/errors';
 
 export function createApp() {
@@ -42,6 +43,7 @@ export function createApp() {
   app.use('/api/v1/report-facts', reportFactsRouter);
   app.use('/api/v1/report-detail', reportDetailRouter);
   app.use('/api/v1/metrics', metricsRouter);
+  app.use('/api/v1/view-as', roleViewRouter);
 
   app.get('/api/v1/healthz', (_req, res) => {
     res.status(200).json({ status: 'ok' });

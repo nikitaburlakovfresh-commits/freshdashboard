@@ -6,6 +6,7 @@ import Icon, { type IconName } from './Icon';
 import { canSeeNavLink, navPermissions, type NavLinkDef } from './navAccess';
 import { getOrganizationTree } from '../api/organization';
 import { useReportDate } from '../state/reportDate';
+import RoleViewBar from './RoleViewBar';
 
 type NavGroup = { label: string; links: NavLinkDef<IconName>[] };
 
@@ -80,6 +81,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, [theme]);
   const permissions = navPermissions(me?.grants ?? []);
   const grants = me?.grants ?? [];
+  // Просмотр глазами роли предлагаем только владельцу платформы: у остальных
+  // ролей этой кнопки быть не должно даже визуально.
+  const isOwner = grants.some(g => g.role === 'SUPER_ADMIN');
   const visible = (groups: NavGroup[]) => groups
     .map(group => ({ ...group, links: group.links.filter(link => canSeeNavLink(link, grants, permissions)) }))
     .filter(group => group.links.length > 0);
@@ -205,8 +209,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <button className="shell-icon-button" aria-label={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
             onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Сменить тему"><Icon name={theme === 'dark' ? 'sun' : 'moon'} /></button>
           <NavLink className="shell-icon-button" to="/notifications" aria-label="Открыть уведомления"><Icon name="bell" /></NavLink>
+          <RoleViewBar isOwner={isOwner} slot="button" />
         </div>
       </header>
+      <RoleViewBar isOwner={isOwner} slot="banner" />
       <main id="portal-main" className="main-content">{children}</main>
     </div>
   </div>;

@@ -17,7 +17,21 @@ export interface AuthedUser {
   fullName: string;
   csrfToken: string;
   rawToken: string;
+  // Режим просмотра «глазами роли» (миграция 036). Когда он активен, userId/
+  // login/fullName выше — это ЛИЧНОСТЬ ПРОСМОТРА, чтобы разбросанные по
+  // доменным файлам проверки прав работали без изменений. Настоящий владелец
+  // сессии сохранён в viewAs.adminUserId и не теряется.
+  viewAs?: {
+    adminUserId: string;
+    adminLogin: string;
+    adminFullName: string;
+    expiresAt: string;
+    startedAt: string;
+  };
 }
+
+// Срок режима просмотра — как на старом портале (/opt/fresh-rbac): 30 минут.
+export const VIEW_AS_TTL_MS = 30 * 60 * 1000;
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -89,8 +103,13 @@ export async function loadSession(rawToken: string): Promise<AuthedUser | null> 
     `SELECT s.id as session_id, s.user_id, s.csrf_digest, s.captured_auth_epoch,
             s.created_at, s.last_seen_at, s.expires_at, s.revoked_at,
             u.login, u.full_name, u.is_active, u.auth_epoch, u.password_hash_updated_at,
-            u.password_last_shared_indicator
+            u.password_last_shared_indicator,
+            s.view_as_user_id, s.view_as_expires_at, s.view_as_started_at,
+            v.login as view_login, v.full_name as view_full_name,
+            v.is_active as view_is_active, v.user_kind as view_user_kind,
+            v.password_last_shared_indicator as view_shared
      FROM sessions s JOIN app_users u ON u.id = s.user_id
+     LEFT JOIN app_users v ON v.id = s.view_as_user_id
      WHERE s.token_digest = $1`,
     [tokenDigest],
   );
@@ -115,7 +134,7 @@ export async function loadSession(rawToken: string): Promise<AuthedUser | null> 
   const csrfToken = deriveCsrfToken(rawToken, config.csrfHmacSecret);
   if (!constantTimeEqual(sha256(csrfToken), row.csrf_digest)) return null;
 
-  return {
+  const base: AuthedUser = {
     sessionId: row.session_id,
     userId: row.user_id,
     login: row.login,
@@ -123,6 +142,55 @@ export async function loadSession(rawToken: string): Promise<AuthedUser | null> 
     csrfToken,
     rawToken,
   };
+
+  // Режим просмотра: истёкший или неподходящий не роняет сессию, а просто
+  // возвращает администратора к самому себе. Отсутствие данных не равно
+  // потере доступа.
+  if (!row.view_as_user_id) return base;
+  if (now > new Date(row.view_as_expires_at).getTime()) {
+    await pool.query(
+      `UPDATE sessions SET view_as_user_id = NULL, view_as_expires_at = NULL,
+              view_as_started_at = NULL WHERE id = $1`,
+      [row.session_id],
+    );
+    await pool.query(
+      `INSERT INTO role_view_log(session_id, admin_user_id, admin_login,
+           target_user_id, target_login, action)
+       VALUES ($1,$2,$3,$4,$5,'EXPIRE')`,
+      [row.session_id, row.user_id, row.login, row.view_as_user_id, row.view_login ?? '?'],
+    );
+    return base;
+  }
+  if (!row.view_is_active || row.view_user_kind !== 'INDIVIDUAL' || row.view_shared) {
+    return base;
+  }
+
+  return {
+    ...base,
+    userId: row.view_as_user_id,
+    login: row.view_login,
+    fullName: row.view_full_name,
+    viewAs: {
+      adminUserId: row.user_id,
+      adminLogin: row.login,
+      adminFullName: row.full_name,
+      expiresAt: new Date(row.view_as_expires_at).toISOString(),
+      startedAt: new Date(row.view_as_started_at).toISOString(),
+    },
+  };
+}
+
+// В режиме просмотра портал только показывает. Изменяющие запросы
+// отклоняются, чтобы действие не попало в аудит от имени человека, который
+// его не совершал. Исключение — выход из режима.
+export function blockWritesWhileViewing(req: Request, _res: Response, next: NextFunction) {
+  if (!req.authUser?.viewAs) return next();
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  if (req.path === '/api/v1/view-as/exit') return next();
+  return next(new ApiError(
+    'VIEW_AS_READ_ONLY',
+    'Включён просмотр глазами роли — портал только показывает. Вернитесь к своей учётной записи, чтобы изменять данные.',
+  ));
 }
 
 export function setSessionCookie(res: Response, rawToken: string, expiresAt: Date) {
@@ -153,7 +221,10 @@ export async function requireSession(req: Request, _res: Response, next: NextFun
       return next(new ApiError('SESSION_REVOKED', 'Сессия недействительна или отозвана.'));
     }
     req.authUser = authed;
-    next();
+    // Запрет записи в режиме просмотра стоит именно здесь: через эту проверку
+    // проходит каждый защищённый маршрут, в том числе те, где сессия подключена
+    // поштучно (workItems, notifications). Единая точка надёжнее десяти.
+    return blockWritesWhileViewing(req, _res, next);
   } catch (err) {
     next(err);
   }
