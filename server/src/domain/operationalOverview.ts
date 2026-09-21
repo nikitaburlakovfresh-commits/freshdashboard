@@ -61,8 +61,8 @@ export async function operationalOverview(ctx:ActorContext,dateRaw:unknown,org?:
         (SELECT count(*) FROM jsonb_array_elements(t.field_schema) e)::int total,
         (SELECT count(*) FROM jsonb_array_elements(t.field_schema) e
           WHERE coalesce(e.value->>'required','false')='true')::int required_total,
-        count(f.id) FILTER(WHERE f.value IS NOT NULL AND btrim(f.value)<>'')::int filled,
-        count(f.id) FILTER(WHERE f.value IS NOT NULL AND btrim(f.value)<>''
+        count(f.field_path) FILTER(WHERE f.value IS NOT NULL AND btrim(f.value)<>'')::int filled,
+        count(f.field_path) FILTER(WHERE f.value IS NOT NULL AND btrim(f.value)<>''
           AND EXISTS(SELECT 1 FROM jsonb_array_elements(t.field_schema) e
             WHERE e.value->>'field_path'=f.field_path AND coalesce(e.value->>'required','false')='true'))::int required_filled
       FROM visible v
