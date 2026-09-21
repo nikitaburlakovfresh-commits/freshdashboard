@@ -98,6 +98,19 @@
   border-radius:8px;background:var(--fresh-surface);color:inherit}
 @media(max-width:860px){.shell-report-date>span{display:none}.shell-report-date{padding-right:6px}}
 
+/* Загрузка отчётов в шапке: действие, с которого начинается рабочий день, и
+   ждать его в боковом меню неудобно. На узком экране остаётся только значок —
+   подпись первой уступает место дате среза, но кнопка сохраняет размер пальца. */
+.shell-topbar-upload{display:inline-flex;align-items:center;gap:8px;min-height:36px;
+  padding:0 12px;border-radius:9px;border:1px solid var(--fresh-blue);
+  background:var(--fresh-blue);color:#fff;font-size:12px;font-weight:600;
+  text-decoration:none;white-space:nowrap;transition:filter .15s ease}
+.shell-topbar-upload:hover{filter:brightness(1.08)}
+.shell-topbar-upload.active{filter:brightness(.92)}
+.shell-topbar-upload svg{width:16px;height:16px}
+@media(max-width:1080px){.shell-topbar-upload>span{display:none}
+  .shell-topbar-upload{min-width:44px;min-height:44px;justify-content:center;padding:0}}
+
 /* Просмотр глазами роли. Полоса намеренно яркая и несворачиваемая: пока она
    на экране, данные принадлежат другому сотруднику. */
 .role-view-bar{display:flex;align-items:center;gap:12px;padding:10px 24px;

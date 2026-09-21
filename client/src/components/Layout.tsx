@@ -221,6 +221,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               aria-label="Дата отчётного среза"
               onChange={e => setReportDate(e.target.value)} />
           </label>
+          {canSeeNavLink({ path: '/prepared-reports', label: '', icon: 'upload' }, grants, permissions)
+            && <NavLink className="shell-topbar-upload" to="/prepared-reports"
+              title="Загрузить пакет отчётов QLIK за новый срез"
+              aria-label="Загрузить отчёты QLIK">
+              <Icon name="upload" /><span>Загрузить QLIK</span>
+            </NavLink>}
           <button className="shell-icon-button" aria-label={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
             onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Сменить тему"><Icon name={theme === 'dark' ? 'sun' : 'moon'} /></button>
           <NavLink className="shell-icon-button shell-bell" to={pendingReg > 0 ? '/access/registrations' : '/notifications'}

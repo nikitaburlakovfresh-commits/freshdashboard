@@ -41,6 +41,15 @@ export interface Overview {
   metric_names:Record<string,string>;
   scoring:{configured:boolean;model_id:string|null;month_progress:number|null;green_score_from:number|null;amber_score_from:number|null};
   run_rates:RunRateTile[];
+  // Рейтинг регионального менеджера: считает сервер по настроенной редакции,
+  // клиент только показывает число, цвет и расшифровку.
+  manager_rating:{configured:boolean;model_id:string|null;
+    green_from:number|null;amber_from:number|null;note:string|null;
+    managers:{group_key:string;group_label:string;division_name:string|null;
+      branches:number;rating:number|null;rag:'GREEN'|'AMBER'|'RED'|'NONE';
+      formula:string;weight_used:number;
+      components:{code:string;label:string;weight:number;value:number|null;
+        fact:number|null;plan:number|null;reason:string|null}[]}[]};
   network:{branches_with_score:number;average_score:number|null;
     green:number;amber:number;red:number;without_score:number};
   focus:{month:string;configured:boolean;configuration_id?:string|null;

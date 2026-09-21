@@ -74,31 +74,10 @@ function focusMonthLabel(month:string):string {
   return m>=1&&m<=12?`${MONTHS[m-1]} ${y} г.`:month;
 }
 /**
- * Средний балл группы РМ считается только по филиалам с рассчитанным баллом.
- * Если балла нет ни у одного филиала, показывается «—», а не ноль.
+ * Среднего балла филиалов зоны здесь больше нет. Рядом с фамилией стоит рейтинг
+ * регионала, который считает сервер по своей формуле: среднее из баллов
+ * филиалов — другая величина, и она уравнивала большой филиал с маленьким.
  */
-function groupAverage(branches:BranchCard[]):number|null {
-  const scored=branches.filter(b=>b.score!==null);
-  return scored.length?scored.reduce((sum,b)=>sum+(b.score??0),0)/scored.length:null;
-}
-function groupScore(branches:BranchCard[]):string {
-  const avg=groupAverage(branches);
-  return avg===null?'—':`${Math.round(avg)}%`;
-}
-/**
- * Цвет руководителя — по его собственному баллу, а не по худшему филиалу:
- * от зелёной границы зелёный, от жёлтой жёлтый, ниже красный. Границы приходят
- * из действующей модели балла, своих порогов клиент не держит. Без модели цвет
- * не назначается.
- */
-function groupRag(branches:BranchCard[],
-  bands:{green_score_from:number|null;amber_score_from:number|null}):string {
-  const avg=groupAverage(branches);
-  if(avg===null||bands.green_score_from===null||bands.amber_score_from===null) return 'NONE';
-  if(avg>=bands.green_score_from) return 'GREEN';
-  return avg>=bands.amber_score_from?'AMBER':'RED';
-}
-
 export default function NetworkScorePage() {
   // Период факта задаётся глобальным срезом из топбара: от начала месяца
   // выбранной даты до самой даты. Локального дубля выбора даты на экране нет.
@@ -136,7 +115,7 @@ export default function NetworkScorePage() {
   // выбранного статуса, а РМ без таких филиалов из списка уходит целиком.
   const visibleBranches=(data?.branches??[])
     .filter(b=>ragFilter===null||b.score_rag===ragFilter);
-  const branchesByManager=groupByManager(visibleBranches,managers);
+  const branchesByManager=groupByManager(visibleBranches,data?.manager_rating?.managers??[]);
 
   return <div className="portal-page network-kpi">
     <header className="overview-head">
@@ -227,9 +206,11 @@ export default function NetworkScorePage() {
                   ?list.filter(k=>k!==group.key):[...list,group.key])}>
                 <span className="manager-chevron" data-open={expanded?'1':undefined} aria-hidden="true"/>
                 <strong>{group.title}</strong>
-                <span className="manager-score tabnum" data-rag={groupRag(group.branches,{green_score_from:data?.scoring.green_score_from??null,
-                    amber_score_from:data?.scoring.amber_score_from??null})}>
-                  {groupScore(group.branches)}</span>
+                <span className="manager-score tabnum" data-rag={group.rating?.rag??'NONE'}
+                  title={group.rating
+                    ?`Рейтинг: ${group.rating.formula}`
+                    :'Рейтинг зоны не рассчитан: нет опубликованных плана и факта'}>
+                  {group.rating?.rating!=null?`${Math.round(group.rating.rating)}%`:'—'}</span>
                 <span className="manager-count">· {group.branches.length} филиалов
                   {group.division&&<> · {group.division}</>}</span>
               </button>
@@ -249,29 +230,28 @@ export default function NetworkScorePage() {
   </div>;
 }
 
-interface Group {key:string;title:string;division:string|null;branches:BranchCard[]}
+interface Group {key:string;title:string;division:string|null;branches:BranchCard[];
+  rating:RmRating|null}
+type RmRating=Overview['manager_rating']['managers'][number];
 /**
  * Группировка филиалов по зоне регионального менеджера. Привязка приходит с
  * сервера из истории справочника на дату среза; филиал без привязки попадает в
  * отдельную явную группу и не приписывается чужому РМ.
  */
-function groupByManager(branches:BranchCard[],_summary:DivisionSummary|null):Group[] {
+function groupByManager(branches:BranchCard[],ratings:RmRating[]):Group[] {
   const groups=new Map<string,Group>();
   for(const b of branches) {
     const key=b.group_key??'none';
     const g=groups.get(key)??{key,title:b.group_label??'Филиал без зоны РМ',
-      division:b.division_name??null,branches:[]};
+      division:b.division_name??null,branches:[],
+      rating:ratings.find(r=>r.group_key===key)??null};
     g.branches.push(b);groups.set(key,g);
   }
-  // Сортировка по собственному проценту от большего к меньшему: руководителю
-  // нужен порядок результата, а не алфавита. Группы без рассчитанного балла
-  // уходят в конец — отсутствие балла не равно нулю.
-  const pct=(g:Group)=>{
-    const scored=g.branches.filter(b=>b.score!==null);
-    return scored.length?scored.reduce((sum,b)=>sum+(b.score??0),0)/scored.length:null;
-  };
+  // Порядок — от лучшего рейтинга к худшему: руководителю нужен результат, а не
+  // алфавит. Зона без рассчитанного рейтинга уходит в конец: отсутствие данных
+  // не равно худшему результату.
   return [...groups.values()].sort((a,b)=>{
-    const pa=pct(a),pb=pct(b);
+    const pa=a.rating?.rating??null,pb=b.rating?.rating??null;
     if(pa===null&&pb===null) return a.title.localeCompare(b.title,'ru');
     if(pa===null) return 1;
     if(pb===null) return -1;

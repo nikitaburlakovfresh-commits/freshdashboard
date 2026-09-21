@@ -7,6 +7,7 @@ import { uuid } from '../reporting/storage';
 import { evaluateRag, resolveThresholds, thresholdFor, type Rag } from './thresholds';
 import { computeBranchScore, monthProgress, resolveScoringModel } from './scoring';
 import { funnelConversions, buyback45Shares, stockTurnover } from './derived';
+import { resolveRmRatingModel, computeRmRating } from './rmRating';
 import { resolveFocusConfiguration } from './focus';
 import { branchAffiliations } from './orgHierarchy';
 
@@ -42,16 +43,26 @@ function runRateTiles(totals:Map<string,number>,on:string):RunRateTile[] {
     return {value:fact*a/plan*100,basis:null};
   };
   const sales=runRate('sales','plan'),margin=runRate('margin','planMargin');
+  const supplies=runRate('suppliesFact','suppliesPlan');
   const revenue=get('revenue'),salesFact=get('sales');
+  // Оборачиваемость склада по сети считается от сложенных величин, а не как
+  // среднее оборачиваемостей филиалов: среднее из отношений не равно отношению
+  // сумм и завышает вклад маленьких складов.
+  const forecastTotal=get('forecast'),stockStartTotal=get('stockStart');
+  const turnover=forecastTotal!==null&&stockStartTotal!==null&&stockStartTotal>0
+    ?forecastTotal/stockStartTotal:null;
+  const turnoverBasis=forecastTotal===null?'FACT_NOT_PUBLISHED:forecast'
+    :stockStartTotal===null?'FACT_NOT_PUBLISHED:stockStart'
+      :stockStartTotal>0?null:'STOCK_START_NOT_POSITIVE';
   return [
     {code:'sales_runrate',label:'Run-rate продажи',hint:'факт / план шт',format:'PCT',
       value:sales.value,fact:salesFact,plan:get('plan'),basis:sales.basis},
-    {code:'stock_turnover',label:'Оборачиваемость склада',hint:'в темпе продаж',format:'RATIO',
-      value:null,fact:salesFact,plan:null,basis:'STOCK_START_NOT_PUBLISHED'},
+    {code:'stock_turnover',label:'Оборачиваемость склада',hint:'прогноз продаж / склад на 1 число',format:'RATIO',
+      value:turnover,fact:get('forecast'),plan:get('stockStart'),basis:turnoverBasis},
     {code:'margin_runrate',label:'Run-rate маржа',hint:'к плану маржи',format:'PCT',
       value:margin.value,fact:get('margin'),plan:get('planMargin'),basis:margin.basis},
     {code:'supplies_runrate',label:'Run-rate поставки',hint:'к плану поставок',format:'PCT',
-      value:null,fact:null,plan:null,basis:'SUPPLIES_NOT_PUBLISHED'},
+      value:supplies.value,fact:get('suppliesFact'),plan:get('suppliesPlan'),basis:supplies.basis},
     {code:'avg_sale_price',label:'Средняя цена продажи',hint:'выручка на 1 авто',format:'RUB',
       value:revenue!==null&&salesFact!==null&&salesFact>0?revenue/salesFact:null,
       fact:revenue,plan:null,
@@ -151,6 +162,23 @@ export async function branchOverview(auth:AuthedUser,query:any) {
     const totals=new Map<string,number>();
     for(const b of branches)for(const m of b.metrics)
       totals.set(m.metric,(totals.get(m.metric)??0)+m.value);
+    // Рейтинг регионального менеджера считается по зоне целиком: величины его
+    // филиалов складываются, и выполнение считается от сложенного. Средним
+    // баллом филиалов его заменять нельзя — это другая величина.
+    const rmModel=await resolveRmRatingModel(c,q.end);
+    const zoneSums=new Map<string,Map<string,number>>();
+    for(const b of branches) {
+      const key=b.group_key??'none';
+      const bucket=zoneSums.get(key)??new Map<string,number>();
+      for(const m of b.metrics)bucket.set(m.metric,(bucket.get(m.metric)??0)+m.value);
+      zoneSums.set(key,bucket);
+    }
+    const managerRatings=rmModel?[...zoneSums.entries()].map(([key,sums])=>{
+      const zone=branches.filter(b=>(b.group_key??'none')===key);
+      return {group_key:key,group_label:zone[0]?.group_label??'Филиал без зоны РМ',
+        division_name:zone[0]?.division_name??null,branches:zone.length,
+        ...computeRmRating(rmModel,sums,q.end)};
+    }).sort((x,y)=>(y.rating??-1)-(x.rating??-1)||x.group_label.localeCompare(y.group_label,'ru')):[];
     const scored=branches.filter(b=>b.score!==null);
     const count=(rag:Rag)=>scored.filter(b=>b.score_rag===rag).length;
     return {mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:q.start,period_end:q.end,
@@ -168,6 +196,9 @@ export async function branchOverview(auth:AuthedUser,query:any) {
         green:count('GREEN'),amber:count('AMBER'),red:count('RED'),
         without_score:branches.length-scored.length},
       run_rates:runRateTiles(totals,q.end),
+      manager_rating:{configured:!!rmModel,model_id:rmModel?.id??null,
+        green_from:rmModel?.green_from??null,amber_from:rmModel?.amber_from??null,
+        note:rmModel?.note??null,managers:managerRatings},
       focus:{month:`${q.end.slice(0,7)}-01`,configured:!!focus,
         configuration_id:focus?.id??null,
         // Факт фокуса не выводится из агрегатов до объявления соответствия
