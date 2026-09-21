@@ -70,6 +70,12 @@
 .overview-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:0 0 14px}
 .overview-head h1{margin:0;font-size:26px;line-height:1.2}
 .overview-subline{margin:4px 0 0;font-size:13px;color:var(--fresh-text-muted)}
+/* Предупреждение о свежести данных. Намеренно заметное: руководитель принимает
+   решения по числам и должен видеть, что они не на выбранную им дату. */
+.overview-stale{margin:6px 0 0;font-size:12px;line-height:1.4;color:var(--fresh-amber-text,#b26a00);
+  background:var(--fresh-amber-bg,rgba(255,176,32,.12));border:1px solid var(--fresh-amber-border,rgba(255,176,32,.35));
+  border-radius:8px;padding:6px 10px;max-width:640px}
+@media(max-width:560px){.overview-stale{max-width:none}}
 .overview-head-actions{display:flex;gap:8px;flex-wrap:wrap}
 .overview-meta{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12px;margin:0 0 12px}
 .runrate-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:0 0 18px}

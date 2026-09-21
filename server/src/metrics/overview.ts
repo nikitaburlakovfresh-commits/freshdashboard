@@ -8,6 +8,7 @@ import { evaluateRag, resolveThresholds, thresholdFor, type Rag } from './thresh
 import { computeBranchScore, monthProgress, resolveScoringModel } from './scoring';
 import { funnelConversions, buyback45Shares, stockTurnover } from './derived';
 import { resolveRmRatingModel, computeRmRating } from './rmRating';
+import { resolveEffectivePeriod } from './effectivePeriod';
 import { resolveFocusConfiguration } from './focus';
 import { branchAffiliations } from './orgHierarchy';
 
@@ -87,15 +88,27 @@ export async function branchOverview(auth:AuthedUser,query:any) {
     if(q.org&&!grants.some(g=>g.org_unit_id===q.org))throw new ApiError('NOT_FOUND','Филиал недоступен.');
     const allowed=grants.filter(g=>!q.org||g.org_unit_id===q.org)
       .flatMap(g=>g.metrics.map(metric=>({org:g.org_unit_id,metric})));
+    // Срез разрешается по последнему опубликованному периоду не позже выбранной
+    // даты. Иначе выбор сегодняшнего числа обнуляет экран, пока отчёты за него
+    // не загружены, хотя вчерашние опубликованы.
+    const period=await resolveEffectivePeriod(c,q.start,q.end,
+      [...new Set(grants.filter(g=>!q.org||g.org_unit_id===q.org)
+        .map(g=>g.org_unit_id).filter((id):id is string=>!!id))]);
+    const on=period?.end??q.end;
+    const from=period?.start??q.start;
     if(!allowed.length)return {mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:q.start,period_end:q.end,
+      requested_end:q.end,data_is_stale:false,
       metric_names:METRIC_NAMES,branches:[],thresholds_configured:false,
-      scoring:{configured:false,model_id:null,month_progress:null},
+      manager_rating:{configured:false,model_id:null,green_from:null,amber_from:null,note:null,managers:[]},
+      scoring:{configured:false,model_id:null,month_progress:null,
+        green_score_from:null,amber_score_from:null},
       network:{branches_with_score:0,average_score:null,green:0,amber:0,red:0,without_score:0},
       run_rates:runRateTiles(new Map(),q.end),
-      focus:{month:`${q.end.slice(0,7)}-01`,configured:false,slots:[]}};
+      focus:{month:`${on.slice(0,7)}-01`,configured:false,slots:[]}};
     const rows=(await c.query(`SELECT s.id snapshot_id,s.org_unit_id,s.metric,s.value::text value,s.unit,
       s.revision,s.created_at,n.display_name,d.id deviation_task_id,d.work_item_id,w.status task_status,
-      w.title task_title,w.assignee_user_id task_assignee_id
+      w.title task_title,w.assignee_user_id task_assignee_id,
+      (SELECT du.lifecycle_state FROM org_directory_units du WHERE du.id=s.org_unit_id) lifecycle_state
       FROM report_fact_snapshots s
       JOIN report_fact_current p ON p.snapshot_id=s.id
       LEFT JOIN metric_deviation_tasks d ON d.snapshot_id=s.id
@@ -110,17 +123,18 @@ export async function branchOverview(auth:AuthedUser,query:any) {
         -- в отчётах за свои периоды, и скрывать его задним числом из истории нельзя.
         AND NOT EXISTS(SELECT 1 FROM org_directory_units d
           WHERE d.id=s.org_unit_id AND d.lifecycle_state='CLOSED')
-      ORDER BY n.display_name,s.metric LIMIT 2001`,[q.start,q.end,JSON.stringify(allowed)])).rows;
+      ORDER BY n.display_name,s.metric LIMIT 2001`,[from,on,JSON.stringify(allowed)])).rows;
     if(rows.length>2000)throw invalid('Слишком много строк: выберите один филиал.');
-    const thresholds=await resolveThresholds(c,q.end);
+    const thresholds=await resolveThresholds(c,on);
     type MetricCell={metric:string;metric_name:string;value:number;unit:string;rag:Rag;basis:string|null;
       basis_value:number|null;threshold_id:string|null;revision:number;published_at:string;snapshot_id:string;
       deviation_task:{id:string;work_item_id:string;status:string;title:string;assignee_user_id:string|null}|null};
-    const byOrg=new Map<string,{org_unit_id:string;display_name:string;metrics:MetricCell[]}>();
+    const byOrg=new Map<string,{org_unit_id:string;display_name:string;lifecycle_state:string;metrics:MetricCell[]}>();
     const planFor=new Map<string,number>();
     for(const r of rows)if(r.metric==='plan')planFor.set(r.org_unit_id,Number(r.value));
     for(const r of rows) {
-      const entry=byOrg.get(r.org_unit_id)??{org_unit_id:r.org_unit_id,display_name:r.display_name,metrics:[] as MetricCell[]};
+      const entry=byOrg.get(r.org_unit_id)??{org_unit_id:r.org_unit_id,display_name:r.display_name,
+        lifecycle_state:r.lifecycle_state,metrics:[] as MetricCell[]};
       const t=thresholdFor(thresholds,r.metric,r.org_unit_id);
       const {rag,basis_value}=evaluateRag(t,Number(r.value),planFor.get(r.org_unit_id)??null);
       entry.metrics.push({metric:r.metric,metric_name:(METRIC_NAMES as Record<string,string>)[r.metric]??r.metric,
@@ -131,12 +145,12 @@ export async function branchOverview(auth:AuthedUser,query:any) {
       byOrg.set(r.org_unit_id,entry);
     }
     // Модель балла и фокусы месяца берутся из настроек портала на дату среза.
-    const model=await resolveScoringModel(c,q.end);
-    const focus=await resolveFocusConfiguration(c,q.end);
-    const affiliations=await branchAffiliations(c,[...byOrg.keys()],q.end);
+    const model=await resolveScoringModel(c,on);
+    const focus=await resolveFocusConfiguration(c,on);
+    const affiliations=await branchAffiliations(c,[...byOrg.keys()],on);
     // Производные показатели: у них нет ячейки источника, поэтому они не
     // публикуются как факты, а считаются из опубликованного и из реестра VIN.
-    const buyback45=await buyback45Shares(c,[...byOrg.keys()],q.end);
+    const buyback45=await buyback45Shares(c,[...byOrg.keys()],on);
     const branches=[...byOrg.values()].map(b=>{
       const worst:Rag=b.metrics.some(m=>m.rag==='RED')?'RED'
         :b.metrics.some(m=>m.rag==='AMBER')?'AMBER'
@@ -147,7 +161,7 @@ export async function branchOverview(auth:AuthedUser,query:any) {
       if(turnover!==null)values.set('stockTurnover',turnover);
       const bb=buyback45.get(b.org_unit_id);
       if(bb)values.set('buyback45Share',bb.share);
-      const score=computeBranchScore(model,values,q.end);
+      const score=computeBranchScore(model,values,on);
       const aff=affiliations.get(b.org_unit_id);
       return {...b,rag:worst,
         cluster_id:aff?.cluster_id??null,cluster_name:aff?.cluster_name??null,
@@ -165,26 +179,32 @@ export async function branchOverview(auth:AuthedUser,query:any) {
     // Рейтинг регионального менеджера считается по зоне целиком: величины его
     // филиалов складываются, и выполнение считается от сложенного. Средним
     // баллом филиалов его заменять нельзя — это другая величина.
-    const rmModel=await resolveRmRatingModel(c,q.end);
+    const rmModel=await resolveRmRatingModel(c,on);
     const zoneSums=new Map<string,Map<string,number>>();
-    for(const b of branches) {
+    // Решение владельца: филиал не в состоянии «действующий» в рейтинг не идёт.
+    // Закрытый, ещё не открытый и запускающийся филиал не отвечает за план,
+    // и его недовыполнение нельзя вешать на регионала.
+    for(const b of branches.filter(b=>b.lifecycle_state==='ACTIVE')) {
       const key=b.group_key??'none';
       const bucket=zoneSums.get(key)??new Map<string,number>();
       for(const m of b.metrics)bucket.set(m.metric,(bucket.get(m.metric)??0)+m.value);
       zoneSums.set(key,bucket);
     }
     const managerRatings=rmModel?[...zoneSums.entries()].map(([key,sums])=>{
-      const zone=branches.filter(b=>(b.group_key??'none')===key);
+      const zone=branches.filter(b=>(b.group_key??'none')===key&&b.lifecycle_state==='ACTIVE');
       return {group_key:key,group_label:zone[0]?.group_label??'Филиал без зоны РМ',
         division_name:zone[0]?.division_name??null,branches:zone.length,
-        ...computeRmRating(rmModel,sums,q.end)};
+        ...computeRmRating(rmModel,sums,on)};
     }).sort((x,y)=>(y.rating??-1)-(x.rating??-1)||x.group_label.localeCompare(y.group_label,'ru')):[];
     const scored=branches.filter(b=>b.score!==null);
     const count=(rag:Rag)=>scored.filter(b=>b.score_rag===rag).length;
-    return {mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:q.start,period_end:q.end,
+    return {mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:from,period_end:on,
+      // Выбранная дата и дата данных называются раздельно: показать данные за
+      // 20-е под подписью «на 21-е» значит соврать о их свежести.
+      requested_end:q.end,data_is_stale:!!period?.stale,
       metric_names:METRIC_NAMES,branches,thresholds_configured:thresholds.length>0,
       scoring:{configured:!!model,model_id:model?.id??null,
-        month_progress:model?monthProgress(q.end):null,
+        month_progress:model?monthProgress(on):null,
         // Границы цвета публикуются вместе с баллом: список руководителей
         // окрашивается по тому же правилу, что и филиал, без второй копии
         // порогов в клиенте.
@@ -195,11 +215,11 @@ export async function branchOverview(auth:AuthedUser,query:any) {
         average_score:scored.length?scored.reduce((s,b)=>s+(b.score as number),0)/scored.length:null,
         green:count('GREEN'),amber:count('AMBER'),red:count('RED'),
         without_score:branches.length-scored.length},
-      run_rates:runRateTiles(totals,q.end),
+      run_rates:runRateTiles(totals,on),
       manager_rating:{configured:!!rmModel,model_id:rmModel?.id??null,
         green_from:rmModel?.green_from??null,amber_from:rmModel?.amber_from??null,
         note:rmModel?.note??null,managers:managerRatings},
-      focus:{month:`${q.end.slice(0,7)}-01`,configured:!!focus,
+      focus:{month:`${on.slice(0,7)}-01`,configured:!!focus,
         configuration_id:focus?.id??null,
         // Факт фокуса не выводится из агрегатов до объявления соответствия
         // кода фокуса опубликованному показателю: подмена источника недопустима.

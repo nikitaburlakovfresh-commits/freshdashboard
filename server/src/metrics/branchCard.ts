@@ -5,6 +5,7 @@ import { METRIC_NAMES } from '../reporting/shared/reportModel';
 import { uuid } from '../reporting/storage';
 import { ApiError } from '../util/errors';
 import { evaluateRag, resolveThresholds, thresholdFor, type Rag } from './thresholds';
+import { resolveEffectivePeriod } from './effectivePeriod';
 import { funnelConversions, buyback45Shares, upwardRepricing, stockTurnover,
   DERIVED_METRICS } from './derived';
 import { resolveScoringModel, computeBranchScore } from './scoring';
@@ -63,11 +64,16 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
       WHERE u.id=$1`,[orgUnitId])).rows[0];
     if(!unit)throw new ApiError('NOT_FOUND','Филиал недоступен.');
 
-    const thresholds=await resolveThresholds(c,q.end);
+    // Срез карточки разрешается так же, как на сводном экране: последний
+    // опубликованный период не позже выбранной даты. Иначе карточка пустеет при
+    // выборе сегодняшнего числа, пока отчёты за него не загружены.
+    const period=await resolveEffectivePeriod(c,q.start,q.end,[orgUnitId]);
+    const from=period?.start??q.start,on=period?.end??q.end;
+    const thresholds=await resolveThresholds(c,on);
     const rows=(await c.query(`SELECT s.id snapshot_id,s.metric,s.value::text value,s.unit,s.revision,s.created_at
       FROM report_fact_snapshots s JOIN report_fact_current p ON p.snapshot_id=s.id
       WHERE s.org_unit_id=$1 AND s.period_start=$2 AND s.period_end=$3 AND s.metric=ANY($4::text[])
-      ORDER BY s.metric`,[orgUnitId,q.start,q.end,grant.metrics])).rows;
+      ORDER BY s.metric`,[orgUnitId,from,on,grant.metrics])).rows;
     const plan=rows.find((r:any)=>r.metric==='plan');
     const metrics=rows.map((r:any)=>{
       const t=thresholdFor(thresholds,r.metric,orgUnitId);
@@ -87,7 +93,7 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
       WHERE s.org_unit_id=$1 AND s.period_start=s.period_end AND s.period_end<=$2::date
         AND s.metric=ANY($3::text[]) AND s.metric=ANY($4::text[])
       ORDER BY s.period_end DESC`,
-    [orgUnitId,q.end,['stock','stockCost'],grant.metrics])).rows;
+    [orgUnitId,on,['stock','stockCost'],grant.metrics])).rows;
     const stockSnapshot=stockRows.length?{observed_on:stockRows[0].observed_on,
       stock:null as number|null,stock_cost:null as number|null}:null;
     if(stockSnapshot)for(const r of stockRows) {
@@ -105,16 +111,16 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
     for(const [k,v] of conversions)values.set(k,v);
     const turnover=stockTurnover(values);
     if(turnover!==null)values.set('stockTurnover',turnover);
-    const buyback=(await buyback45Shares(c,[orgUnitId],q.end)).get(orgUnitId)??null;
+    const buyback=(await buyback45Shares(c,[orgUnitId],on)).get(orgUnitId)??null;
     if(buyback)values.set('buyback45Share',buyback.share);
-    const repricing=(await upwardRepricing(c,[orgUnitId],q.end,REPRICING_WINDOW_DAYS)).get(orgUnitId)??null;
+    const repricing=(await upwardRepricing(c,[orgUnitId],on,REPRICING_WINDOW_DAYS)).get(orgUnitId)??null;
     // Сколько срезов реестра накоплено: по одному срезу переоценку определить
     // нельзя, и выдавать её отсутствие за ноль нельзя тоже.
     const snapshots=Number((await c.query(
       `SELECT count(DISTINCT observed_on)::int n FROM vehicle_stock_rows
        WHERE org_unit_id=$1 AND observed_on<=$2::date
          AND observed_on>$2::date-($3::int||' days')::interval`,
-      [orgUnitId,q.end,REPRICING_WINDOW_DAYS])).rows[0].n);
+      [orgUnitId,on,REPRICING_WINDOW_DAYS])).rows[0].n);
     const derivedValues=new Map(conversions);
     if(turnover!==null)derivedValues.set('stockTurnover',turnover);
     const derived=[...derivedValues.entries()].map(([metric,value])=>({metric,
@@ -127,8 +133,8 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
       components:DERIVED_METRICS.buyback45Share.components});
 
     // Балл филиала и его разбивка по показателям — та же модель, что на главной.
-    const model=await resolveScoringModel(c,q.end);
-    const score=computeBranchScore(model,values,q.end);
+    const model=await resolveScoringModel(c,on);
+    const score=computeBranchScore(model,values,on);
 
     // История отклонений: все задачи филиала по доступным показателям, без
     // ограничения выбранным периодом — руководителю нужен ход работы.
@@ -168,7 +174,8 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
         ...outcome};
     }));
 
-    return {mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:q.start,period_end:q.end,
+    return {mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:from,period_end:on,
+      requested_end:q.end,data_is_stale:!!period?.stale,
       branch:{org_unit_id:unit.id,code:unit.code,display_name:unit.display_name,lifecycle_state:unit.lifecycle_state},
       metrics,metrics_without_threshold:metrics.filter(m=>!m.threshold_id).map(m=>m.metric),
       deviations,metric_names:METRIC_NAMES,thresholds_configured:thresholds.length>0,

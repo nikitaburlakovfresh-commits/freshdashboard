@@ -121,8 +121,15 @@ export default function NetworkScorePage() {
     <header className="overview-head">
       <div>
         <h1>Обзор сети</h1>
-        <p className="overview-subline">Срез на {RU_DATE(end)} · {data?data.branches.length:'…'} филиалов
+        {/* Дата данных, а не выбранная дата. Если отчёты за выбранное число ещё
+            не загружены, экран показывает предыдущий срез и говорит об этом
+            прямо: выдавать вчерашние данные за сегодняшние нельзя. */}
+        <p className="overview-subline">Срез на {RU_DATE(data?data.period_end:end)} ·
+          {' '}{data?data.branches.length:'…'} филиалов
           {net&&net.without_score>0&&<> · без балла {net.without_score}</>}</p>
+        {data?.data_is_stale&&<p className="overview-stale" role="status">
+          Выбрано {RU_DATE(data.requested_end)}, но отчёты за эту дату ещё не загружены.
+          Показаны последние опубликованные данные — на {RU_DATE(data.period_end)}.</p>}
       </div>
       <div className="overview-head-actions">
         <Link className="btn" to="/division-summary">Сводка по задачам</Link>

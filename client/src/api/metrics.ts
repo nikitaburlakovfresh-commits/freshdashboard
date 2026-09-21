@@ -37,6 +37,9 @@ export interface RunRateTile {
 }
 export interface Overview {
   mode:string; period_start:string; period_end:string;
+  // Выбранная дата и дата данных различаются, когда отчёты за выбранное число
+  // ещё не загружены: экран обязан назвать настоящую дату данных.
+  requested_end:string; data_is_stale:boolean;
   branches:BranchCard[]; thresholds_configured:boolean;
   metric_names:Record<string,string>;
   scoring:{configured:boolean;model_id:string|null;month_progress:number|null;green_score_from:number|null;amber_score_from:number|null};
