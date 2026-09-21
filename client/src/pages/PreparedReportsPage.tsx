@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { useReportDate } from '../state/reportDate';
 import { ApiError } from '../api/client';
 import { getStagingCapabilities,listStagingBatches,getStagingBatch,uploadStagingBatch,probeStagingBatch,
   autoPublishStagingBatch,type StagingCapabilities,type StagingBatch,
@@ -18,8 +19,12 @@ export default function PreparedReportsPage() {
   const intake=useReportIntakeEnabled();
   const [cap,setCap]=useState<StagingCapabilities|null>(null),[batches,setBatches]=useState<StagingBatch[]>([]);
   const [selected,setSelected]=useState<StagingBatch|null>(null),[network,setNetwork]=useState('');
-  const [files,setFiles]=useState<File[]>([]),[confirmed,setConfirmed]=useState(false);
-  const [period,setPeriod]=useState<ImportPeriod>({start:'',end:'',planStart:'',planEnd:''}),[confirmation,setConfirmation]=useState('');
+  const [files,setFiles]=useState<File[]>([]);
+  // Вместо четырёх дат и письменного обоснования — одна дата данных. Период
+  // всегда накопительный: с 1-го числа её месяца по неё саму. Так считает сеть,
+  // так устроены сами отчёты QLIK, и вводить это каждый раз руками незачем.
+  const {reportDate}=useReportDate();
+  const [asOf,setAsOf]=useState(reportDate);
   const [busy,setBusy]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [auto,setAuto]=useState<AutoPublishResult|null>(null);
   const input=useRef<HTMLInputElement>(null),request=useRef(0),alive=useRef(true);
@@ -50,8 +55,8 @@ export default function PreparedReportsPage() {
     e.preventDefault();setError('');setNotice('');setSelected(null);setBusy(true);request.current++;
     try {
       checkStagingFiles(files);
-      if(!network)throw new Error('Сначала выберите существующую корневую сеть.');
-      const meta=periodMetadata(confirmed,period,confirmation);
+      if(!network)throw new Error('Подтверждённой корневой сети нет: создайте её в редакторе структуры.');
+      const meta=periodMetadata(true,period,confirmation);
       const saved=await uploadStagingBatch(network,meta,files);
       if(!alive.current)return;
       setSelected(saved);setFiles([]);if(input.current)input.current.value='';
@@ -66,8 +71,8 @@ export default function PreparedReportsPage() {
     setError('');setNotice('');setSelected(null);setAuto(null);setBusy(true);request.current++;
     try {
       checkStagingFiles(files);
-      if(!network)throw new Error('Сначала выберите существующую корневую сеть.');
-      if(!confirmed)throw new Error('Для публикации нужен подтверждённый период: портал не выводит его из файлов.');
+      if(!network)throw new Error('Подтверждённой корневой сети нет: создайте её в редакторе структуры.');
+      if(!asOf)throw new Error('Укажите дату, по состоянию на которую собраны отчёты.');
       const meta=periodMetadata(true,period,confirmation);
       const result=await autoPublishStagingBatch(network,meta,files);
       const list=await listStagingBatches();
@@ -83,6 +88,11 @@ export default function PreparedReportsPage() {
     try {const result=await probeStagingBatch(selected);const list=await listStagingBatches();if(alive.current){setSelected(result);setBatches(list.items);}}
     catch(e){fail(e);} finally {if(alive.current)setBusy(false);}
   }
+  // Период и его обоснование выводятся из даты данных, а не из имени файла и не
+  // из даты загрузки: дату называет человек, который загружает пакет.
+  const period:ImportPeriod={start:`${asOf.slice(0,7)}-01`,end:asOf,
+    planStart:`${asOf.slice(0,7)}-01`,planEnd:asOf};
+  const confirmation=`Дата данных указана при загрузке из портала: накопительный период с ${period.start} по ${asOf}.`;
   const preview=selected?.preview;
   return <div className="portal-dashboard org-page reports-page">
     <header className="portal-heading"><div><div className="portal-eyebrow">ИСТОЧНИКИ · ЗАКРЫТАЯ ПОДГОТОВКА</div>
@@ -103,32 +113,35 @@ export default function PreparedReportsPage() {
     {cap && <>
       <section className="portal-panel reports-upload"><div className="portal-eyebrow">01 / ОРИГИНАЛЫ</div><h2>Подготовить новый пакет</h2>
         {!cap.roots.length && <p className="org-error">Подтверждённой реальной сети пока нет. <Link to="/organization">Создание сети — в редакторе структуры</Link>; загрузка не создаёт её автоматически.</p>}
-        <form onSubmit={upload}><fieldset className="org-editor-fields" disabled={busy}>
-          <label>Корневая сеть<select value={network} onChange={e=>setNetwork(e.target.value)} required>
-            <option value="">Выберите сеть</option>{cap.roots.map(r=><option value={r.id} key={r.id}>{r.display_name} · {r.code}</option>)}</select></label>
-          <label>Агрегатные XLSX · до 10 отчётов одним пакетом, до 8 МиБ каждый<input ref={input} type="file" accept=".xlsx" multiple
-            onChange={e=>setFiles(Array.from(e.target.files ?? []))}/></label>
-          <label className="org-editor-wide">Период продаж<select value={confirmed?'confirmed':'unknown'} onChange={e=>{
-            const on=e.target.value==='confirmed';setConfirmed(on);
-            if(on&&!period.start){
-              const now=new Date(),m=String(now.getMonth()+1).padStart(2,'0');
-              const first=`${now.getFullYear()}-${m}-01`,today=now.toISOString().slice(0,10);
-              setPeriod({start:first,end:today,planStart:first,planEnd:today});
-              if(!confirmation) setConfirmation('Период подтверждён администратором при загрузке пакета из портала.');
-            }
-          }}>
-            <option value="unknown">Не подтверждён — сохранить только для проверки</option><option value="confirmed">Подтверждаю период вручную</option></select></label>
-          {confirmed && <>
-            {([['start','Продажи: с'],['end','Продажи: по'],['planStart','План: с (необязательно)'],['planEnd','План: по (необязательно)']] as const)
-              .map(([key,label])=><label key={key}>{label}<input type="date" required={key==='start'||key==='end'} value={period[key]} onChange={e=>setPeriod(p=>({...p,[key]:e.target.value}))}/></label>)}
-            <label className="org-editor-wide">Основание подтверждения периода<textarea maxLength={500} minLength={10} required value={confirmation} onChange={e=>setConfirmation(e.target.value)} /></label>
-          </>}
-        </fieldset><p className="org-small">Период не выводится из имени файла, даты загрузки или даты склада. Филиалы не привязываются автоматически.</p>
-        <button className="btn reports-primary" disabled={!intake || busy || !network || !files.length} type="submit">Сохранить и проверить на сервере</button>
-        <button className="btn reports-primary" type="button" onClick={publishNow}
-          disabled={!intake || busy || !network || !files.length || !confirmed}
-          title="Загрузка, привязка филиалов и публикация показателей одной операцией">
-          Загрузить и опубликовать</button></form>
+        <form onSubmit={e=>{e.preventDefault();publishNow();}}>
+          <fieldset className="org-editor-fields" disabled={busy}>
+            {/* Сеть одна: выбирать её каждый раз незачем. Выпадающий список
+                появляется только если подтверждённых сетей действительно больше. */}
+            {cap.roots.length>1
+              ?<label>Корневая сеть<select value={network} onChange={e=>setNetwork(e.target.value)} required>
+                <option value="">Выберите сеть</option>
+                {cap.roots.map(r=><option value={r.id} key={r.id}>{r.display_name} · {r.code}</option>)}</select></label>
+              :cap.roots.length===1&&<p className="org-small reports-network">Сеть: <strong>{cap.roots[0].display_name}</strong></p>}
+            <label>Отчёты QLIK · XLSX, до 10 файлов, до 8 МиБ каждый
+              <input ref={input} type="file" accept=".xlsx" multiple
+                onChange={e=>setFiles(Array.from(e.target.files ?? []))}/></label>
+            <label>Данные по состоянию на
+              <input type="date" required value={asOf} max={new Date().toISOString().slice(0,10)}
+                onChange={e=>setAsOf(e.target.value)}/></label>
+          </fieldset>
+          <p className="org-small">Период считается накопительным: с {period.start} по {asOf}.
+            Из имени файла и даты загрузки он не выводится — дату называете вы.
+            Отчёты раскладываются по видам и публикуются автоматически; непрочитанный
+            файл или критичное отклонение портал не примет и назовёт, какой это отчёт.</p>
+          <button className="btn reports-primary" type="submit"
+            disabled={!intake || busy || !network || !files.length || !asOf}>
+            Загрузить и опубликовать</button>
+          {/* Проверка без публикации нужна редко — когда пакет уже отклонён и надо
+              понять причину, не меняя опубликованных показателей. */}
+          <button className="btn reports-secondary" type="button" onClick={upload}
+            disabled={!intake || busy || !network || !files.length}>
+            Только проверить</button>
+        </form>
         {auto&&<div className="reports-auto" role="status">
           <p><strong>{auto.message}</strong></p>
           <ul>

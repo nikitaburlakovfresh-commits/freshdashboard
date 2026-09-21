@@ -8,6 +8,11 @@
 .reports-page .org-editor-fields input[type=file] { padding: 8px; font-size: 12px; }
 .reports-page input[type=file]::file-selector-button { border: 1px solid var(--fresh-border); border-radius: 5px; padding: 6px 10px; margin-right: 10px; }
 .reports-primary:not(:disabled) { background: var(--fresh-blue)!important; color: #fff; }
+/* Проверка без публикации — вспомогательное действие: нужна, когда пакет
+   отклонён и надо понять причину, не меняя опубликованных показателей. */
+.reports-secondary { background: transparent; border: 1px solid var(--fresh-border); color: var(--fresh-text-muted); margin-left: 8px; }
+.reports-secondary:not(:disabled):hover { color: inherit; border-color: var(--fresh-blue); }
+.reports-network { margin: 0 0 4px; }
 .reports-page button:disabled { opacity: .5; cursor: not-allowed; }
 .reports-feedback { min-height: 10px; overflow-wrap: anywhere; }
 .reports-count { font-size: 14px; color: var(--fresh-text-muted); margin-left: 8px; }
@@ -29,7 +34,8 @@
 .reports-table-wrap td { font-variant-numeric: tabular-nums; }
 .reports-mismatch { color: var(--fresh-warning); }
 @media(max-width:1100px) { .reports-batches { grid-template-columns: repeat(2,minmax(0,1fr)); } }
-@media(max-width:650px) { .reports-batches { grid-template-columns: 1fr; } .reports-primary { width: 100%; } }
+@media(max-width:650px) { .reports-batches { grid-template-columns: 1fr; }
+  .reports-primary, .reports-secondary { width: 100%; margin-left: 0; margin-top: 8px; min-height: 44px; } }
 /* Итог приёма пакета одной операцией. */
 .reports-auto{margin-top:14px;padding:12px 14px;border:1px solid var(--fresh-border);border-radius:12px;
   background:var(--fresh-raised)}
