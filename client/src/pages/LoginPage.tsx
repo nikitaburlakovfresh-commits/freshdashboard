@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Logo from '../components/Logo';
 import { useAuth } from '../auth/AuthContext';
 
+/** Показывать заставку один раз на открытие портала, а не на каждый возврат
+ *  к экрану входа внутри той же вкладки. */
+const INTRO_SHOWN_KEY = 'fresh_intro_shown';
+
 export default function LoginPage() {
   const { login } = useAuth();
+  const [introDone, setIntroDone] = useState(() => {
+    try { return sessionStorage.getItem(INTRO_SHOWN_KEY) === '1'; } catch { return false; }
+  });
   const [loginValue, setLoginValue] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -22,6 +29,13 @@ export default function LoginPage() {
     }
   }
 
+  const finishIntro = () => {
+    try { sessionStorage.setItem(INTRO_SHOWN_KEY, '1'); } catch { /* приватный режим — просто покажем снова */ }
+    setIntroDone(true);
+  };
+
+  if (!introDone) return <IntroScreen onEnter={finishIntro} />;
+
   return (
     <div className="login-page"
       style={{
@@ -29,7 +43,7 @@ export default function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#F5F6F8',
+        background: 'var(--fresh-bg)',
         padding: 20,
       }}
     >
@@ -37,7 +51,7 @@ export default function LoginPage() {
         onSubmit={onSubmit}
         style={{
           width: 380,
-          background: '#fff',
+          background: 'var(--fresh-surface)',
           borderRadius: 16,
           padding: 32,
           boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)',
@@ -95,11 +109,64 @@ export default function LoginPage() {
   );
 }
 
+/**
+ * Стартовый экран портала: ролик Fresh, после которого появляется кнопка «Войти».
+ *
+ * Звук выключен намеренно: браузеры не дают автозапуск со звуком, и ролик просто
+ * не начался бы. Кнопка «Пропустить» есть с самого начала — если автозапуск
+ * запрещён политикой браузера или человек заходит десятый раз за день, экран не
+ * должен становиться препятствием. Как только ролик закончился, появляется
+ * крупная кнопка входа.
+ */
+function IntroScreen({ onEnter }: { onEnter: () => void }) {
+  const [ended, setEnded] = useState(false);
+  const video = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const node = video.current;
+    if (!node) return;
+    // Если браузер отказал в автозапуске, ролик ждать бессмысленно — сразу
+    // показываем кнопку входа.
+    const attempt = node.play();
+    if (attempt && typeof attempt.catch === 'function') attempt.catch(() => setEnded(true));
+    // Страховка: событие окончания может не прийти — при подвисшей буферизации
+    // или если ролик не начался. Вход не должен зависеть от этого события, поэтому
+    // кнопка появляется и по таймеру, не позже чем через 12 секунд.
+    const guard = setTimeout(() => setEnded(true), 12000);
+    return () => clearTimeout(guard);
+  }, []);
+
+  return (
+    <div className="intro-screen">
+      <video
+        ref={video}
+        className="intro-video"
+        src="/intro/fresh-intro.mp4"
+        poster="/intro/fresh-intro.jpg"
+        muted
+        playsInline
+        preload="auto"
+        onEnded={() => setEnded(true)}
+        onError={() => setEnded(true)}
+      />
+      <div className="intro-overlay">
+        {ended ? (
+          <button type="button" className="intro-enter" onClick={onEnter} autoFocus>Войти</button>
+        ) : (
+          <button type="button" className="intro-skip" onClick={() => setEnded(true)}>Пропустить</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '10px 12px',
   borderRadius: 8,
   border: '1px solid var(--fresh-border)',
+  background: 'var(--fresh-subtle)',
+  color: 'var(--fresh-dark)',
   fontSize: 14,
   outline: 'none',
 };
@@ -111,7 +178,7 @@ function buttonStyle(disabled: boolean): React.CSSProperties {
     padding: '11px 16px',
     borderRadius: 8,
     border: 'none',
-    background: disabled ? '#A9B8FF' : '#003DFF',
+    background: disabled ? 'var(--fresh-blue-disabled)' : 'var(--fresh-blue)',
     color: '#fff',
     fontSize: 14,
     fontWeight: 600,

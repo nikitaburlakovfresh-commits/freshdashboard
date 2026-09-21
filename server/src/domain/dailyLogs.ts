@@ -111,8 +111,11 @@ export async function ensureDailyLog(c:PoolClient,ctx:ActorContext,org:string,ro
   const created=await c.query(`INSERT INTO work_items(org_unit_id,template_version_id,title,due_at,status,assignee_user_id,created_by)
     VALUES($1,$2,$3,$4,'ASSIGNED',$5,$5) RETURNING id`,[org,template.id,`Ежедневник ${role} · ${date}`,window.base_close,ctx.authUser.userId]);
   const id=created.rows[0].id;
-  for(const field of template.field_schema) await c.query(`INSERT INTO work_item_fields(work_item_id,org_unit_id,field_path,updated_by)
-    VALUES($1,$2,$3,$4)`,[id,org,field.field_path,ctx.authUser.userId]);
+  // Одной вставкой, а не по полю за запрос: у ежедневника РФ 95 полей, и
+  // цикл дал бы 95 обращений к базе на каждое открытие дня.
+  await c.query(`INSERT INTO work_item_fields(work_item_id,org_unit_id,field_path,updated_by)
+    SELECT $1,$2,path,$3 FROM unnest($4::text[]) path`,
+    [id,org,ctx.authUser.userId,template.field_schema.map(f=>f.field_path)]);
   await c.query(`INSERT INTO daily_log_records(work_item_id,org_unit_id,user_id,role_code,business_date,policy_id,base_open,base_close,window_open,window_close)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[id,org,ctx.authUser.userId,role,date,policy.id,window.base_open,window.base_close,window.window_open,window.window_close]);
   await writeAuditAndOutbox(c,{actorUserId:ctx.authUser.userId,actorRole:role,orgUnitId:org,workItemId:id,

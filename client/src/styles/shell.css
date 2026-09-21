@@ -169,3 +169,22 @@
 .register-card .role-view-primary:disabled{background:#A9B8FF;cursor:default}
 .register-card .role-view-error{margin:0 0 12px;font-size:13px;font-weight:600;color:var(--fresh-danger)}
 .login-alt-link{display:block;margin-top:14px;font-size:13px;text-align:center;color:var(--fresh-link)}
+
+/* Стартовый экран портала: ролик на всю страницу и кнопка входа после него.
+   Фон чёрный независимо от темы — это подложка видео, а не поверхность портала.
+   object-fit:contain, чтобы фирменный кадр не обрезался на узких экранах. */
+.intro-screen{position:fixed;inset:0;background:#000;display:flex;
+  align-items:center;justify-content:center;overflow:hidden}
+.intro-video{width:100%;height:100%;object-fit:contain;background:#000}
+.intro-overlay{position:absolute;left:0;right:0;bottom:7vh;display:flex;
+  justify-content:center;pointer-events:none}
+.intro-overlay>*{pointer-events:auto}
+.intro-enter{min-width:220px;padding:14px 28px;border:none;border-radius:10px;
+  background:var(--fresh-blue);color:#fff;font-size:16px;font-weight:600;cursor:pointer;
+  box-shadow:0 10px 28px rgba(0,0,0,.45);animation:intro-rise .35s ease-out}
+.intro-enter:hover{background:var(--fresh-blue-hover)}
+.intro-skip{padding:9px 18px;border:1px solid rgba(255,255,255,.35);border-radius:8px;
+  background:rgba(0,0,0,.35);color:#fff;font-size:13px;cursor:pointer}
+.intro-skip:hover{border-color:rgba(255,255,255,.6)}
+@keyframes intro-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.intro-enter{animation:none}}

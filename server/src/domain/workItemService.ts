@@ -593,12 +593,14 @@ export async function createWorkItem(
         [body.org_unit_id, template.id, body.title, dueAt, ctx.authUser.userId],
       );
       const workItem = inserted.rows[0];
-      for (const fieldDef of template.field_schema) {
-        await client.query(
-          `INSERT INTO work_item_fields (work_item_id, org_unit_id, field_path, updated_by) VALUES ($1, $2, $3, $4)`,
-          [workItem.id, workItem.org_unit_id, fieldDef.field_path, ctx.authUser.userId],
-        );
-      }
+      // Одной вставкой: у шаблонов ежедневника десятки полей, и цикл давал по
+      // обращению к базе на каждое поле при создании задачи.
+      await client.query(
+        `INSERT INTO work_item_fields (work_item_id, org_unit_id, field_path, updated_by)
+         SELECT $1, $2, path, $3 FROM unnest($4::text[]) path`,
+        [workItem.id, workItem.org_unit_id, ctx.authUser.userId,
+          template.field_schema.map((f) => f.field_path)],
+      );
 
       await writeAuditAndOutbox(client, {
         actorUserId: ctx.authUser.userId,

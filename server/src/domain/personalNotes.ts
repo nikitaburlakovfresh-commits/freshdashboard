@@ -72,11 +72,10 @@ export async function ensurePersonalNote(
      VALUES($1,$2,$3,$4,'ASSIGNED',$5,$5) RETURNING id`,
     [org, template.id, `Личная запись дня · ${date}`, due, ctx.authUser.userId]);
   const id = created.rows[0].id as string;
-  for (const field of template.field_schema) {
-    await c.query(
-      `INSERT INTO work_item_fields(work_item_id,org_unit_id,field_path,updated_by) VALUES($1,$2,$3,$4)`,
-      [id, org, field.field_path, ctx.authUser.userId]);
-  }
+  await c.query(
+    `INSERT INTO work_item_fields(work_item_id,org_unit_id,field_path,updated_by)
+     SELECT $1,$2,path,$3 FROM unnest($4::text[]) path`,
+    [id, org, ctx.authUser.userId, template.field_schema.map(f => f.field_path)]);
   await c.query(
     `INSERT INTO personal_day_notes(work_item_id,org_unit_id,user_id,role_code,business_date)
      VALUES($1,$2,$3,$4,$5)`, [id, org, ctx.authUser.userId, role, date]);
