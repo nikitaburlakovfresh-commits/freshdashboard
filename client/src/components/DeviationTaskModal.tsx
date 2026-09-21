@@ -23,12 +23,14 @@ export default function DeviationTaskModal({branch,branchName,period,cell,onClos
   onClose:()=>void; onCreated:(workItemId:string)=>void;
 }) {
   const [templates,setTemplates]=useState<TaskTemplate[]>([]);
-  const [draft,setDraft]=useState<DeviationDraft>({template_code:'pilot_task_v1',
+  // Шаблон выбирается из загруженного списка, пилотный больше не подставляется.
+  const [draft,setDraft]=useState<DeviationDraft>({template_code:'',
     title:defaultTitle(branchName,cell),due_date:'',
     reason:`Отклонение ${cell.metric_name} за период ${period.start} — ${period.end}: `});
   const [error,setError]=useState<string|null>(null),[busy,setBusy]=useState(false);
   useEffect(()=>{let live=true;
-    listTaskTemplates().then(d=>{if(live)setTemplates(d.items);})
+    listTaskTemplates().then(d=>{if(live){setTemplates(d.items);
+      setDraft(cur=>cur.template_code?cur:{...cur,template_code:d.items[0]?.code??''});}})
       .catch(e=>{if(live)setError(e?.message??'Не удалось загрузить шаблоны задач.');});
     return()=>{live=false;};},[]);
   const set=(patch:Partial<DeviationDraft>)=>setDraft(d=>({...d,...patch}));
@@ -57,7 +59,7 @@ export default function DeviationTaskModal({branch,branchName,period,cell,onClos
       <p className="portal-muted">{ragReason(cell)}</p>
       <label>Шаблон задачи
         <select value={draft.template_code} onChange={e=>set({template_code:e.target.value})}>
-          {templates.length===0&&<option value="pilot_task_v1">pilot_task_v1</option>}
+          {templates.length===0&&<option value="">Загрузка шаблонов…</option>}
           {templates.map(t=><option key={t.code} value={t.code}>{t.display_name??t.code}</option>)}
         </select>
       </label>

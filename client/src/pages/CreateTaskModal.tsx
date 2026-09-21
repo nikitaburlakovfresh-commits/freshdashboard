@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createWorkItem, listTaskTemplates } from '../api/endpoints';
 import type { Grant, TaskTemplate } from '../api/types';
-import { orgUnitLabel } from '../constants/orgUnits';
+import { useOrgNames } from '../state/orgNames';
 
 export default function CreateTaskModal({
   grants,
@@ -19,11 +19,18 @@ export default function CreateTaskModal({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
-  const [templateCode, setTemplateCode] = useState('pilot_task_v1');
+  // Пилотный шаблон больше не подставляется: он существует для двух
+  // синтетических филиалов и в рабочей постановке задачи не нужен.
+  const [templateCode, setTemplateCode] = useState('');
+  // Названия филиалов — из справочника оргструктуры. Раньше здесь была таблица
+  // из двух синтетических филиалов, и все 39 реальных показывались сырым UUID.
+  const orgUnitLabel = useOrgNames();
   useEffect(() => {
     let live = true;
-    listTaskTemplates().then(data => { if (live) setTemplates(data.items); })
-      .catch(err => { if (live) setError(err.message ?? 'Не удалось загрузить шаблоны.'); });
+    listTaskTemplates().then(data => { if (live) {
+      setTemplates(data.items);
+      setTemplateCode(current => current || data.items[0]?.code || '');
+    } }).catch(err => { if (live) setError(err.message ?? 'Не удалось загрузить шаблоны.'); });
     return () => { live = false; };
   }, []);
 
@@ -82,7 +89,7 @@ export default function CreateTaskModal({
         <label htmlFor="task-template" style={labelStyle}>Шаблон и роль исполнителя</label>
         <select id="task-template" value={templateCode} disabled={submitting || !templates.length}
           onChange={e => setTemplateCode(e.target.value)} style={inputStyle}>
-          {!templates.length && <option value="pilot_task_v1">Загрузка шаблонов…</option>}
+          {!templates.length && <option value="">Загрузка шаблонов…</option>}
           {templates.map(t => <option key={t.code} value={t.code}>{t.owner_role} · {t.display_name}</option>)}
         </select>
         <p style={{fontSize:12,color:'var(--fresh-text-muted)'}}>Один исполнитель, одна роль. Назначение сотрудника выполняется в карточке после создания.</p>

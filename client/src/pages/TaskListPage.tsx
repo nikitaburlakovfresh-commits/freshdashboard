@@ -5,7 +5,7 @@ import type { WorkItem, WorkItemStatus } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import StatusBadge from '../components/StatusBadge';
 import CreateTaskModal from './CreateTaskModal';
-import { orgUnitLabel } from '../constants/orgUnits';
+import { useOrgNames } from '../state/orgNames';
 
 const STATUS_OPTIONS: { value: WorkItemStatus | ''; label: string }[] = [
   { value: '', label: 'Все статусы' },
@@ -18,6 +18,7 @@ const STATUS_OPTIONS: { value: WorkItemStatus | ''; label: string }[] = [
 ];
 
 export default function TaskListPage() {
+  const orgUnitLabel = useOrgNames();
   const { me } = useAuth();
   const navigate = useNavigate();
   const [items, setItems] = useState<WorkItem[]>([]);

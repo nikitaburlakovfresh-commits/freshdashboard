@@ -35,12 +35,11 @@ export function listTaskTemplates() {
   return apiFetch<{items: TaskTemplate[]}>('/work-items/templates');
 }
 
-export function createWorkItem(body: { org_unit_id: string; title: string; due_at: string; template_code?: string }) {
-  return apiFetch<WorkItem>('/work-items', {
-    method: 'POST',
-    idempotent: true,
-    body: { template_code: 'pilot_task_v1', ...body },
-  });
+// Шаблон задаётся вызывающим экраном и молча не подставляется. Раньше здесь по
+// умолчанию уходил пилотный pilot_task_v1: задача создавалась не по тому
+// шаблону, который выбрал руководитель, если экран забыл его передать.
+export function createWorkItem(body: { org_unit_id: string; title: string; due_at: string; template_code: string }) {
+  return apiFetch<WorkItem>('/work-items', { method: 'POST', idempotent: true, body });
 }
 
 export function assignWorkItem(id: string, body: { expected_entity_version: number; assignee_user_id: string }) {

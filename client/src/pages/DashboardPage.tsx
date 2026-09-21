@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { listWorkItems } from '../api/endpoints';
-import { orgUnitLabel } from '../constants/orgUnits';
+import { useOrgNames } from '../state/orgNames';
 import type { WorkItem } from '../api/types';
 import StatusBadge from '../components/StatusBadge';
 import CreateTaskModal from './CreateTaskModal';
@@ -16,6 +16,7 @@ export const METRICS = [
   {code:'hangers45_total',name:'Склад 45+',unit:'шт.',source:'main_summary',section:'stock'},
 ];
 export default function DashboardPage(){
+  const orgUnitLabel = useOrgNames();
   const {me}=useAuth();
   const orgs=[...new Set(me?.grants.map(g=>g.org_unit_id).filter((id):id is string=>id!==null)??[])];
   const [org,setOrg]=useState(orgs[0]??'');

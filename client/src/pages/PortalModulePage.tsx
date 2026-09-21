@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { METRICS } from './DashboardPage';
-import { orgUnitLabel } from '../constants/orgUnits';
+import { useOrgNames } from '../state/orgNames';
 import { useAuth } from '../auth/AuthContext';
 const modules:Record<string,{title:string,description:string,rows:string[]}>={
   '/modules':{title:'Карта модулей портала',description:'Полный бизнес-охват остаётся по ТЗ v2.12. Ниже — карта будущих контуров, а не работающие функции.',rows:['Access, OrgUnit и ролевые рабочие места · BH Workspace','Data, Metric, Plan и Composition Engine','Vehicle, склад, VIN и эпизоды хранения','WorkItem, Today, Template Designer · approvals и эскалации','Mail, уведомления, дайджесты и Report Builder','Meeting Notes, Site Audit и Reorganization','AI-ассистент, Compliance, Reconciliation и Audit','P&L / БДР, договоры, роялти и продукты УК','Онбординг, поощрения, franchise pipeline и exit','Локации, модельный микс, маркетинг и NPS','Mobile и offline-очередь']},
@@ -11,6 +11,7 @@ const modules:Record<string,{title:string,description:string,rows:string[]}>={
   '/diary':{title:'Ежедневник',description:'Будущий контур регулярных обязательств и задач дня.',rows:['Обязательства на день','Результаты и подтверждения','Просрочки и корректирующие действия']},
 };
 export default function PortalModulePage(){
+  const orgUnitLabel = useOrgNames();
   const {pathname}=useLocation();const [params]=useSearchParams();const {me}=useAuth();
   const m=modules[pathname]??modules['/analytics'];const metric=METRICS.find(x=>x.code===params.get('metric'));
   const org=params.get('org');const allowed=!!org && me?.grants.some(g=>g.org_unit_id===org);
