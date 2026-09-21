@@ -89,21 +89,57 @@ export interface Buyback45 {
 export const AGED_DAYS_THRESHOLD = 45;
 
 /**
- * Доля автомобилей выкупа с хранением 45 дней и более, в штуках, по реестру VIN
- * на дату среза. Считается по филиалам, у которых реестр вообще опубликован:
- * филиал без реестра остаётся без показателя.
+ * Область склада для расчёта висяков 45+.
+ *
+ * Висяки считают по-разному, и подменять одну базу другой нельзя:
+ *   BUYOUT     — только выкуп. Это основная база: машина выкупа стоит денег
+ *                компании, и её себестоимость — суть вопроса.
+ *   COMMISSION — комиссия, то есть всё, что не выкуп. Определяется через
+ *                отрицание, чтобы не зависеть от написания слова в отчёте.
+ *   ALL        — весь склад. Нужна, когда речь о ликвидности склада в целом.
+ */
+export type AgedScope = 'BUYOUT' | 'COMMISSION' | 'ALL';
+
+/** Мера: штуки или себестоимость этих машин в рублях. */
+export type AgedMeasure = 'UNITS' | 'COST';
+
+export interface Aged45 {
+  scope: AgedScope;
+  /** Доля в штуках. */
+  share: number;
+  /** Доля по себестоимости: null, если себестоимость в реестре не заполнена. */
+  cost_share: number | null;
+  aged: number; total: number;
+  aged_cost: number | null; total_cost: number | null;
+  observed_on: string;
+}
+
+function scopeCondition(scope: AgedScope): string {
+  if (scope === 'BUYOUT') return "r.supply_type = 'Выкуп'";
+  // Комиссия — через отрицание выкупа. Машины без указанного типа поставки в
+  // комиссию не попадают: неизвестный тип нельзя выдавать за комиссию.
+  if (scope === 'COMMISSION') return "r.supply_type IS NOT NULL AND r.supply_type <> 'Выкуп'";
+  return 'TRUE';
+}
+
+/**
+ * Висяки 45+ по реестру VIN на дату среза, в выбранной области склада.
+ *
+ * Возвращаются сразу обе меры — штуки и себестоимость, — потому что вопрос
+ * «сколько машин зависло» и вопрос «сколько денег в них заморожено» задают по
+ * одному и тому же складу, и считать их двумя разными запросами незачем.
+ *
+ * Филиал без единого среза реестра остаётся без показателя: отсутствие реестра
+ * не означает отсутствие склада.
  *
  * Это НЕ показатель `agedShare` из сводного отчёта QLIK: там доля по среднему
  * возрасту остатка. Подменять одно другим нельзя — величины разные.
  */
-export async function buyback45Shares(
-  c: PoolClient, orgUnitIds: string[], observedOn: string,
-): Promise<Map<string, Buyback45>> {
-  const out = new Map<string, Buyback45>();
+export async function aged45(
+  c: PoolClient, orgUnitIds: string[], observedOn: string, scope: AgedScope = 'BUYOUT',
+): Promise<Map<string, Aged45>> {
+  const out = new Map<string, Aged45>();
   if (!orgUnitIds.length) return out;
-  // Берётся последний срез реестра на дату или раньше: реестр загружается не
-  // каждый день, и отсутствие среза именно за эту дату не означает отсутствие
-  // склада. Филиал без единого среза остаётся без показателя.
   const rows = (await c.query(
     `WITH latest AS (
        SELECT org_unit_id, max(observed_on) AS observed_on FROM vehicle_stock_rows
@@ -116,19 +152,34 @@ export async function buyback45Shares(
        sum(r.cost_rub) FILTER (WHERE r.days_on_stock >= $3) AS aged_cost
      FROM vehicle_stock_rows r
      JOIN latest l ON l.org_unit_id = r.org_unit_id AND l.observed_on = r.observed_on
-     WHERE r.supply_type = 'Выкуп'
+     WHERE ${scopeCondition(scope)}
      GROUP BY r.org_unit_id, l.observed_on`,
     [orgUnitIds, observedOn, AGED_DAYS_THRESHOLD])).rows;
   for (const r of rows) {
     const total = Number(r.total), aged = Number(r.aged);
-    // Ни одной машины выкупа с известным сроком хранения — доли нет.
     if (!(total > 0)) continue;
-    out.set(r.org_unit_id, { share: aged / total, aged, total,
-      aged_cost: r.aged_cost === null ? null : Number(r.aged_cost),
-      total_cost: r.total_cost === null ? null : Number(r.total_cost),
-      observed_on: String(r.observed_on instanceof Date ? r.observed_on.toISOString().slice(0, 10) : r.observed_on) });
+    const totalCost = r.total_cost === null ? null : Number(r.total_cost);
+    const agedCost = r.aged_cost === null ? null : Number(r.aged_cost);
+    out.set(r.org_unit_id, {
+      scope, share: aged / total, aged, total,
+      aged_cost: agedCost, total_cost: totalCost,
+      // Доля по себестоимости требует обеих сумм: пустая себестоимость не ноль.
+      cost_share: totalCost && agedCost !== null ? agedCost / totalCost : null,
+      observed_on: String(r.observed_on instanceof Date
+        ? r.observed_on.toISOString().slice(0, 10) : r.observed_on),
+    });
   }
   return out;
+}
+
+/**
+ * Доля 45+ в выкупе — частный случай `aged45` с областью «выкуп». Оставлен ради
+ * существующих вызовов карточки филиала и сводки.
+ */
+export async function buyback45Shares(
+  c: PoolClient, orgUnitIds: string[], observedOn: string,
+): Promise<Map<string, Buyback45>> {
+  return aged45(c, orgUnitIds, observedOn, 'BUYOUT');
 }
 
 /**
