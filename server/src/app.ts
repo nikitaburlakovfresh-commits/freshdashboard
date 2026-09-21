@@ -13,6 +13,7 @@ import { reportFactsRouter } from './routes/reportFacts';
 import { reportDetailRouter } from './routes/reportDetail';
 import { metricsRouter } from './routes/metrics';
 import { roleViewRouter } from './routes/roleView';
+import { adminSettingsRouter, publicRegistrationRouter } from './routes/adminSettings';
 import { ApiError, errorBody } from './util/errors';
 
 export function createApp() {
@@ -44,6 +45,8 @@ export function createApp() {
   app.use('/api/v1/report-detail', reportDetailRouter);
   app.use('/api/v1/metrics', metricsRouter);
   app.use('/api/v1/view-as', roleViewRouter);
+  app.use('/api/v1/registration', publicRegistrationRouter);
+  app.use('/api/v1/admin-settings', adminSettingsRouter);
 
   app.get('/api/v1/healthz', (_req, res) => {
     res.status(200).json({ status: 'ok' });

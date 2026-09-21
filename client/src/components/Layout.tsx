@@ -7,6 +7,7 @@ import { canSeeNavLink, navPermissions, type NavLinkDef } from './navAccess';
 import { getOrganizationTree } from '../api/organization';
 import { useReportDate } from '../state/reportDate';
 import RoleViewBar from './RoleViewBar';
+import { getPendingRegistrations } from '../api/adminSettings';
 
 type NavGroup = { label: string; links: NavLinkDef<IconName>[] };
 
@@ -48,6 +49,8 @@ const adminGroups: NavGroup[] = [
     { path: '/settings/notifications', label: 'Уведомления и сроки', icon: 'target' },
   ] },
   { label: 'Доступ и структура', links: [
+    { path: '/access/roles', label: 'Роли и права', icon: 'shield' },
+    { path: '/access/registrations', label: 'Заявки на доступ', icon: 'check' },
     { path: '/organization', label: 'Оргструктура сети', icon: 'network' },
     { path: '/access', label: 'Пользователи и назначения', icon: 'network' },
   ] },
@@ -84,6 +87,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // Просмотр глазами роли предлагаем только владельцу платформы: у остальных
   // ролей этой кнопки быть не должно даже визуально.
   const isOwner = grants.some(g => g.role === 'SUPER_ADMIN');
+  // Счётчик ожидающих заявок на доступ: владелец платформы должен видеть новую
+  // заявку, не заходя в раздел. Обновляется раз в минуту.
+  const [pendingReg, setPendingReg] = useState(0);
+  useEffect(() => {
+    if (!isOwner) return;
+    let alive = true;
+    const tick = () => { getPendingRegistrations()
+      .then(r => { if (alive) setPendingReg(r.pending); }).catch(() => {}); };
+    tick();
+    const id = window.setInterval(tick, 60000);
+    return () => { alive = false; window.clearInterval(id); };
+  }, [isOwner]);
   const visible = (groups: NavGroup[]) => groups
     .map(group => ({ ...group, links: group.links.filter(link => canSeeNavLink(link, grants, permissions)) }))
     .filter(group => group.links.length > 0);
@@ -208,7 +223,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </label>
           <button className="shell-icon-button" aria-label={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
             onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Сменить тему"><Icon name={theme === 'dark' ? 'sun' : 'moon'} /></button>
-          <NavLink className="shell-icon-button" to="/notifications" aria-label="Открыть уведомления"><Icon name="bell" /></NavLink>
+          <NavLink className="shell-icon-button shell-bell" to={pendingReg > 0 ? '/access/registrations' : '/notifications'}
+            aria-label={pendingReg > 0 ? `Заявок на доступ: ${pendingReg}` : 'Открыть уведомления'}
+            title={pendingReg > 0 ? `Новых заявок на доступ: ${pendingReg}` : 'Уведомления'}>
+            <Icon name="bell" />
+            {pendingReg > 0 && <span className="shell-bell-badge">{pendingReg}</span>}
+          </NavLink>
           <RoleViewBar isOwner={isOwner} slot="button" />
         </div>
       </header>

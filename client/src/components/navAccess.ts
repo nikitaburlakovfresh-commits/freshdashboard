@@ -16,6 +16,11 @@ export function isSuperAdmin(grants: Grant[]): boolean {
 /** Право, без которого пункт меню не показывается. */
 export const NAV_REQUIRED_PERMISSION: Record<string, string> = {
   '/access': 'access.directory.read',
+  // Настройка наборов прав и решения по заявкам на доступ — только владелец
+  // платформы. Оба раздела меняют полномочия, поэтому гейт строже обычного
+  // права на чтение справочника доступов.
+  '/access/roles': 'user.assign_role',
+  '/access/registrations': 'user.create',
   '/organization': 'organization.directory.review',
   '/prepared-reports': 'report.fact_access.manage',
   '/saved-network': 'report.fact_access.manage',

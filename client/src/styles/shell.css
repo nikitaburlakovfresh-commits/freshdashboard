@@ -129,3 +129,43 @@
   border-color:transparent;color:#fff;font-weight:600}
 .role-view-actions button:disabled{opacity:.55;cursor:default}
 @media(max-width:760px){.role-view-bar{padding:10px 12px;flex-wrap:wrap}}
+
+/* Счётчик заявок на доступ на колокольчике. */
+.shell-bell{position:relative}
+.shell-bell-badge{position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;
+  padding:0 4px;border-radius:8px;background:#c2410c;color:#fff;font-size:10px;
+  font-weight:700;line-height:16px;text-align:center}
+
+/* Галочки прав роли. */
+.role-perm-grid{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+.role-perm-item{display:flex;align-items:flex-start;gap:9px;padding:8px 10px;
+  border:1px solid var(--fresh-border);border-radius:8px;font-size:13px;cursor:pointer}
+.role-perm-item input{margin-top:2px;flex:0 0 auto}
+.role-perm-item span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.role-perm-item strong{font-weight:600;word-break:break-word}
+.role-perm-item em{font-style:normal;color:var(--fresh-muted);font-size:12px}
+.role-perm-changed{border-color:#c2410c;background:rgba(194,65,12,.08)}
+
+/* Форма регистрации шире обычной карточки входа. */
+.register-card{max-width:520px;text-align:left}
+.login-alt-link{display:block;margin-top:14px;font-size:13px;text-align:center}
+
+/* Страница регистрации. Оформление в стиле экрана входа: страница открыта до
+   входа в портал, поэтому не наследует каркас с боковым меню. */
+.login-shell{min-height:100vh;display:flex;align-items:center;justify-content:center;
+  padding:32px 16px;background:#F5F6F8}
+.login-card{width:100%;max-width:380px;background:#fff;border-radius:14px;
+  padding:28px 30px 30px;box-shadow:0 12px 32px rgba(16,24,40,.10);color:var(--fresh-dark)}
+.login-card h1{margin:14px 0 8px;font-size:20px;line-height:1.25;color:var(--fresh-dark)}
+.login-card p{margin:0 0 14px;font-size:13px;line-height:1.45;color:#5a6472}
+.register-card{max-width:560px}
+.register-card .role-view-field{margin-bottom:12px;color:var(--fresh-dark)}
+.register-card .role-view-field span{font-size:13px;font-weight:500}
+.register-card .role-view-field input,
+.register-card .role-view-field select{width:100%;padding:10px 12px;border-radius:8px;
+  border:1px solid var(--fresh-border);background:#fff;color:var(--fresh-dark);font-size:14px}
+.register-card .role-view-primary{width:100%;margin-top:8px;padding:11px 16px;border:none;
+  border-radius:8px;background:#003DFF;color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+.register-card .role-view-primary:disabled{background:#A9B8FF;cursor:default}
+.register-card .role-view-error{margin:0 0 12px;font-size:13px;font-weight:600;color:var(--fresh-danger)}
+.login-alt-link{display:block;margin-top:14px;font-size:13px;text-align:center;color:#003DFF}

@@ -2,6 +2,9 @@ import React from 'react';
 import { Routes, Route, Navigate,useLocation } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import RolePermissionsPage from './pages/RolePermissionsPage';
+import RegistrationRequestsPage from './pages/RegistrationRequestsPage';
 import Layout from './components/Layout';
 import TaskListPage from './pages/TaskListPage';
 import TaskDetailPage from './pages/TaskDetailPage';
@@ -33,6 +36,8 @@ export default function App() {
   const { me, loading } = useAuth();
   const {pathname}=useLocation();
   if(pathname==='/activate-account')return <ActivateAccountPage/>;
+  // Регистрация открыта до входа: человека ещё нет в портале.
+  if(pathname==='/register')return <RegisterPage/>;
 
   if (loading) {
     return (
@@ -65,6 +70,8 @@ export default function App() {
         <Route path="/organization" element={<OrganizationPage />} />
         <Route path="/access" element={<AccessPage />} />
         <Route path="/access/metrics" element={<MetricAccessPage />} />
+        <Route path="/access/roles" element={<RolePermissionsPage />} />
+        <Route path="/access/registrations" element={<RegistrationRequestsPage />} />
         <Route path="/division-summary" element={<DivisionSummaryPage />} />
         {/* Обзор KPI живёт на главной; прежний адрес сохранён как переход,
             чтобы закладки руководителей не ломались. */}
