@@ -59,8 +59,18 @@ services:
       CSRF_HMAC_SECRET: ${CSRF_HMAC_SECRET:?CSRF_HMAC_SECRET must be set in your .env}
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:5173}
       REPORT_STORAGE_DIR: /var/lib/fresh/report-quarantine
+      # Решение владельца 25.09.2026: антивирусная проверка загружаемых отчётов
+      # отключена. Официальный сервер баз ClamAV блокирует российские IP, базы
+      # приходилось доставлять вручную, и через 48 часов загрузка отчётов
+      # останавливалась. Режим off предусмотрен кодом: проверка не выполняется
+      # и не подделывается — в квитанции пишется честный статус NOT_SCANNED.
+      # Вернуть проверку: REPORT_SCAN_MODE=clamav в .env сервера.
+      REPORT_SCAN_MODE: ${REPORT_SCAN_MODE:-off}
     volumes:
       - fresh_report_quarantine:/var/lib/fresh/report-quarantine
+      # Signatures only (no reports, no secrets): survive image rebuilds so the
+      # SCAN stage has verifiable ClamAV databases.
+      - fresh_clamav_db:/var/lib/clamav
     ports:
       - "127.0.0.1:4000:4000"
 
@@ -69,3 +79,4 @@ volumes:
   caddy_data:
   caddy_config:
   fresh_report_quarantine:
+  fresh_clamav_db:
