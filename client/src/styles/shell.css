@@ -141,7 +141,7 @@
 .role-view-actions .role-view-primary{background:var(--fresh-accent,#0b6b3a);
   border-color:transparent;color:#fff;font-weight:600}
 .role-view-actions button:disabled{opacity:.55;cursor:default}
-@media(max-width:760px){.role-view-bar{padding:10px 12px;flex-wrap:wrap}}
+@media(max-width:760px){.role-view-bar{padding:10px 12px;flex-wrap:wrap}.role-view-exit{width:100%;min-height:44px}}
 
 /* Счётчик заявок на доступ на колокольчике. */
 .shell-bell{position:relative}

@@ -48,7 +48,10 @@ export default function RoleViewBar({ isOwner, slot }: { isOwner: boolean; slot:
     try { setStatus(await getRoleViewStatus()); } catch { /* статус не критичен для работы экрана */ }
   }, []);
 
-  useEffect(() => { if (isOwner || viewing) void refresh(); }, [isOwner, viewing, refresh]);
+  // Статус спрашиваем всегда: в режиме просмотра права на экране — чужие, и
+  // isOwner ложен. Раньше из-за этого баннер с возвратом не появлялся вовсе,
+  // и владельцу приходилось выходить из портала (26.09.2026).
+  useEffect(() => { void refresh(); }, [isOwner, refresh]);
 
   // Тикаем раз в секунду только когда режим включён: таймер должен быть
   // правдивым, а вне режима считать нечего.
@@ -118,7 +121,7 @@ export default function RoleViewBar({ isOwner, slot }: { isOwner: boolean; slot:
         {status.expires_at && <> · {formatLeft(status.expires_at)}</>}
       </span>
       <button type="button" className="role-view-exit" onClick={leave} disabled={busy}>
-        Вернуться к {status.admin?.login}
+        Вернуться к своей учётной записи{status.admin?.full_name ? ` · ${status.admin.full_name}` : ''}
       </button>
     </div>;
   }
