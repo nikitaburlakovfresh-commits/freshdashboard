@@ -113,3 +113,14 @@
   justify-content:flex-start;gap:10px;margin:0;padding:6px 0}
 .task-multipick .task-multipick-item>input{margin:0;align-self:center}
 .task-multipick .task-multipick-item>span{display:block;line-height:1.3;margin:0;padding:0}
+
+/* Шкала дня: обязательная и необязательная части в одной полосе. */
+.day-scale{display:flex;gap:4px;height:12px;margin:12px 0 8px}
+.day-scale-part{border-radius:6px;background:var(--fresh-border);overflow:hidden;min-width:0}
+.day-scale-part>div{height:100%;border-radius:6px}
+.day-scale-part[data-kind="must"]>div{background:#1c8f4b}
+.day-scale-part[data-kind="opt"]>div{background:#6aa7e8}
+.day-scale-legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px}
+.day-scale-legend span{display:inline-flex;align-items:center;gap:6px}
+.day-scale-legend span::before{content:"";width:10px;height:10px;border-radius:3px;background:#1c8f4b}
+.day-scale-legend span[data-kind="opt"]::before{background:#6aa7e8}

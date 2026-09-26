@@ -321,20 +321,37 @@ export default function TaskDetailPage() {
         const mustDone=must.filter(f=>val(f.field_path)==='Выполнено').length;
         const optDone=opt.filter(f=>val(f.field_path)==='Выполнено').length;
         const bossLeft=mandatoryOpen.length;
-        const pct=must.length?Math.round(mustDone/must.length*100):0;
+        // Шкала дня (решение владельца 26.09.2026): весь трекер — 100 %.
+        // Доля обязательных и необязательных — по числу задач (у РФ 6 и 4 →
+        // 60 % и 40 %). Сдать можно, когда отмечены все обязательные.
+        const total=must.length+opt.length;
+        const wMust=total?Math.round(must.length/total*100):0, wOpt=100-wMust;
+        const gotMust=must.length?Math.round(mustDone/must.length*wMust):0;
+        const gotOpt=opt.length?Math.round(optDone/opt.length*wOpt):0;
+        const pct=gotMust+gotOpt;
+        const unmarked=must.filter(f=>!val(f.field_path)).length;
+        const summaryEmpty=!String(val('completion_summary')).trim();
+        const canSubmit=unmarked===0&&!summaryEmpty&&bossLeft===0;
         return <section style={card} aria-label="Прогресс дня">
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:12,flexWrap:'wrap'}}>
             <h2 style={{...cardTitle,margin:0}}>Прогресс дня</h2>
             <strong style={{fontSize:22}}>{pct}%</strong>
           </div>
-          <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}
-            style={{height:10,borderRadius:5,background:'var(--fresh-border)',margin:'12px 0',overflow:'hidden'}}>
-            <div style={{width:`${pct}%`,height:'100%',background:pct===100?'var(--fresh-success, #1c8f4b)':'var(--fresh-primary, #1d4ed8)'}}/>
+          <div className="day-scale" role="img" aria-label={`Выполнено ${pct}% дня`}>
+            <div className="day-scale-part" style={{flexBasis:`${wMust}%`}} data-kind="must">
+              <div style={{width:must.length?`${mustDone/must.length*100}%`:'0'}}/></div>
+            {wOpt>0&&<div className="day-scale-part" style={{flexBasis:`${wOpt}%`}} data-kind="opt">
+              <div style={{width:opt.length?`${optDone/opt.length*100}%`:'0'}}/></div>}
           </div>
-          <p style={{margin:0,fontSize:14}}>Обязательные: {mustDone} из {must.length}
-            {must.length-mustDone>0?<> · <b>осталось {must.length-mustDone}</b></>:' · все выполнены'}
-            {opt.length>0&&<> · необязательные: {optDone} из {opt.length}</>}
-            {bossLeft>0&&<> · <b style={{color:'var(--fresh-danger, #c0392b)'}}>от руководителя не сдано: {bossLeft}</b></>}</p>
+          <div className="day-scale-legend">
+            <span data-kind="must">Обязательные: <b>{gotMust}% из {wMust}%</b> · {mustDone} из {must.length}</span>
+            {wOpt>0&&<span data-kind="opt">Необязательные: <b>{gotOpt}% из {wOpt}%</b> · {optDone} из {opt.length}</span>}
+          </div>
+          <p style={{margin:'10px 0 0',fontSize:14,fontWeight:600,color:canSubmit?'var(--fresh-success, #1c8f4b)':'var(--fresh-danger, #c0392b)'}}>
+            {canSubmit?'Можно сдавать день':'Сдать пока нельзя: '+[
+              unmarked?`нет отметки у обязательных задач — ${unmarked}`:'',
+              summaryEmpty?'не заполнен итог дня':'',
+              bossLeft?`не сданы задачи от руководителя — ${bossLeft}`:''].filter(Boolean).join(', ')}</p>
         </section>;
       })()}
 
