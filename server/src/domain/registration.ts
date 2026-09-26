@@ -39,7 +39,8 @@ async function assertPlatformOwner(c: PoolClient, user: AuthedUser): Promise<voi
 export async function registrationDirectory() {
   return withTransaction(async (c) => {
     const roles = (await c.query(
-      `SELECT code, display_name, scope_kind FROM roles
+      `SELECT code, display_name,
+              CASE WHEN code IN ('REGIONAL_MANAGER','DIVISION_MANAGER') THEN 'NETWORK' ELSE scope_kind END AS scope_kind FROM roles
         WHERE code NOT IN ('SUPER_ADMIN','SHARED_LOGIN') AND NOT hidden_in_registration
         ORDER BY display_name`,
     )).rows;
@@ -57,6 +58,8 @@ export async function registrationDirectory() {
 
 /** Значение выбора «ГК Fresh, управляющая компания» в поле подразделения. */
 export const UC_CHOICE = 'FRESH_UC';
+/** Должности УК, которые закрепляются за зоной РМ или дивизионом, а не за одним филиалом. */
+export const ZONE_ROLES = new Set(['REGIONAL_MANAGER', 'DIVISION_MANAGER']);
 
 export async function submitRegistration(raw: unknown) {
   const b = (raw ?? {}) as Record<string, unknown>;
@@ -102,7 +105,14 @@ export async function submitRegistration(raw: unknown) {
     if (scopeKind === 'NETWORK' && !isHeadOffice) {
       throw new ApiError('VALIDATION_ERROR', 'Для этой должности подразделение — ГК Fresh (управляющая компания).');
     }
-    if (scopeKind === 'ORG_UNIT') {
+    // РМ и дивизиональный руководитель — должности управляющей компании (решение
+    // владельца 26.09.2026): при регистрации выбирают «ГК Fresh», зону филиалов
+    // администратор закрепляет при подтверждении.
+    const zoneRole = ZONE_ROLES.has(roleCode);
+    if (zoneRole && !isHeadOffice) {
+      throw new ApiError('VALIDATION_ERROR', 'Эта должность относится к управляющей компании: выберите «ГК Fresh · управляющая компания».');
+    }
+    if (scopeKind === 'ORG_UNIT' && !zoneRole) {
       if (isHeadOffice || !orgUnitId) {
         throw new ApiError('VALIDATION_ERROR', 'Для этой должности выберите филиал из списка.');
       }
@@ -244,7 +254,9 @@ export async function decideRegistration(
     }
     const approveScope = role.rows[0].scope_kind as string;
     if (approveScope === 'ORG_UNIT' && !orgUnitId) {
-      throw new ApiError('VALIDATION_ERROR', 'Укажите филиал: без области видимости сотрудник не увидит ни одного показателя.');
+      throw new ApiError('VALIDATION_ERROR', ZONE_ROLES.has(roleCode)
+        ? 'Выберите зону РМ или дивизион: без них сотрудник не увидит ни одного филиала.'
+        : 'Укажите филиал: без области видимости сотрудник не увидит ни одного показателя.');
     }
     if (approveScope === 'NETWORK' && orgUnitId) {
       throw new ApiError('VALIDATION_ERROR', 'Должность уровня управляющей компании не закрепляется за филиалом.');

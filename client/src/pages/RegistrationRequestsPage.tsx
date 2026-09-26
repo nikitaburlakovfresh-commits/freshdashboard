@@ -37,9 +37,19 @@ export default function RegistrationRequestsPage() {
   const zoneKind = (role: string) => role === 'REGIONAL_MANAGER' ? 'CLUSTER' : role === 'DIVISION_MANAGER' ? 'DIVISION' : null;
   const zoneOf = (role: string, branchId: string | null) =>
     zones.find(z => z.kind === zoneKind(role) && z.branches.some(b => b.id === branchId))?.id;
+  // РМ регистрируется от УК без филиала: зона подбирается по фамилии в её названии.
+  const zoneByName = (role: string, fullName: string) => {
+    const words = fullName.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    // Совпадение по фамилии и имени сразу: «Игорь» встречается в двух зонах.
+    const scored = zones.filter(z => z.kind === zoneKind(role))
+      .map(z => ({ id: z.id, n: words.filter(w => z.display_name.toLowerCase().includes(w)).length }))
+      .filter(x => x.n > 0).sort((a, b) => b.n - a.n);
+    return scored.length && (scored.length === 1 || scored[0].n > scored[1].n) ? scored[0].id : undefined;
+  };
   const edit = (r: RegistrationRequest) => edits[r.id] ?? {
     role_code: r.requested_role_code,
-    org_unit_id: zoneOf(r.requested_role_code, r.requested_org_unit_id) ?? r.requested_org_unit_id ?? '',
+    org_unit_id: zoneOf(r.requested_role_code, r.requested_org_unit_id)
+      ?? zoneByName(r.requested_role_code, r.full_name) ?? r.requested_org_unit_id ?? '',
     reason: '',
   };
   const patch = (id: string, k: 'role_code' | 'org_unit_id' | 'reason', v: string) =>
@@ -91,7 +101,7 @@ export default function RegistrationRequestsPage() {
       <h2>{r.full_name} · {r.login}</h2>
       <p className="org-small">
         Подана {r.created_at} · просит роль «{r.role_name}»
-        {r.org_unit_name ? ` · филиал ${r.org_unit_name}` : ' · филиал не указан'}
+        {r.org_unit_name ? ` · филиал ${r.org_unit_name}` : ' · ГК Fresh (управляющая компания)'}
         {r.primary_email ? ` · ${r.primary_email}` : ''}{r.phone ? ` · ${r.phone}` : ''}
       </p>
       {r.comment && <p className="org-small">Комментарий: {r.comment}</p>}
