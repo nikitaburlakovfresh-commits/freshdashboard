@@ -82,3 +82,16 @@
 .task-stale ul { list-style: none; margin: 0; padding: 0 14px 8px; }
 .task-stale li { border-top: 1px solid var(--fresh-border); padding: 10px 0; overflow-wrap: anywhere; font-size: 14px; }
 @media (max-width: 560px) { .task-stale { margin: 8px 12px; } }
+
+/* Подсветка ключевых полей: рамка поля, полоса слева и слово зоны — цвет не
+   единственный носитель смысла. */
+.task-rag { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  vertical-align: middle; white-space: normal; }
+.task-rag[data-rag="GREEN"] { background: rgba(28,143,75,.12); color: var(--fresh-success, #1c8f4b); }
+.task-rag[data-rag="AMBER"] { background: rgba(178,106,0,.14); color: var(--fresh-warning, #b26a00); }
+.task-rag[data-rag="RED"] { background: rgba(192,57,43,.12); color: var(--fresh-danger, #c0392b); }
+.task-field[data-rag] { box-shadow: inset 4px 0 0 var(--rag-color); }
+.task-field[data-rag="GREEN"] { --rag-color: var(--fresh-success, #1c8f4b); }
+.task-field[data-rag="AMBER"] { --rag-color: var(--fresh-warning, #b26a00); }
+.task-field[data-rag="RED"] { --rag-color: var(--fresh-danger, #c0392b); }
+.task-fields .task-field[data-rag] > input, .task-fields .task-field[data-rag] > select { border-color: var(--rag-color); border-width: 2px; }

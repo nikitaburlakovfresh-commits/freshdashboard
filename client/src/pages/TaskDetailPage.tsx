@@ -19,7 +19,7 @@ import StatusBadge from '../components/StatusBadge';
 import { apiFetch } from '../api/client';
 import TaskFields from '../components/TaskFields';
 import DelegateDialog, { type DelegateSource } from '../components/DelegateDialog';
-import { diaryDelegations, diaryReference, type DiaryDelegation, type DiaryHint, type StalePrices } from '../api/dailyLogs';
+import { diaryDelegations, diaryReference, type DiaryDelegation, type DiaryHint, type StalePrices, type ColorRule } from '../api/dailyLogs';
 import { hasUnsavedFields, mergeSavedFields, requiredFieldsPresent } from '../domain/taskForm';
 import { saveLocalDraft, restoreLocalDraft, clearLocalDraft } from '../domain/draftStorage';
 import type { FieldDrafts } from '../domain/taskForm';
@@ -68,6 +68,7 @@ export default function TaskDetailPage() {
   const [delegateFrom, setDelegateFrom] = useState<DelegateSource | null>(null);
   const [delegateBatch, setDelegateBatch] = useState<DelegateSource[] | undefined>();
   const [stale, setStale] = useState<StalePrices | null>(null);
+  const [colorRules, setColorRules] = useState<ColorRule[]>([]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -148,7 +149,7 @@ export default function TaskDetailPage() {
   useEffect(()=>{
     if(!item?.id||!canDelegate)return;
     loadDelegations();
-    diaryReference(item.id).then(r=>{setHints(r.hints);setStale(r.stale_prices??null);}).catch(()=>setHints([]));
+    diaryReference(item.id).then(r=>{setHints(r.hints);setStale(r.stale_prices??null);setColorRules(r.color_rules??[]);}).catch(()=>setHints([]));
   },[item?.id,canDelegate,loadDelegations]);
   useEffect(() => {
     if (!dirty) return;
@@ -312,7 +313,7 @@ export default function TaskDetailPage() {
         <TaskFields item={item} drafts={drafts} editable={isOwnExecutor && ['ASSIGNED','IN_PROGRESS'].includes(item.status) && item.daily_log?.can_fill!==false}
           busy={actionBusy}
           hints={hints} delegations={delegations}
-          stale={stale}
+          stale={stale} colorRules={colorRules}
           onDelegate={canDelegate ? (s,b)=>{setDelegateFrom(s);setDelegateBatch(b);} : undefined}
           onChange={(path,value) => {setError(null);setDrafts(current => ({...current,[path]:{...current[path],value}}));}}
           onSave={path => {

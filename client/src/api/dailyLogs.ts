@@ -100,8 +100,11 @@ export const diaryDelegations=(diary:string)=>apiFetch<DiaryDelegation[]>(`/dail
 export const createDelegation=(diary:string,body:DelegationDraft)=>apiFetch<{id:string;due_date:string}>(`/daily-logs/${diary}/delegations`,{method:'POST',body});
 
 // Подсказки из опубликованных данных портала: значение, источник, срез, формула.
-export interface DiaryHint { field_path:string;value:number;unit:string;as_of:string;period:string;source:string;formula:string;note?:string;check?:'MIN'|'MATCH';min?:number;tolerance?:number }
+export interface DiaryHint { field_path:string;value:number;unit:string;as_of:string;period:string;source:string;formula:string;note?:string;check?:'MIN'|'MATCH';min?:number;tolerance?:number;rag_value?:number;rag_label?:string }
+export type Rag='GREEN'|'AMBER'|'RED';
+export interface ColorBand { color:Rag;gt?:number;gte?:number;lt?:number;lte?:number }
+export interface ColorRule { field_path:string;basis:'INPUT'|'PORTAL';rule:{bands?:ColorBand[];options?:Record<string,Rag>} }
 export interface StaleCar { vin:string;make:string|null;model:string|null;production_year:number|null;days_on_stock:number|null;
   days_without_reprice:number;price_changes_count:number|null;supply_type:string|null;sale_price_rub:number|null;market_price_rub:number|null }
 export interface StalePrices { threshold_days:number;observed_on:string|null;rows:StaleCar[] }
-export const diaryReference=(diary:string)=>apiFetch<{business_date:string;hints:DiaryHint[];stale_prices?:StalePrices}>(`/daily-logs/${diary}/reference`);
+export const diaryReference=(diary:string)=>apiFetch<{business_date:string;hints:DiaryHint[];stale_prices?:StalePrices;color_rules?:ColorRule[]}>(`/daily-logs/${diary}/reference`);

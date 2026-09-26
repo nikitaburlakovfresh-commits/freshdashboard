@@ -34,6 +34,8 @@ export interface Hint {
    *  MATCH — введённое расходится с данными портала больше чем на tolerance.
    */
   check?: 'MIN' | 'MATCH'; min?: number; tolerance?: number;
+  /** Расчёт портала, по которому красится поле с basis PORTAL, и его подпись. */
+  rag_value?: number; rag_label?: string;
 }
 
 async function facts(c: PoolClient, org: string, date: string) {
@@ -61,25 +63,31 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
     // Оставшиеся дни месяца, включая день ежедневника: план на сегодня входит в остаток.
     const daysLeft = Number(monthEnd.slice(8, 10)) - Number(d.business_date.slice(8, 10)) + 1;
 
+    // Темп RunRate (решение владельца 26.09.2026): идём ли на план. Факт с
+    // начала месяца сравнивается с той частью плана, которая приходится на
+    // прошедшие дни: факт ÷ (план месяца × прошло дней ÷ дней в месяце) × 100.
+    // «Прошло дней» — по дате конца периода отчёта, а не по дате ежедневника.
+    const monthDays = Number(monthEnd.slice(8, 10));
+    const runRate = (fact: number, planMonth: number, pe: string) =>
+      fact / (planMonth * Number(pe.slice(8, 10)) / monthDays) * 100;
     const sales = f.get('sales'), plan = f.get('plan');
     if (sales && plan && plan.v > 0) {
-      hints.push({ field_path: 't1_sales_pct', value: r1(sales.v / plan.v * 100), unit: '%', as_of: sales.pe,
+      hints.push({ field_path: 't1_sales_pct', value: r1(runRate(sales.v, plan.v, sales.pe)), unit: '%', as_of: sales.pe,
         period: `${ru(sales.ps)}–${ru(sales.pe)}`, source: 'Сводный отчёт QLIK',
-        formula: `Факт продаж ${sales.v} шт на ${ru(sales.pe)} ÷ план месяца ${plan.v} шт × 100`,
+        formula: `RunRate: факт ${sales.v} шт ÷ (план ${plan.v} шт × ${Number(sales.pe.slice(8, 10))} ÷ ${monthDays} дн.) × 100`,
         check: 'MATCH', tolerance: 0.5 });
       if (daysLeft > 0 && plan.v > sales.v)
         hints.push({ field_path: 't1_sales_plan', value: r1((plan.v - sales.v) / daysLeft), unit: 'шт', as_of: sales.pe,
           period: `${ru(sales.ps)}–${ru(sales.pe)}`, source: 'Сводный отчёт QLIK',
           formula: `Остаток плана ${plan.v - sales.v} шт ÷ ${daysLeft} дн. до конца месяца`,
           note: 'Если факт отчёта снят раньше даты ежедневника, остаток завышен на продажи этих дней.',
-          // Продажи — целые машины: 3,8 в день означает не менее 4.
           check: 'MIN', min: Math.ceil((plan.v - sales.v) / daysLeft) });
     }
     const sf = f.get('suppliesFact'), sp = f.get('suppliesPlan');
     if (sf && sp && sp.v > 0)
-      hints.push({ field_path: 't1_supply_pct', value: r1(sf.v / sp.v * 100), unit: '%', as_of: sf.pe,
+      hints.push({ field_path: 't1_supply_pct', value: r1(runRate(sf.v, sp.v, sf.pe)), unit: '%', as_of: sf.pe,
         period: `${ru(sf.ps)}–${ru(sf.pe)}`, source: 'Сводный отчёт QLIK',
-        formula: `Факт поставок ${sf.v} шт на ${ru(sf.pe)} ÷ план поставок месяца ${sp.v} шт × 100`,
+        formula: `RunRate: факт ${sf.v} шт ÷ (план ${sp.v} шт × ${Number(sf.pe.slice(8, 10))} ÷ ${monthDays} дн.) × 100`,
         check: 'MATCH', tolerance: 0.5 });
     // План поставок в отчёте QLIK — месячный: во всех срезах 20, 25 и 26.09
     // одно и то же значение 113. Поэтому остаток на день считается так же, как
@@ -95,7 +103,9 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
       hints.push({ field_path: 't1_km', value: Math.round((pm.v - m.v) / daysLeft), unit: '₽', as_of: m.pe,
         period: `${ru(m.ps)}–${ru(m.pe)}`, source: 'Сводный отчёт QLIK',
         formula: `Остаток плана маржи (КСО + железо) ${Math.round(pm.v - m.v).toLocaleString('ru-RU')} ₽ ÷ ${daysLeft} дн.`,
-        check: 'MIN', min: Math.ceil((pm.v - m.v) / daysLeft) });
+        check: 'MIN', min: Math.ceil((pm.v - m.v) / daysLeft),
+        rag_value: r1(runRate(m.v, pm.v, m.pe)),
+        rag_label: `Темп RunRate по марже: ${r1(runRate(m.v, pm.v, m.pe)).toLocaleString('ru-RU')} % к плану` });
 
     // Задача 5 — по реестру VIN. Висяки 45+ бывают по всему складу и по
     // выкупу; в поле подставляется весь склад, выкуп показан рядом, чтобы их
@@ -134,6 +144,52 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
           source: 'Реестр VIN, выкуп + комиссия', formula: `Средняя цена продажи ÷ рыночная цена × 100 по ${old.nm} машинам старше 30 дней, выкуп + комиссия`,
           check: 'MATCH', tolerance: 0.5 });
     }
+    // Задача 7 — структура склада по реестру VIN.
+    const st = (await c.query(
+      `WITH l AS (SELECT max(observed_on) d FROM vehicle_stock_rows WHERE org_unit_id=$1 AND observed_on<=$2::date)
+       SELECT l.d::text d, count(*) n,
+              count(*) FILTER (WHERE r.supply_type='Выкуп') nb,
+              count(*) FILTER (WHERE r.supply_type IS NOT NULL AND r.supply_type<>'Выкуп') nc,
+              count(*) FILTER (WHERE r.advertising_status IS NOT NULL) na,
+              count(*) FILTER (WHERE r.advertising_status IS NOT NULL AND r.advertising_status<>'Выгружено') noads,
+              avg(r.profitability)::float8 roi, avg(r.profitability) FILTER (WHERE r.supply_type='Выкуп')::float8 roi_b,
+              avg(r.profitability) FILTER (WHERE r.supply_type IS NOT NULL AND r.supply_type<>'Выкуп')::float8 roi_c
+         FROM l JOIN vehicle_stock_rows r ON r.org_unit_id=$1 AND r.observed_on=l.d GROUP BY l.d`,
+      [d.org_unit_id, d.business_date])).rows[0];
+    if (st && Number(st.n) > 0) {
+      const per = `срез ${ru(st.d)}`, n = Number(st.n);
+      hints.push({ field_path: 't7_share_buy', value: r1(Number(st.nb) / n * 100), unit: '%', as_of: st.d, period: per,
+        source: 'Реестр VIN', formula: `${st.nb} машин выкупа ÷ ${n} машин склада × 100`, check: 'MATCH', tolerance: 0.5 });
+      hints.push({ field_path: 't7_share_com', value: r1(Number(st.nc) / n * 100), unit: '%', as_of: st.d, period: per,
+        source: 'Реестр VIN', formula: `${st.nc} машин комиссии ÷ ${n} машин склада × 100`, check: 'MATCH', tolerance: 0.5 });
+      if (Number(st.na) > 0)
+        hints.push({ field_path: 't7_noads', value: r1(Number(st.noads) / Number(st.na) * 100), unit: '%', as_of: st.d, period: per,
+          source: 'Реестр VIN', formula: `${st.noads} машин со статусом рекламы не «Выгружено» ÷ ${st.na} машин × 100`,
+          check: 'MATCH', tolerance: 0.5 });
+      // Рентабельность — среднее по колонке «Рентабельность» реестра.
+      const roi = (field: string, v: number | null, what: string) => { if (v !== null) hints.push({ field_path: field,
+        value: r1(v * 100), unit: '%', as_of: st.d, period: per, source: 'Реестр VIN',
+        formula: `Средняя рентабельность из колонки реестра, ${what}`, check: 'MATCH', tolerance: 0.5 }); };
+      roi('t7_roi_stock', st.roi, 'весь склад'); roi('t7_roi_buy', st.roi_b, 'выкуп'); roi('t7_roi_com', st.roi_c, 'комиссия');
+    }
+    const rev = f.get('revenue'), unitCost = f.get('stockUnitCost');
+    const soldAvg = rev && sales && sales.v > 0 && rev.pe === sales.pe ? rev.v / sales.v : null;
+    if (soldAvg !== null)
+      hints.push({ field_path: 't7_sold_price', value: Math.round(soldAvg), unit: '₽', as_of: rev!.pe,
+        period: `${ru(rev!.ps)}–${ru(rev!.pe)}`, source: 'Сводный отчёт QLIK',
+        formula: `Выручка ${Math.round(rev!.v).toLocaleString('ru-RU')} ₽ ÷ продано ${sales!.v} шт`,
+        check: 'MATCH', tolerance: Math.max(1000, Math.round(soldAvg * 0.01)) });
+    if (unitCost)
+      hints.push({ field_path: 't7_stock_price', value: Math.round(unitCost.v), unit: '₽', as_of: unitCost.pe,
+        period: `на ${ru(unitCost.pe)}`, source: 'Сводный отчёт QLIK',
+        formula: 'Средняя себестоимость машины на складе (себестоимость склада ÷ машин на складе)',
+        check: 'MATCH', tolerance: Math.max(1000, Math.round(unitCost.v * 0.01)) });
+    if (unitCost && soldAvg !== null)
+      hints.push({ field_path: 't7_diff', value: Math.round(unitCost.v - soldAvg), unit: '₽', as_of: unitCost.pe,
+        period: `склад на ${ru(unitCost.pe)}, продажи ${ru(rev!.ps)}–${ru(rev!.pe)}`, source: 'Сводный отчёт QLIK',
+        formula: 'Средняя себестоимость на складе минус средняя цена проданного', check: 'MATCH',
+        tolerance: Math.max(1000, Math.round(Math.abs(unitCost.v - soldAvg) * 0.01)) });
+
     // Машины без переоценки больше 10 дней — список для поручений (решение
     // владельца 26.09.2026). Основание — колонка выгрузки «Изменения Цены
     // продажи, дн.»: сколько дней цена не менялась.
@@ -147,7 +203,11 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
         WHERE r.price_changes_days > $3
         ORDER BY r.price_changes_days DESC, r.days_on_stock DESC`,
       [d.org_unit_id, d.business_date, STALE_REPRICE_DAYS])).rows;
-    return { business_date: d.business_date, hints,
+    const colorRules = (await c.query(
+      `SELECT DISTINCT ON (field_path) field_path, basis, rule FROM daily_field_color_rules
+        WHERE effective_from <= $1::date ORDER BY field_path, effective_from DESC, version DESC`,
+      [d.business_date])).rows;
+    return { business_date: d.business_date, hints, color_rules: colorRules,
       stale_prices: { threshold_days: STALE_REPRICE_DAYS, observed_on: stale[0]?.observed_on ?? null, rows: stale } };
   });
 }

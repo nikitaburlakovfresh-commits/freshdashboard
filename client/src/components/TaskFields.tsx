@@ -2,7 +2,24 @@ import React from 'react';
 import type { FieldDef, WorkItem } from '../api/types';
 import type { FieldDrafts } from '../domain/taskForm';
 import { parseGroup } from '../domain/taskForm';
-import type { DiaryDelegation, DiaryHint, StalePrices, StaleCar } from '../api/dailyLogs';
+import type { DiaryDelegation, DiaryHint, StalePrices, StaleCar, ColorRule, Rag } from '../api/dailyLogs';
+
+/** Зона по правилу цвета; вне заданных зон — без цвета. */
+export function ragOf(rule: ColorRule['rule'], raw: string | number | null | undefined): Rag | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (rule.options) return rule.options[String(raw)] ?? null;
+  const v = typeof raw === 'number' ? raw : Number(String(raw).replace(',', '.'));
+  if (!Number.isFinite(v)) return null;
+  for (const b of rule.bands ?? []) {
+    if (b.gt !== undefined && !(v > b.gt)) continue;
+    if (b.gte !== undefined && !(v >= b.gte)) continue;
+    if (b.lt !== undefined && !(v < b.lt)) continue;
+    if (b.lte !== undefined && !(v <= b.lte)) continue;
+    return b.color;
+  }
+  return null;
+}
+const RAG_WORD: Record<Rag, string> = { GREEN: 'зелёная зона', AMBER: 'жёлтая зона', RED: 'красная зона' };
 import type { DelegateSource } from './DelegateDialog';
 import '../styles/task-fields.css';
 
@@ -11,12 +28,12 @@ import '../styles/task-fields.css';
  * 26.09.2026: у процента план/факт должно быть видно, что он на дату.
  */
 const FIELD_NOTES: Record<string, string> = {
-  t1_sales_pct: '% выполнения плана месяца на дату последнего отчёта: факт продаж с начала месяца ÷ план месяца.',
+  t1_sales_pct: '% на дату в темпе RunRate: факт продаж с начала месяца ÷ (план месяца × прошло дней ÷ дней в месяце). 100 % и выше — идём на план.',
   t5_share_pct: 'Только выкуп: доля машин выкупа, которые стоят 45 дней и больше, от всех машин выкупа на складе.',
   t5_share_rub: 'Только выкуп, в процентах: себестоимость машин выкупа 45+ дней ÷ себестоимость всего выкупленного склада × 100.',
   t5_age: 'Выкуп + комиссия: весь склад старше 30 дней.',
   t5_market: 'Выкуп + комиссия: весь склад старше 30 дней.',
-  t1_supply_pct: '% выполнения плана поставок на дату последнего отчёта: факт поставок с начала месяца ÷ план поставок месяца.',
+  t1_supply_pct: '% на дату в темпе RunRate: факт поставок с начала месяца ÷ (план поставок месяца × прошло дней ÷ дней в месяце).',
 };
 const STATUS_RU: Record<string, string> = { ASSIGNED: 'назначена', IN_PROGRESS: 'в работе',
   SUBMITTED: 'на проверке у вас', COMPLETED: 'принята', CANCELLED: 'отменена', DRAFT: 'черновик' };
@@ -52,11 +69,11 @@ export function groupFieldsBySection(schema: FieldDef[]): Section[] {
   return out;
 }
 
-export default function TaskFields({ item, drafts, editable, busy, onChange, onSave, hints = [], delegations = [], onDelegate, stale }: {
+export default function TaskFields({ item, drafts, editable, busy, onChange, onSave, hints = [], delegations = [], onDelegate, stale, colorRules = [] }: {
   item: WorkItem; drafts: FieldDrafts; editable: boolean; busy: boolean;
   onChange: (path: string, value: string) => void; onSave: (path: string) => void;
   hints?: DiaryHint[]; delegations?: DiaryDelegation[]; onDelegate?: (source: DelegateSource, batch?: DelegateSource[]) => void;
-  stale?: StalePrices | null;
+  stale?: StalePrices | null; colorRules?: ColorRule[];
 }) {
   const sectionOf = (path: string) => item.field_schema.find(f => f.field_path === path);
   const delegationList = (list: DiaryDelegation[]) => list.length > 0 && <ul className="task-delegations">
@@ -73,8 +90,14 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
       const value = editable ? draft?.value ?? '' : saved?.value ?? '';
       const dirty = !!draft && draft.value !== draft.baseValue;
       const rows = def.type === 'repeatable_group' ? parseGroup(value) : null;
-      return <section className="task-field" key={def.field_path}>
-        <h3>{def.label}{def.required && <span className="task-required"> · обязательно</span>}</h3>
+      // Цвет: по введённому значению или, для basis PORTAL, по расчёту портала.
+      const colorRule = colorRules.find(r => r.field_path === def.field_path);
+      const portalHint = hints.find(h => h.field_path === def.field_path);
+      const rag = !colorRule ? null : colorRule.basis === 'PORTAL' ? ragOf(colorRule.rule, portalHint?.rag_value)
+        : ragOf(colorRule.rule, value);
+      return <section className="task-field" key={def.field_path} data-rag={rag ?? undefined}>
+        <h3>{def.label}{def.required && <span className="task-required"> · обязательно</span>}
+          {rag && <span className="task-rag" data-rag={rag}>{RAG_WORD[rag]}{colorRule?.basis === 'PORTAL' && portalHint?.rag_label ? ` · ${portalHint.rag_label}` : ''}</span>}</h3>
         {def.type === 'repeatable_group' ? <div>
           {rows === null ? <p role="alert">Сохранённый список имеет неподдерживаемый формат. Автоматическая замена отключена.</p> : <>
             {rows.map((row, index) => <fieldset key={index} disabled={busy} className="task-group-row">
@@ -117,6 +140,8 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
             : null;
           return <div className="task-hint" key={h.field_path} data-warn={warn ? '' : undefined}>
             <p><strong>По данным портала: {fmt(h.value, h.unit)}</strong>
+              {colorRule?.basis === 'INPUT' && ragOf(colorRule.rule, h.value) && <span className="task-rag" data-rag={ragOf(colorRule.rule, h.value)!}>
+                {RAG_WORD[ragOf(colorRule.rule, h.value)!]}</span>}
               {h.check === 'MIN' && h.min !== undefined && <> · нужно не менее {fmt(h.min, h.unit)}</>} · {h.source}, {h.period}</p>
             <p className="task-fields-note">{h.formula}{h.note ? `. ${h.note}` : ''}</p>
             {warn && <p className="task-hint-warn" role="alert">{warn}</p>}
