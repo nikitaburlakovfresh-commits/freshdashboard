@@ -108,12 +108,14 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
         period: `срез ${ru(buy.observed_on)}`, source: 'Реестр VIN, выкуп',
         formula: `${buy.aged} машин выкупа 45+ дней ÷ ${buy.total} машин выкупа на складе × 100`,
         check: 'MATCH', tolerance: 0.5 });
-      if (buy.aged_cost !== null)
-        hints.push({ field_path: 't5_share_rub', value: Math.round(buy.aged_cost), unit: '₽', as_of: buy.observed_on,
+      // Доля в деньгах — процент (решение владельца 26.09.2026): себестоимость
+      // машин выкупа 45+ ÷ себестоимость всего выкупленного склада. В шаблоне
+      // у поля единица «₽» — это ошибка шаблона; вводится и сверяется процент.
+      if (buy.cost_share !== null && buy.aged_cost !== null && buy.total_cost !== null)
+        hints.push({ field_path: 't5_share_rub', value: r1(buy.cost_share * 100), unit: '%', as_of: buy.observed_on,
           period: `срез ${ru(buy.observed_on)}`, source: 'Реестр VIN, выкуп',
-          formula: `Себестоимость ${buy.aged} машин выкупа 45+ дней`,
-          // Деньги вводят округлённо: расхождение до 1 % или 1 000 ₽ не ошибка.
-          check: 'MATCH', tolerance: Math.max(1000, Math.round(buy.aged_cost * 0.01)) });
+          formula: `Себестоимость машин выкупа 45+ дней ${Math.round(buy.aged_cost).toLocaleString('ru-RU')} ₽ ÷ себестоимость всего выкупленного склада ${Math.round(buy.total_cost).toLocaleString('ru-RU')} ₽ × 100`,
+          check: 'MATCH', tolerance: 0.5 });
     }
     const old = (await c.query(
       `WITH l AS (SELECT max(observed_on) d FROM vehicle_stock_rows WHERE org_unit_id=$1 AND observed_on<=$2::date)
