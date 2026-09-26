@@ -100,5 +100,5 @@ export const diaryDelegations=(diary:string)=>apiFetch<DiaryDelegation[]>(`/dail
 export const createDelegation=(diary:string,body:DelegationDraft)=>apiFetch<{id:string;due_date:string}>(`/daily-logs/${diary}/delegations`,{method:'POST',body});
 
 // Подсказки из опубликованных данных портала: значение, источник, срез, формула.
-export interface DiaryHint { field_path:string;value:number;unit:string;as_of:string;period:string;source:string;formula:string;note?:string }
+export interface DiaryHint { field_path:string;value:number;unit:string;as_of:string;period:string;source:string;formula:string;note?:string;check?:'MIN'|'MATCH';min?:number;tolerance?:number }
 export const diaryReference=(diary:string)=>apiFetch<{business_date:string;hints:DiaryHint[]}>(`/daily-logs/${diary}/reference`);

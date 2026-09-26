@@ -99,12 +99,24 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
         </div> : editable ? <Scalar def={def} value={value} onChange={v => onChange(def.field_path, v)} disabled={busy} label={def.label}/>
           : <p className="task-field-value">{value || 'Не заполнено'}</p>}
         {FIELD_NOTES[def.field_path] && <p className="task-fields-note">{FIELD_NOTES[def.field_path]}</p>}
-        {hints.filter(h => h.field_path === def.field_path).map(h => <div className="task-hint" key={h.field_path}>
-          <p><strong>По данным портала: {fmt(h.value, h.unit)}</strong> · {h.source}, {h.period}</p>
-          <p className="task-fields-note">{h.formula}{h.note ? `. ${h.note}` : ''}</p>
-          {editable && value !== String(h.value) && <button type="button" className="task-field-secondary" disabled={busy}
-            onClick={() => onChange(def.field_path, String(h.value))}>Подставить {fmt(h.value, h.unit)}</button>}
-        </div>)}
+        {hints.filter(h => h.field_path === def.field_path).map(h => {
+          // Значение портала в поле не ставится (решение владельца 26.09.2026):
+          // человек вводит своё, а портал предупреждает, если этого мало для
+          // плана или если число расходится с отчётом.
+          const entered = value.trim() === '' ? null : Number(value.replace(',', '.'));
+          const warn = entered === null || !Number.isFinite(entered) ? null
+            : h.check === 'MIN' && h.min !== undefined && entered < h.min
+              ? `Для достижения плана нужно не менее ${fmt(h.min, h.unit)} в день. Сейчас указано ${fmt(entered, h.unit)}.`
+            : h.check === 'MATCH' && Math.abs(entered - h.value) > (h.tolerance ?? 0)
+              ? `По данным портала ${fmt(h.value, h.unit)}, указано ${fmt(entered, h.unit)}. Проверьте значение.`
+            : null;
+          return <div className="task-hint" key={h.field_path} data-warn={warn ? '' : undefined}>
+            <p><strong>По данным портала: {fmt(h.value, h.unit)}</strong>
+              {h.check === 'MIN' && h.min !== undefined && <> · нужно не менее {fmt(h.min, h.unit)}</>} · {h.source}, {h.period}</p>
+            <p className="task-fields-note">{h.formula}{h.note ? `. ${h.note}` : ''}</p>
+            {warn && <p className="task-hint-warn" role="alert">{warn}</p>}
+          </div>;
+        })}
         {def.type === 'number' && <p className="task-fields-note">Десятичный разделитель: точка.
           {def.min_value !== undefined && ` Минимум: ${def.min_value}.`}{def.max_value !== undefined && ` Максимум: ${def.max_value}.`} Отсутствие данных не равно нулю.</p>}
         {editable && <div className="task-field-footer">

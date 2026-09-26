@@ -70,3 +70,7 @@
 .task-delegations { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
 .task-delegations a { color: var(--fresh-blue); }
 @media (max-width: 560px) { .task-done-check { margin: 4px 12px 12px; } .task-section-delegate { padding: 8px 12px 4px; } }
+
+/* Предупреждение сверки с данными портала: и рамкой, и словами. */
+.task-hint[data-warn] { border-left-color: var(--fresh-warning, #b26a00); }
+.task-hint-warn { margin: 6px 0 0 !important; font-weight: 600; color: var(--fresh-warning, #b26a00); }

@@ -26,6 +26,14 @@ import { aged45 } from '../metrics/derived';
 export interface Hint {
   field_path: string; value: number; unit: string;
   as_of: string; period: string; source: string; formula: string; note?: string;
+  /**
+   * Проверка ввода человека (решение владельца 26.09.2026: значение из базы в
+   * поле не ставится, а ввод сверяется с ним).
+   *  MIN   — введено меньше минимума, нужного для выполнения плана: предупреждение
+   *          «для достижения плана нужно не менее N».
+   *  MATCH — введённое расходится с данными портала больше чем на tolerance.
+   */
+  check?: 'MIN' | 'MATCH'; min?: number; tolerance?: number;
 }
 
 async function facts(c: PoolClient, org: string, date: string) {
@@ -57,23 +65,28 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
     if (sales && plan && plan.v > 0) {
       hints.push({ field_path: 't1_sales_pct', value: r1(sales.v / plan.v * 100), unit: '%', as_of: sales.pe,
         period: `${ru(sales.ps)}–${ru(sales.pe)}`, source: 'Сводный отчёт QLIK',
-        formula: `Факт продаж ${sales.v} шт на ${ru(sales.pe)} ÷ план месяца ${plan.v} шт × 100` });
+        formula: `Факт продаж ${sales.v} шт на ${ru(sales.pe)} ÷ план месяца ${plan.v} шт × 100`,
+        check: 'MATCH', tolerance: 0.5 });
       if (daysLeft > 0 && plan.v > sales.v)
         hints.push({ field_path: 't1_sales_plan', value: r1((plan.v - sales.v) / daysLeft), unit: 'шт', as_of: sales.pe,
           period: `${ru(sales.ps)}–${ru(sales.pe)}`, source: 'Сводный отчёт QLIK',
           formula: `Остаток плана ${plan.v - sales.v} шт ÷ ${daysLeft} дн. до конца месяца`,
-          note: 'Если факт отчёта снят раньше даты ежедневника, остаток завышен на продажи этих дней.' });
+          note: 'Если факт отчёта снят раньше даты ежедневника, остаток завышен на продажи этих дней.',
+          // Продажи — целые машины: 3,8 в день означает не менее 4.
+          check: 'MIN', min: Math.ceil((plan.v - sales.v) / daysLeft) });
     }
     const sf = f.get('suppliesFact'), sp = f.get('suppliesPlan');
     if (sf && sp && sp.v > 0)
       hints.push({ field_path: 't1_supply_pct', value: r1(sf.v / sp.v * 100), unit: '%', as_of: sf.pe,
         period: `${ru(sf.ps)}–${ru(sf.pe)}`, source: 'Сводный отчёт QLIK',
-        formula: `Факт поставок ${sf.v} шт ÷ план поставок ${sp.v} шт за ${ru(sp.ps)}–${ru(sp.pe)} × 100` });
+        formula: `Факт поставок ${sf.v} шт ÷ план поставок ${sp.v} шт за ${ru(sp.ps)}–${ru(sp.pe)} × 100`,
+        check: 'MATCH', tolerance: 0.5 });
     const m = f.get('margin'), pm = f.get('planMargin');
     if (m && pm && daysLeft > 0 && pm.v > m.v)
       hints.push({ field_path: 't1_km', value: Math.round((pm.v - m.v) / daysLeft), unit: '₽', as_of: m.pe,
         period: `${ru(m.ps)}–${ru(m.pe)}`, source: 'Сводный отчёт QLIK',
-        formula: `Остаток плана маржи (КСО + железо) ${Math.round(pm.v - m.v).toLocaleString('ru-RU')} ₽ ÷ ${daysLeft} дн.` });
+        formula: `Остаток плана маржи (КСО + железо) ${Math.round(pm.v - m.v).toLocaleString('ru-RU')} ₽ ÷ ${daysLeft} дн.`,
+        check: 'MIN', min: Math.ceil((pm.v - m.v) / daysLeft) });
 
     // Задача 5 — по реестру VIN. Висяки 45+ бывают по всему складу и по
     // выкупу; в поле подставляется весь склад, выкуп показан рядом, чтобы их
@@ -105,7 +118,8 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
         source: 'Реестр VIN', formula: `Средние дни на складе у ${old.n} машин старше 30 дней` });
       if (Number(old.nm) > 0)
         hints.push({ field_path: 't5_market', value: r1(old.mkt), unit: '%', as_of: old.d, period: `срез ${ru(old.d)}`,
-          source: 'Реестр VIN', formula: `Средняя цена продажи ÷ рыночная цена × 100 по ${old.nm} машинам старше 30 дней` });
+          source: 'Реестр VIN', formula: `Средняя цена продажи ÷ рыночная цена × 100 по ${old.nm} машинам старше 30 дней`,
+          check: 'MATCH', tolerance: 0.5 });
     }
     return { business_date: d.business_date, hints };
   });
