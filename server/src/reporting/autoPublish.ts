@@ -172,7 +172,7 @@ export async function autoPublishPackage(auth: AuthedUser, metadata: any,
     preview = await previewPublication(auth, uploaded.id, {
       review_version: review.current.version, choices: active,
       reason: `Публикация пакета QLIK за ${period.start} — ${period.end} одной операцией из портала.`,
-      confirm_source_aggregates: true,
+      confirm_source_aggregates: true, skip_unmapped: true,
     });
     if (preview.can_commit) break;
     const blockers: string[] = preview.blockers ?? [];

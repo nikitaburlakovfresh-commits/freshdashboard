@@ -31,9 +31,12 @@ export function closed(raw:any,keys:string[]) {
   return raw;
 }
 type Choice={metric:MetricKey;source:ReportKind;methodology:string;channel?:FunnelChannel};
-type Command={review_version:number;choices:Choice[];reason:string;confirm_source_aggregates:true};
+// skip_unmapped — приём одной кнопкой (26.09.2026): строка точки без филиала в
+// справочнике не публикуется и называется отдельно, но не останавливает весь пакет.
+type Command={review_version:number;choices:Choice[];reason:string;confirm_source_aggregates:true;skip_unmapped?:true};
 function command(raw:any):Command {
-  const b=closed(raw,['review_version','choices','reason','confirm_source_aggregates']);
+  const b=closed(raw,['review_version','choices','reason','confirm_source_aggregates','skip_unmapped']);
+  if(b.skip_unmapped!==undefined&&b.skip_unmapped!==true)throw invalid('skip_unmapped допускает только true.');
   if(!Number.isSafeInteger(b.review_version)||b.review_version<1||b.confirm_source_aggregates!==true||
     typeof b.reason!=='string'||b.reason.trim().length<16||b.reason.length>500||!Array.isArray(b.choices)||!b.choices.length||b.choices.length>METRIC_KEYS.length)
     throw invalid('Нужны сохранённая версия, явный выбор метрик, подтверждение и основание 16–500 символов.');
@@ -161,7 +164,9 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
     for(const row of report.branches) {
       if(exclusions.has(normalizeBranchName(row.name)))continue;
       const item=sourceItemId(context.b.id,report.kind,row.row),mapping=view.rows.find(m=>m.item_id===item);
-      if(!mapping?.org_unit_id||mapping.status!=='PROPOSED'){blockers.push(`Строка ${report.kind}:${row.row}: нет допустимой UUID-привязки.`);continue;}
+      if(!mapping?.org_unit_id||mapping.status!=='PROPOSED'){
+        if(b.skip_unmapped&&!mapping?.org_unit_id)continue;
+        blockers.push(`Строка ${report.kind}:${row.row}: нет допустимой UUID-привязки.`);continue;}
       const org=mapping.org_unit_id;
       // Every path edge must cover the WHOLE period. Never use today's hierarchy
       // to silently assign historical facts to another network.
