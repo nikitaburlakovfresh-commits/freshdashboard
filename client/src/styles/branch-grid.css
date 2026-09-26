@@ -45,14 +45,21 @@
 /* Окно постановки задачи по отклонению. */
 .portal-modal-backdrop{position:fixed;inset:0;background:rgba(15,23,32,.45);display:flex;
   align-items:center;justify-content:center;padding:var(--space-4);z-index:40;}
-.portal-modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+.portal-modal{background:var(--surface,var(--fresh-surface,#fff));color:var(--fresh-dark);border:1px solid var(--border,var(--fresh-border));border-radius:var(--radius-lg);
   padding:var(--space-5);width:min(520px,100%);max-height:90vh;overflow:auto;
   display:flex;flex-direction:column;gap:var(--space-3);}
 .portal-modal h3{margin:0;font-size:var(--text-lg);}
 .portal-modal label{display:flex;flex-direction:column;gap:var(--space-1);font-size:var(--text-sm);}
 .portal-modal input,.portal-modal select,.portal-modal textarea{font:inherit;padding:var(--space-2);
-  border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:inherit;}
-.portal-modal-actions{display:flex;gap:var(--space-2);justify-content:flex-end;}
+  border:1px solid var(--border,var(--fresh-border));border-radius:var(--radius-sm);background:var(--surface,var(--fresh-surface,#fff));color:inherit;min-height:44px;box-sizing:border-box;width:100%;}
+.portal-modal-actions{display:flex;gap:var(--space-2);justify-content:flex-end;flex-wrap:wrap;}
+/* Переменной --surface в токенах нет: без запасных значений окно было прозрачным (26.09.2026). */
+.portal-modal .portal-muted{margin:0;font-size:13px;line-height:1.5;color:var(--fresh-text-muted);}
+.portal-modal-actions button{min-height:44px;padding:10px 18px;border-radius:12px;border:0;background:#003DFF;color:#fff;font:inherit;cursor:pointer;}
+.portal-modal-actions button.btn-ghost{background:var(--fresh-surface,#fff);color:var(--fresh-dark);border:1px solid var(--fresh-border);}
+.portal-modal-actions button:disabled{opacity:.5;cursor:default;}
+@media(max-width:560px){.portal-modal-backdrop{align-items:flex-end;padding:0;}.portal-modal{border-radius:14px 14px 0 0;max-height:92vh;}
+  .portal-modal-actions button{flex:1 1 auto;}}
 .branch-metric-actions{display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap;}
 .branch-metric-actions .btn-link{background:none;border:0;padding:0;font:inherit;cursor:pointer;
   color:var(--accent,#0b6);text-decoration:underline;}
