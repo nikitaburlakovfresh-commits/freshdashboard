@@ -321,7 +321,7 @@ export default function TaskDetailPage() {
           data-overdue={t.mandatory&&t.due_at_local&&t.due_at_local.slice(0,10)<item.daily_log!.business_date?'1':undefined}>
           <div><strong>{t.title}</strong>
             <small>{t.created_by_name&&<>Поставил {t.created_by_name}</>}
-              {t.mandatory?t.due_at_local&&<> · срок {t.due_at_local} МСК</>
+              {t.mandatory?t.due_at_local&&<> · срок {t.due_at_local.slice(8,10)}.{t.due_at_local.slice(5,7)}.{t.due_at_local.slice(0,4)} {t.due_at_local.slice(11)} МСК</>
                 :t.due_at_local?<> · станет обязательной {t.due_at_local.slice(8,10)}.{t.due_at_local.slice(5,7)}, срок сдачи {t.due_at_local.slice(11)} МСК</>
                 :<> · срок не задан</>}</small></div>
           <StatusBadge status={t.status as any}/></Link>;

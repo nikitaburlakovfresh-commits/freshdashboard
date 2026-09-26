@@ -71,7 +71,7 @@ export default function PersonalDayPage() {
           const overdue=!!t.due_at_local&&t.due_at_local.slice(0,10)<date;
           return <Link className="personal-task" to={`/tasks/${t.id}`} key={t.id} data-overdue={overdue?'1':undefined}>
             <div><strong>{t.title}</strong><small>{t.created_by_name&&<>поставил {t.created_by_name} · </>}
-              {t.due_at_local?<>срок {t.due_at_local} МСК</>:<>срок не задан</>}</small></div>
+              {t.due_at_local?<>срок {t.due_at_local.slice(8,10)}.{t.due_at_local.slice(5,7)}.{t.due_at_local.slice(0,4)} {t.due_at_local.slice(11)} МСК</>:<>срок не задан</>}</small></div>
             <StatusBadge status={t.status as any}/></Link>;})}</div>
           :<p>Задач от руководителя на этот день нет.</p>}
       </section>}
@@ -97,7 +97,7 @@ export default function PersonalDayPage() {
             <div><strong>{t.title}</strong>
               <small>{t.template_name}
                 {t.created_by_name&&<> · поставил {t.created_by_name}</>}
-                {t.mandatory?<> · <b>обязательна</b>{t.due_at_local&&<> · срок {t.due_at_local} МСК</>}</>
+                {t.mandatory?<> · <b>обязательна</b>{t.due_at_local&&<> · срок {t.due_at_local.slice(8,10)}.{t.due_at_local.slice(5,7)}.{t.due_at_local.slice(0,4)} {t.due_at_local.slice(11)} МСК</>}</>
                   :t.due_at_local?<> · необязательна · станет обязательной {t.due_at_local.slice(8,10)}.{t.due_at_local.slice(5,7)}, срок сдачи {t.due_at_local.slice(11)} МСК</>
                   :<> · необязательна · срок не задан</>}
                 {overdue&&<> · просрочена</>}
