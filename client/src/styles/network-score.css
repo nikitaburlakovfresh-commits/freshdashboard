@@ -228,3 +228,8 @@ button.score-tile:hover{border-color:currentColor}
   .peer-own-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .peer-grid{grid-template-columns:1fr}
 }
+/* Плитка филиала — ссылка на страницу филиала (26.09.2026). */
+.branch-tile-link{display:block;color:inherit;text-decoration:none;cursor:pointer;transition:border-color .15s ease,transform .15s ease}
+.branch-tile-link:hover{border-color:var(--fresh-primary,#0033ff);transform:translateY(-1px)}
+.branch-tile-link:focus-visible{outline:2px solid var(--fresh-primary,#0033ff);outline-offset:2px}
+.branch-tile-link .branch-tile-toggle{cursor:pointer}

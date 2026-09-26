@@ -234,7 +234,8 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
   };
 
   return <div className="task-fields">
-    {autosaves ? <p className="task-fields-note">Поля сохраняются сами.</p>
+    {!editable ? <p className="task-fields-note">Только просмотр.</p>
+      : autosaves ? <p className="task-fields-note">Поля сохраняются сами.</p>
       : <p className="task-fields-note">{item.template_display_name}. Сохранение каждого поля отдельно; сдача фиксирует все поля одной версией результата.</p>}
     {item.template_code.startsWith('rf_') && <p className="task-fields-notice">Предварительная форма РФ. Введённые значения не публикуются как KPI; формулы и бизнес-приёмка форм ещё не завершены.</p>}
     {!grouped ? item.field_schema.map(renderField) : sections.map((section, index) => {

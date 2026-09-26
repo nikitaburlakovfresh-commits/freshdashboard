@@ -347,8 +347,8 @@ export default function TaskDetailPage() {
             <span data-kind="must">Обязательные: <b>{gotMust}% из {wMust}%</b> · {mustDone} из {must.length}</span>
             {wOpt>0&&<span data-kind="opt">Необязательные: <b>{gotOpt}% из {wOpt}%</b> · {optDone} из {opt.length}</span>}
           </div>
-          <p style={{margin:'10px 0 0',fontSize:14,fontWeight:600,color:canSubmit||!['ASSIGNED','IN_PROGRESS'].includes(item.status)?'var(--fresh-success, #1c8f4b)':'var(--fresh-danger, #c0392b)'}}>
-            {!['ASSIGNED','IN_PROGRESS'].includes(item.status)?'День сдан':canSubmit?'Можно сдавать день':'Сдать пока нельзя: '+[
+          <p style={{margin:'10px 0 0',fontSize:14,fontWeight:600,color:!isOwnExecutor&&['ASSIGNED','IN_PROGRESS'].includes(item.status)?'var(--fresh-muted, #6b7280)':canSubmit||!['ASSIGNED','IN_PROGRESS'].includes(item.status)?'var(--fresh-success, #1c8f4b)':'var(--fresh-danger, #c0392b)'}}>
+            {!['ASSIGNED','IN_PROGRESS'].includes(item.status)?'День сдан':!isOwnExecutor?'Только просмотр · день ещё не сдан':canSubmit?'Можно сдавать день':'Сдать пока нельзя: '+[
               unmarked?`нет отметки у обязательных задач — ${unmarked}`:'',
               summaryEmpty?'не заполнен итог дня':'',
               bossLeft?`не сданы задачи от руководителя — ${bossLeft}`:''].filter(Boolean).join(', ')}</p>
