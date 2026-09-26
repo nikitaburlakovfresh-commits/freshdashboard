@@ -115,12 +115,26 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
         AND s.metric=ANY($3::text[]) AND s.metric=ANY($4::text[])
       ORDER BY s.period_end DESC`,
     [orgUnitId,on,['stock','stockCost'],grant.metrics])).rows;
-    const stockSnapshot=stockRows.length?{observed_on:stockRows[0].observed_on,
+    let stockSnapshot=stockRows.length?{observed_on:stockRows[0].observed_on,
       stock:null as number|null,stock_cost:null as number|null}:null;
     if(stockSnapshot)for(const r of stockRows) {
       if(r.observed_on!==stockSnapshot.observed_on)continue;
       if(r.metric==='stock')stockSnapshot.stock=Number(r.value);
       if(r.metric==='stockCost')stockSnapshot.stock_cost=Number(r.value);
+    }
+
+    // Склад по реестру VIN (решение владельца 26.09.2026): реестр приходит с
+    // каждым пакетом, а сводный срез склада — реже. Берём последний срез реестра
+    // не позже выбранной даты; сводный остаётся, только если реестра нет.
+    const vin=(await c.query(`SELECT to_char(r.observed_on,'YYYY-MM-DD') observed_on,count(*)::int n,
+        sum(r.cost_rub)::float8 cost FROM vehicle_stock_rows r
+      WHERE r.org_unit_id=$1 AND r.observed_on=(SELECT max(observed_on) FROM vehicle_stock_rows
+        WHERE org_unit_id=$1 AND observed_on<=$2::date)
+      GROUP BY r.observed_on`,[orgUnitId,on])).rows[0];
+    let stockSource:'VIN'|'SUMMARY'|null=stockSnapshot?'SUMMARY':null;
+    if(vin&&(!stockSnapshot||vin.observed_on>=stockSnapshot.observed_on)) {
+      stockSnapshot={observed_on:vin.observed_on,stock:vin.n,stock_cost:vin.cost};
+      stockSource='VIN';
     }
 
     // Производные показатели карточки: конверсии воронки из опубликованных
@@ -202,7 +216,7 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
       metrics,metrics_without_threshold:metrics.filter(m=>!m.threshold_id).map(m=>m.metric),
       deviations,metric_names:METRIC_NAMES,thresholds_configured:thresholds.length>0,
       derived,latest,
-      stock_snapshot:stockSnapshot,
+      stock_snapshot:stockSnapshot?{...stockSnapshot,source:stockSource}:null,
       buyback45:buyback,
       repricing:{window_days:REPRICING_WINDOW_DAYS,snapshots,
         vehicles:repricing?.vehicles??null,events:repricing?.events??null},

@@ -128,7 +128,7 @@ export default function BranchCardPage() {
                   :'склад не опубликован')
                 :<>{plan?<>{pct(fact/plan.value)} плана на конец месяца</>:'план не опубликован'}
                   {cost!==null&&<> · себестоимость {rub(cost)}</>}
-                  {snap&&<> · срез {snap.observed_on}</>}</>}</p>
+                  {snap&&<> · {(snap as any).source==='VIN'?'по реестру VIN':'срез'} на {ru(snap.observed_on)}</>}</>}</p>
             </article>;
           }
           const late=!cell?latestBy.get(tile.metric):undefined;
