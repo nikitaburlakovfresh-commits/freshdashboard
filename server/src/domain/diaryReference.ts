@@ -72,10 +72,14 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
       fact / (planMonth * Number(pe.slice(8, 10)) / monthDays) * 100;
     const sales = f.get('sales'), plan = f.get('plan');
     if (sales && plan && plan.v > 0) {
-      hints.push({ field_path: 't1_sales_pct', value: r1(runRate(sales.v, plan.v, sales.pe)), unit: '%', as_of: sales.pe,
+      // Решение владельца 26.09.2026: в поле — % выполнения месячного плана на
+      // дату (факт ÷ план месяца); цвет — по темпу RunRate.
+      hints.push({ field_path: 't1_sales_pct', value: r1(sales.v / plan.v * 100), unit: '%', as_of: sales.pe,
         period: `${ru(sales.ps)}–${ru(sales.pe)}`, source: 'Сводный отчёт QLIK',
-        formula: `RunRate: факт ${sales.v} шт ÷ (план ${plan.v} шт × ${Number(sales.pe.slice(8, 10))} ÷ ${monthDays} дн.) × 100`,
-        check: 'MATCH', tolerance: 0.5 });
+        formula: `Факт ${sales.v} шт ÷ план месяца ${plan.v} шт × 100`,
+        check: 'MATCH', tolerance: 0.5,
+        rag_value: r1(runRate(sales.v, plan.v, sales.pe)),
+        rag_label: `RunRate ${r1(runRate(sales.v, plan.v, sales.pe)).toLocaleString('ru-RU')} %: факт ${sales.v} ÷ (план ${plan.v} × ${Number(sales.pe.slice(8, 10))} ÷ ${monthDays} дн.)` });
       if (daysLeft > 0 && plan.v > sales.v)
         hints.push({ field_path: 't1_sales_plan', value: r1((plan.v - sales.v) / daysLeft), unit: 'шт', as_of: sales.pe,
           period: `${ru(sales.ps)}–${ru(sales.pe)}`, source: 'Сводный отчёт QLIK',
@@ -85,10 +89,12 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
     }
     const sf = f.get('suppliesFact'), sp = f.get('suppliesPlan');
     if (sf && sp && sp.v > 0)
-      hints.push({ field_path: 't1_supply_pct', value: r1(runRate(sf.v, sp.v, sf.pe)), unit: '%', as_of: sf.pe,
+      hints.push({ field_path: 't1_supply_pct', value: r1(sf.v / sp.v * 100), unit: '%', as_of: sf.pe,
         period: `${ru(sf.ps)}–${ru(sf.pe)}`, source: 'Сводный отчёт QLIK',
-        formula: `RunRate: факт ${sf.v} шт ÷ (план ${sp.v} шт × ${Number(sf.pe.slice(8, 10))} ÷ ${monthDays} дн.) × 100`,
-        check: 'MATCH', tolerance: 0.5 });
+        formula: `Факт ${sf.v} шт ÷ план месяца ${sp.v} шт × 100`,
+        check: 'MATCH', tolerance: 0.5,
+        rag_value: r1(runRate(sf.v, sp.v, sf.pe)),
+        rag_label: `RunRate ${r1(runRate(sf.v, sp.v, sf.pe)).toLocaleString('ru-RU')} %: факт ${sf.v} ÷ (план ${sp.v} × ${Number(sf.pe.slice(8, 10))} ÷ ${monthDays} дн.)` });
     // План поставок в отчёте QLIK — месячный: во всех срезах 20, 25 и 26.09
     // одно и то же значение 113. Поэтому остаток на день считается так же, как
     // у продаж.
@@ -105,7 +111,7 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
         formula: `Остаток плана маржи (КСО + железо) ${Math.round(pm.v - m.v).toLocaleString('ru-RU')} ₽ ÷ ${daysLeft} дн.`,
         check: 'MIN', min: Math.ceil((pm.v - m.v) / daysLeft),
         rag_value: r1(runRate(m.v, pm.v, m.pe)),
-        rag_label: `Темп RunRate по марже: ${r1(runRate(m.v, pm.v, m.pe)).toLocaleString('ru-RU')} % к плану` });
+        rag_label: `RunRate маржи ${r1(runRate(m.v, pm.v, m.pe)).toLocaleString('ru-RU')} %: факт ÷ (план × ${Number(m.pe.slice(8, 10))} ÷ ${monthDays} дн.)` });
 
     // Задача 5 — по реестру VIN. Висяки 45+ бывают по всему складу и по
     // выкупу; в поле подставляется весь склад, выкуп показан рядом, чтобы их
