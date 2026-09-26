@@ -79,8 +79,17 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
     if (sf && sp && sp.v > 0)
       hints.push({ field_path: 't1_supply_pct', value: r1(sf.v / sp.v * 100), unit: '%', as_of: sf.pe,
         period: `${ru(sf.ps)}–${ru(sf.pe)}`, source: 'Сводный отчёт QLIK',
-        formula: `Факт поставок ${sf.v} шт ÷ план поставок ${sp.v} шт за ${ru(sp.ps)}–${ru(sp.pe)} × 100`,
+        formula: `Факт поставок ${sf.v} шт на ${ru(sf.pe)} ÷ план поставок месяца ${sp.v} шт × 100`,
         check: 'MATCH', tolerance: 0.5 });
+    // План поставок в отчёте QLIK — месячный: во всех срезах 20, 25 и 26.09
+    // одно и то же значение 113. Поэтому остаток на день считается так же, как
+    // у продаж.
+    if (sf && sp && daysLeft > 0 && sp.v > sf.v)
+      hints.push({ field_path: 't1_supply_plan', value: r1((sp.v - sf.v) / daysLeft), unit: 'шт', as_of: sf.pe,
+        period: `${ru(sf.ps)}–${ru(sf.pe)}`, source: 'Сводный отчёт QLIK',
+        formula: `Остаток плана поставок ${sp.v - sf.v} шт ÷ ${daysLeft} дн. до конца месяца`,
+        note: 'Если факт отчёта снят раньше даты ежедневника, остаток завышен на поставки этих дней.',
+        check: 'MIN', min: Math.ceil((sp.v - sf.v) / daysLeft) });
     const m = f.get('margin'), pm = f.get('planMargin');
     if (m && pm && daysLeft > 0 && pm.v > m.v)
       hints.push({ field_path: 't1_km', value: Math.round((pm.v - m.v) / daysLeft), unit: '₽', as_of: m.pe,
