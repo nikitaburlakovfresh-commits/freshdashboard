@@ -108,3 +108,8 @@
 .task-multipick-item input{width:18px;height:18px;flex:none}
 .task-meeting-tasks{margin-top:10px}
 @media (max-width:640px){.task-multipick fieldset{grid-template-columns:1fr}}
+
+.task-multipick .task-multipick-item{display:flex!important;flex-direction:row!important;align-items:center!important;
+  justify-content:flex-start;gap:10px;margin:0;padding:6px 0}
+.task-multipick .task-multipick-item>input{margin:0;align-self:center}
+.task-multipick .task-multipick-item>span{display:block;line-height:1.3;margin:0;padding:0}

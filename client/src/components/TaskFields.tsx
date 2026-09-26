@@ -60,7 +60,7 @@ function MultiPick({ value, groups, onChange, disabled, label }: {
     {[...groups, ...(extra.length ? [{ title: 'Указано ранее', items: extra }] : [])].map(g => g.items.length > 0 &&
       <fieldset key={g.title} disabled={disabled}><legend>{g.title}</legend>
         {g.items.map(x => <label key={x} className="task-multipick-item">
-          <input type="checkbox" checked={picked.includes(x)} onChange={() => toggle(x)} /> {x}</label>)}
+          <input type="checkbox" checked={picked.includes(x)} onChange={() => toggle(x)} /><span>{x}</span></label>)}
       </fieldset>)}
   </details>;
 }
