@@ -64,6 +64,7 @@ export interface WorkItem {
   parent_work_item_id?: string|null;
   daily_log?: import('./dailyLogs').DailyMeta|null;
   daily_links?: import('./dailyLogs').DailyLink[];
+  assigned_tasks?: import('./dailyLogs').AssignedTask[];
   current_business_date?:string;
   id: string;
   org_unit_id: string;

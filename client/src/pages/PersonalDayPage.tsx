@@ -87,8 +87,8 @@ export default function PersonalDayPage() {
         <Link to={`/branches/${org}`}>Карточка филиала →</Link>
       </section>}
       {day&&<section className="portal-panel"><h2>Задачи от руководителя</h2>
-        <p className="portal-muted">Поставлены вам извне ежедневника, на этот день и ранее. Просроченные
-          остаются в списке: перенос срока не делает задачу выполненной.</p>
+        <p className="portal-muted">Со сроком на этот день и просроченные — обязательны к выполнению. С более
+          поздним сроком — необязательны, указана контрольная дата, когда станут обязательными.</p>
         {day.assigned_tasks.length?<div className="personal-task-list">{day.assigned_tasks.map(t=>{
           // Просрочка определяется по рабочей дате ежедневника, а не по «сейчас»:
           // открыв вчерашний день, руководитель должен видеть его картину.
@@ -97,7 +97,9 @@ export default function PersonalDayPage() {
             <div><strong>{t.title}</strong>
               <small>{t.template_name}
                 {t.created_by_name&&<> · поставил {t.created_by_name}</>}
-                {t.due_at_local?<> · срок {t.due_at_local} МСК</>:<> · срок не задан</>}
+                {t.mandatory?<> · <b>обязательна</b>{t.due_at_local&&<> · срок {t.due_at_local} МСК</>}</>
+                  :t.due_at_local?<> · необязательна · станет обязательной {t.due_at_local.slice(8,10)}.{t.due_at_local.slice(5,7)}, срок сдачи {t.due_at_local.slice(11)} МСК</>
+                  :<> · необязательна · срок не задан</>}
                 {overdue&&<> · просрочена</>}
                 {t.in_daily_log&&<> · уже в ежедневнике</>}</small></div>
             <StatusBadge status={t.status as any}/></Link>;})}</div>

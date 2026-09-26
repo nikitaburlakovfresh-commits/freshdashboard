@@ -75,7 +75,7 @@ export default function NotificationsPage() {
             >
               <div role="link" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') navigate(`/tasks/${n.work_item_id}`); }} style={{ minWidth: 0, cursor: 'pointer' }} onClick={() => navigate(`/tasks/${n.work_item_id}`)}>
                 <div style={{ fontWeight: n.read_at ? 500 : 700, fontSize: 14, color: 'var(--fresh-dark)', overflowWrap: 'anywhere' }}>{n.message}</div>
-                <div style={{ fontSize: 12, color: 'var(--fresh-text-muted)', marginTop: 4 }}>{new Date(n.created_at).toLocaleString('ru-RU', {timeZone:'UTC'})} UTC</div>
+                <div style={{ fontSize: 12, color: 'var(--fresh-text-muted)', marginTop: 4 }}>{new Date(n.created_at).toLocaleString('ru-RU', {timeZone:'Europe/Moscow'})} МСК</div>
               </div>
               {!n.read_at && (
                 <button onClick={() => markRead(n)} style={markBtn}>

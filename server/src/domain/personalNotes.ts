@@ -114,6 +114,7 @@ export async function getPersonalNoteDay(ctx: ActorContext, org: string, roleRaw
     const tasks = (await c.query(
       `SELECT w.id,w.title,w.status,w.entity_version,
               to_char(w.due_at AT TIME ZONE 'Europe/Moscow','YYYY-MM-DD HH24:MI') due_at_local,
+              (w.due_at IS NOT NULL AND (w.due_at AT TIME ZONE 'Europe/Moscow')::date<=$3::date) AS mandatory,
               author.full_name AS created_by_name
          FROM work_items w
          JOIN templates t ON t.id=w.template_version_id
@@ -121,8 +122,7 @@ export async function getPersonalNoteDay(ctx: ActorContext, org: string, roleRaw
         WHERE w.org_unit_id=$1 AND w.assignee_user_id=$2
           AND t.code NOT LIKE 'personal_note_%' AND t.code NOT LIKE 'personal_daily_%'
           AND w.status IN ('ASSIGNED','IN_PROGRESS','SUBMITTED')
-          AND (w.due_at IS NULL OR (w.due_at AT TIME ZONE 'Europe/Moscow')::date<=$3::date)
-        ORDER BY w.due_at NULLS LAST,w.created_at`,
+        ORDER BY mandatory DESC,w.due_at NULLS LAST,w.created_at`,
       [org, ctx.authUser.userId, date])).rows;
     const current = (await c.query(
       "SELECT to_char(now() AT TIME ZONE 'Europe/Moscow','YYYY-MM-DD') AS day")).rows[0].day;

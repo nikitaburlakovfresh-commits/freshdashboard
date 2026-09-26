@@ -122,7 +122,7 @@ export default function TaskListPage() {
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 500, fontSize: 14, color: 'var(--fresh-dark)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</div>
                 <div style={{ fontSize: 12, color: 'var(--fresh-text-muted)', marginTop: 4 }}>
-                  Срок: {new Date(item.due_at).toLocaleString('ru-RU', {timeZone:'UTC'})} UTC
+                  Срок: {new Date(item.due_at).toLocaleString('ru-RU', {timeZone:'Europe/Moscow'})} МСК
                   {item.rework_count > 0 && ` · доработок: ${item.rework_count}`}
                 </div>
               </div>

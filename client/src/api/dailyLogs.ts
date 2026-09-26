@@ -18,6 +18,8 @@ export interface AssignedTask {
   id:string;title:string;status:string;entity_version:number;
   due_at_local:string|null;template_name:string;created_by:string|null;
   created_by_name:string|null;in_daily_log:boolean;
+  /** Срок на этот день или раньше — обязательна к выполнению в этот день. */
+  mandatory:boolean;
 }
 export interface PersonalDay {
   business_date:string;current_business_date:string;record:(DailyMeta&{status:string;entity_version:number})|null;

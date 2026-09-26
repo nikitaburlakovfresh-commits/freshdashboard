@@ -308,6 +308,29 @@ export default function TaskDetailPage() {
           </div>;})}
       </section>}
 
+      {item.daily_log&&(()=>{
+        // Задачи от руководителя — часть ежедневника (решение владельца
+        // 26.09.2026): со сроком сегодня и просроченные обязательны, остальные
+        // видны заранее с контрольной датой.
+        const list=item.assigned_tasks??[];
+        const must=list.filter(t=>t.mandatory), later=list.filter(t=>!t.mandatory);
+        const row=(t:typeof list[number])=><Link className="personal-task" to={`/tasks/${t.id}`} key={t.id}
+          data-overdue={t.mandatory&&t.due_at_local&&t.due_at_local.slice(0,10)<item.daily_log!.business_date?'1':undefined}>
+          <div><strong>{t.title}</strong>
+            <small>{t.created_by_name&&<>Поставил {t.created_by_name}</>}
+              {t.mandatory?t.due_at_local&&<> · срок {t.due_at_local} МСК</>
+                :t.due_at_local?<> · станет обязательной {t.due_at_local.slice(8,10)}.{t.due_at_local.slice(5,7)}, срок сдачи {t.due_at_local.slice(11)} МСК</>
+                :<> · срок не задан</>}</small></div>
+          <StatusBadge status={t.status as any}/></Link>;
+        return <section style={card}>
+          <h2 style={cardTitle}>Задачи от руководителя</h2>
+          <h3 style={{fontSize:14,margin:'12px 0 8px'}}>Обязательно сегодня: {must.length}</h3>
+          {must.length?<div className="personal-task-list">{must.map(row)}</div>:<p style={{fontSize:13,color:'var(--fresh-text-muted)'}}>Обязательных задач на этот день нет.</p>}
+          {later.length>0&&<details style={{marginTop:12}}><summary style={{cursor:'pointer',minHeight:44,display:'flex',alignItems:'center',fontSize:14}}>
+            Необязательно сегодня: {later.length}</summary><div className="personal-task-list">{later.map(row)}</div></details>}
+        </section>;
+      })()}
+
       <section style={card}>
         <h2 style={cardTitle}>Результат выполнения</h2>
         <TaskFields item={item} drafts={drafts} editable={isOwnExecutor && ['ASSIGNED','IN_PROGRESS'].includes(item.status) && item.daily_log?.can_fill!==false}
@@ -363,8 +386,14 @@ export default function TaskDetailPage() {
           {isOwnExecutor && ['ASSIGNED', 'IN_PROGRESS'].includes(item.status) && !item.is_blocked && (
             <button
               disabled={actionBusy || dirty || item.daily_log?.can_fill===false || !requiredFieldsPresent(item.field_schema, item.fields)}
-              onClick={() => runAction(() => submitWorkItem(item.id, { expected_entity_version: item.entity_version,
-                ...(!item.daily_log&&['RF','ROP','ROO'].includes(item.owner_role??'')?{add_to_daily_log:addToDaily,business_date:dailyDate}:{}) }))}
+              onClick={() => {
+                // Сдача дня не блокируется (решение владельца: без блокеров), но
+                // несданные обязательные задачи называются перед сдачей.
+                const open=(item.assigned_tasks??[]).filter(t=>t.mandatory&&['ASSIGNED','IN_PROGRESS'].includes(t.status));
+                if(item.daily_log&&open.length&&!window.confirm(`Не сдано обязательных задач от руководителя: ${open.length}.\n`
+                  +open.map(t=>`— ${t.title}`).join('\n')+'\n\nСдать день всё равно? Задачи останутся в работе и будут видны руководителю как невыполненные.'))return;
+                runAction(() => submitWorkItem(item.id, { expected_entity_version: item.entity_version,
+                ...(!item.daily_log&&['RF','ROP','ROO'].includes(item.owner_role??'')?{add_to_daily_log:addToDaily,business_date:dailyDate}:{}) }));}}
               style={primaryBtn(actionBusy)}
               title={dirty ? 'Сначала сохраните изменения' : 'Сервер проверит все обязательные поля'}
             >

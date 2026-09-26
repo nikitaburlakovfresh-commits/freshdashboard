@@ -287,12 +287,15 @@ export async function getPersonalDay(ctx:ActorContext,org:string,roleRaw:unknown
  * Задачи, поставленные исполнителю руководителем, — блок «Задачи от
  * руководителя» в ежедневнике дня. Это не жёсткие задачи ежедневника: они
  * приходят извне, поэтому показываются отдельным списком ещё до выполнения.
- * Берём открытые задачи филиала, назначенные этому пользователю, кроме самих
- * ежедневников, со сроком на этот день или раньше (просроченные видны тоже).
+ * Решение владельца 26.09.2026: поставленная задача входит в ежедневник, а не
+ * висит отдельно. Со сроком на этот день или раньше — обязательная к выполнению
+ * (просроченные тоже); со сроком позже или без срока — необязательная, с
+ * контрольной датой и временем, когда станет обязательной.
  */
 export async function assignedTasksForDay(c:PoolClient,org:string,userId:string,date:string) {
   return (await c.query(`SELECT w.id,w.title,w.status,w.entity_version,
       to_char(w.due_at AT TIME ZONE 'Europe/Moscow','YYYY-MM-DD HH24:MI') due_at_local,
+      (w.due_at IS NOT NULL AND (w.due_at AT TIME ZONE 'Europe/Moscow')::date<=$3::date) AS mandatory,
       t.display_name template_name,w.created_by,
       author.full_name AS created_by_name,
       EXISTS(SELECT 1 FROM daily_log_links l JOIN submissions s ON s.id=l.submission_id
@@ -301,10 +304,9 @@ export async function assignedTasksForDay(c:PoolClient,org:string,userId:string,
     JOIN templates t ON t.id=w.template_version_id
     LEFT JOIN app_users author ON author.id=w.created_by
     WHERE w.org_unit_id=$1 AND w.assignee_user_id=$2
-      AND t.code NOT LIKE 'personal_daily_%'
+      AND t.code NOT LIKE 'personal_daily_%' AND t.code NOT LIKE 'personal_note_%'
       AND w.status IN ('ASSIGNED','IN_PROGRESS','SUBMITTED')
-      AND (w.due_at IS NULL OR (w.due_at AT TIME ZONE 'Europe/Moscow')::date<=$3::date)
-    ORDER BY w.due_at NULLS LAST,w.created_at`,[org,userId,date])).rows;
+    ORDER BY mandatory DESC,w.due_at NULLS LAST,w.created_at`,[org,userId,date])).rows;
 }
 export async function dailyLinks(c:PoolClient,id:string,submissionId?:string) {
   return (await c.query(`SELECT s.id submission_id,s.work_item_id,s.revision,s.completion_summary,s.submitted_at,

@@ -55,8 +55,8 @@ FROM (VALUES
   ('t6_sr_call',  'INPUT', '{"bands":[{"color":"GREEN","gt":10},{"color":"AMBER","gte":8,"lte":10},{"color":"RED","lt":8}]}'),
   ('t6_sr_visit', 'INPUT', '{"bands":[{"color":"GREEN","gt":15},{"color":"AMBER","gte":12,"lte":15},{"color":"RED","lt":12}]}'),
   ('t6_sr_chat',  'INPUT', '{"bands":[{"color":"GREEN","gt":6},{"color":"AMBER","gte":4,"lte":6},{"color":"RED","lt":4}]}'),
-  -- Задача 7: структура склада. Выше 40 % выкупа (ниже 60 % комиссии) порог не задан — не красится.
-  ('t7_share_buy', 'INPUT', '{"bands":[{"color":"GREEN","gte":27,"lte":40},{"color":"AMBER","gte":21,"lt":27},{"color":"RED","lt":21}]}'),
-  ('t7_share_com', 'INPUT', '{"bands":[{"color":"GREEN","gte":60,"lte":73},{"color":"AMBER","gt":73,"lte":79},{"color":"RED","gt":79}]}')
+  -- Задача 7: структура склада. Выкуп выше 40 % (комиссия ниже 60 %) — красный.
+  ('t7_share_buy', 'INPUT', '{"bands":[{"color":"GREEN","gte":27,"lte":40},{"color":"AMBER","gte":21,"lt":27},{"color":"RED","lt":21},{"color":"RED","gt":40}]}'),
+  ('t7_share_com', 'INPUT', '{"bands":[{"color":"GREEN","gte":60,"lte":73},{"color":"AMBER","gt":73,"lte":79},{"color":"RED","gt":79},{"color":"RED","lt":60}]}')
 ) AS v(field_path, basis, rule)
 WHERE NOT EXISTS (SELECT 1 FROM daily_field_color_rules r WHERE r.field_path = v.field_path);

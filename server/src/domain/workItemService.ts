@@ -10,7 +10,7 @@ import {
 import { serializeWorkItem } from './serialize';
 import { writeAuditAndOutbox } from './auditOutbox';
 import { beginIdempotent, completeIdempotent, IdempotentOperation } from './idempotency';
-import { assertDailyWindow, dailyMetadata, dailyLinks, dailyDate, ensureDailyLog, liveFence, assertSectionNotTooEarly} from './dailyLogs';
+import { assertDailyWindow, dailyMetadata, dailyLinks, assignedTasksForDay, dailyDate, ensureDailyLog, liveFence, assertSectionNotTooEarly} from './dailyLogs';
 
 export interface ActorContext {
   authUser: AuthedUser;
@@ -93,6 +93,9 @@ async function loadCard(client: PoolClient, workItem: WorkItemRow) {
   const submission = await getCurrentSubmission(client, workItem);
   const daily = await dailyMetadata(client,workItem.id);
   return {...serializeWorkItem(workItem, template, fields, submission),daily_log:daily,
+    // Задачи от руководителя — внутри самого ежедневника (решение владельца 26.09.2026).
+    assigned_tasks:daily&&workItem.assignee_user_id?await assignedTasksForDay(client,workItem.org_unit_id,
+      workItem.assignee_user_id,daily.business_date):[],
     daily_links:daily?await dailyLinks(client,workItem.id,
       ['SUBMITTED','COMPLETED'].includes(workItem.status)?workItem.current_submission_id??undefined:undefined):[],
     current_business_date:(await client.query("SELECT to_char(now() AT TIME ZONE 'Europe/Moscow','YYYY-MM-DD') AS day")).rows[0].day};
