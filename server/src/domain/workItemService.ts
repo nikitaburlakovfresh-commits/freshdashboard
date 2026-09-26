@@ -1012,10 +1012,30 @@ export async function submitWorkItem(ctx: ActorContext, workItemId: string, idem
       // row -- but the loop, not the field count, is what makes the check
       // real for later phases.
       const fields = await lockAllFields(client, workItemId);
-      for (const f of fields) {
-        if (!f.value || !/\S/.test(f.value)) {
-          throw new ApiError('COMPLETION_REQUIRED', 'Результат должен быть заполнен перед сдачей.');
-        }
+      // Обязательность берётся из шаблона (исправление 26.09.2026). Раньше
+      // требовалось заполнить ВСЕ поля, и ежедневник РФ из 95 полей нельзя было
+      // сдать, пока пусты необязательные задачи, скрытые поля или разделы с
+      // отметкой «Не выполнено». Теперь: поля с required=true, а у ежедневника —
+      // ещё отметка выполнения каждой обязательной задачи дня. Шаблон без явных
+      // признаков required проверяется по-старому — все поля.
+      const schema: any[] = (await client.query(`SELECT field_schema FROM templates WHERE id=$1`,
+        [workItem.template_version_id])).rows[0]?.field_schema ?? [];
+      const explicit = schema.some(d => typeof d.required === 'boolean');
+      const mustFill = explicit
+        ? new Set(schema.filter(d => d.required === true
+            || (daily && /_done$/.test(d.field_path) && !d.optional)).map(d => d.field_path as string))
+        : null;
+      const empty = fields.filter((f: any) => (!mustFill || mustFill.has(f.field_path)) && (!f.value || !/\S/.test(f.value)));
+      if (empty.length) {
+        const label = (p: string) => {
+          const d = schema.find(x => x.field_path === p);
+          if (!d) return p;
+          return /_done$/.test(p) && d.section_num != null ? `задача ${d.section_num} — отметка выполнения` : d.label ?? p;
+        };
+        throw new ApiError('COMPLETION_REQUIRED', 'Нельзя сдать: не заполнено — '
+          + empty.slice(0, 6).map((f: any) => `«${label(f.field_path)}»`).join(', ')
+          + (empty.length > 6 ? ` и ещё ${empty.length - 6}` : '') + '.',
+          { issues: empty.map((f: any) => ({ path: f.field_path, issue: 'required' })) } as any);
       }
       const fieldValues: Record<string, string> = {};
       for (const f of fields) fieldValues[f.field_path] = f.value;
