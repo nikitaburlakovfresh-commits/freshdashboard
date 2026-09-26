@@ -61,9 +61,7 @@ export default function LoginPage() {
           <Logo size={32} />
           <span style={{ fontWeight: 700, fontSize: 18, color: 'var(--fresh-dark)' }}>Вход в портал</span>
         </div>
-        <div style={{ marginBottom: 24 }}>
-          <span className="pilot-badge">Синтетический пилот — не боевые данные</span>
-        </div>
+        <div style={{ marginBottom: 24 }} />
 
         <label htmlFor="login" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6, color: 'var(--fresh-dark)' }}>
           Логин
@@ -97,10 +95,6 @@ export default function LoginPage() {
           {submitting ? 'Вход…' : 'Войти'}
         </button>
 
-        <p style={{ marginTop: 18, fontSize: 12, color: 'var(--fresh-text-muted)', lineHeight: 1.5 }}>
-          Личный вход в тестовый контур пилота. Если открыт во встроенном предпросмотре без
-          cookie-поддержки, откройте приложение по прямой ссылке в отдельной вкладке.
-        </p>
         <p style={{ marginTop: 14, fontSize: 13, textAlign: 'center' }}>
           <a href="/reset-password">Забыли пароль?</a>
         </p>
