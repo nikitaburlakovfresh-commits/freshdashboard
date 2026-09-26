@@ -89,11 +89,11 @@ export const savePolicy=(org:string,body:unknown)=>apiFetch<{id:string;version:n
 export interface DelegationTarget { user_id:string;full_name:string;login:string;role_code:string;role_name:string }
 export interface DiaryDelegation {
   id:string;title:string;status:string;brief:string|null;due_date:string;assignee_name:string|null;template_name:string;
-  source_ref:{section_num:number|null;field_path:string|null;row_index:number|null;link:string|null}|null;
+  source_ref:{section_num:number|null;field_path:string|null;row_index:number|null;link:string|null;vin?:string|null}|null;
 }
 export interface DelegationDraft {
   assignee_user_id:string;role_code:string;due_date:string;title:string;brief?:string;
-  section_num?:number|null;field_path?:string|null;row_index?:number|null;link?:string|null;
+  section_num?:number|null;field_path?:string|null;row_index?:number|null;link?:string|null;vin?:string|null;
 }
 export const delegationTargets=(diary:string)=>apiFetch<{self_user_id:string;business_date:string;targets:DelegationTarget[]}>(`/daily-logs/${diary}/delegation-targets`);
 export const diaryDelegations=(diary:string)=>apiFetch<DiaryDelegation[]>(`/daily-logs/${diary}/delegations`);
@@ -101,4 +101,7 @@ export const createDelegation=(diary:string,body:DelegationDraft)=>apiFetch<{id:
 
 // Подсказки из опубликованных данных портала: значение, источник, срез, формула.
 export interface DiaryHint { field_path:string;value:number;unit:string;as_of:string;period:string;source:string;formula:string;note?:string;check?:'MIN'|'MATCH';min?:number;tolerance?:number }
-export const diaryReference=(diary:string)=>apiFetch<{business_date:string;hints:DiaryHint[]}>(`/daily-logs/${diary}/reference`);
+export interface StaleCar { vin:string;make:string|null;model:string|null;production_year:number|null;days_on_stock:number|null;
+  days_without_reprice:number;price_changes_count:number|null;supply_type:string|null;sale_price_rub:number|null;market_price_rub:number|null }
+export interface StalePrices { threshold_days:number;observed_on:string|null;rows:StaleCar[] }
+export const diaryReference=(diary:string)=>apiFetch<{business_date:string;hints:DiaryHint[];stale_prices?:StalePrices}>(`/daily-logs/${diary}/reference`);

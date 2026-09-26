@@ -19,7 +19,7 @@ import StatusBadge from '../components/StatusBadge';
 import { apiFetch } from '../api/client';
 import TaskFields from '../components/TaskFields';
 import DelegateDialog, { type DelegateSource } from '../components/DelegateDialog';
-import { diaryDelegations, diaryReference, type DiaryDelegation, type DiaryHint } from '../api/dailyLogs';
+import { diaryDelegations, diaryReference, type DiaryDelegation, type DiaryHint, type StalePrices } from '../api/dailyLogs';
 import { hasUnsavedFields, mergeSavedFields, requiredFieldsPresent } from '../domain/taskForm';
 import { saveLocalDraft, restoreLocalDraft, clearLocalDraft } from '../domain/draftStorage';
 import type { FieldDrafts } from '../domain/taskForm';
@@ -66,6 +66,8 @@ export default function TaskDetailPage() {
   const [hints, setHints] = useState<DiaryHint[]>([]);
   const [delegations, setDelegations] = useState<DiaryDelegation[]>([]);
   const [delegateFrom, setDelegateFrom] = useState<DelegateSource | null>(null);
+  const [delegateBatch, setDelegateBatch] = useState<DelegateSource[] | undefined>();
+  const [stale, setStale] = useState<StalePrices | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -146,7 +148,7 @@ export default function TaskDetailPage() {
   useEffect(()=>{
     if(!item?.id||!canDelegate)return;
     loadDelegations();
-    diaryReference(item.id).then(r=>setHints(r.hints)).catch(()=>setHints([]));
+    diaryReference(item.id).then(r=>{setHints(r.hints);setStale(r.stale_prices??null);}).catch(()=>setHints([]));
   },[item?.id,canDelegate,loadDelegations]);
   useEffect(() => {
     if (!dirty) return;
@@ -265,7 +267,7 @@ export default function TaskDetailPage() {
           {item.parent_work_item_id&&<> · <Link to={`/tasks/${item.parent_work_item_id}`}>открыть ежедневник</Link></>}</p>}
       </section>:null}
 
-      {delegateFrom&&item.daily_log&&<DelegateDialog diaryId={item.id} source={delegateFrom}
+      {delegateFrom&&item.daily_log&&<DelegateDialog diaryId={item.id} source={delegateFrom} batch={delegateBatch}
         onClose={()=>setDelegateFrom(null)} onCreated={()=>{setDelegateFrom(null);loadDelegations();}}/>}
 
       {item.daily_log&&<section style={card}><h2 style={cardTitle}>Личная дневная запись · {item.daily_log.business_date}</h2>
@@ -310,7 +312,8 @@ export default function TaskDetailPage() {
         <TaskFields item={item} drafts={drafts} editable={isOwnExecutor && ['ASSIGNED','IN_PROGRESS'].includes(item.status) && item.daily_log?.can_fill!==false}
           busy={actionBusy}
           hints={hints} delegations={delegations}
-          onDelegate={canDelegate ? setDelegateFrom : undefined}
+          stale={stale}
+          onDelegate={canDelegate ? (s,b)=>{setDelegateFrom(s);setDelegateBatch(b);} : undefined}
           onChange={(path,value) => {setError(null);setDrafts(current => ({...current,[path]:{...current[path],value}}));}}
           onSave={path => {
             const draft = drafts[path];

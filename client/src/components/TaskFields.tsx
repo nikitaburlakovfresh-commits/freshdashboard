@@ -2,7 +2,7 @@ import React from 'react';
 import type { FieldDef, WorkItem } from '../api/types';
 import type { FieldDrafts } from '../domain/taskForm';
 import { parseGroup } from '../domain/taskForm';
-import type { DiaryDelegation, DiaryHint } from '../api/dailyLogs';
+import type { DiaryDelegation, DiaryHint, StalePrices, StaleCar } from '../api/dailyLogs';
 import type { DelegateSource } from './DelegateDialog';
 import '../styles/task-fields.css';
 
@@ -12,6 +12,10 @@ import '../styles/task-fields.css';
  */
 const FIELD_NOTES: Record<string, string> = {
   t1_sales_pct: '% выполнения плана месяца на дату последнего отчёта: факт продаж с начала месяца ÷ план месяца.',
+  t5_share_pct: 'Только выкуп: доля машин выкупа, которые стоят 45 дней и больше, от всех машин выкупа на складе.',
+  t5_share_rub: 'Только выкуп: себестоимость машин выкупа, которые стоят 45 дней и больше.',
+  t5_age: 'Выкуп + комиссия: весь склад старше 30 дней.',
+  t5_market: 'Выкуп + комиссия: весь склад старше 30 дней.',
   t1_supply_pct: '% выполнения плана поставок на дату последнего отчёта: факт поставок с начала месяца ÷ план поставок месяца.',
 };
 const STATUS_RU: Record<string, string> = { ASSIGNED: 'назначена', IN_PROGRESS: 'в работе',
@@ -48,10 +52,11 @@ export function groupFieldsBySection(schema: FieldDef[]): Section[] {
   return out;
 }
 
-export default function TaskFields({ item, drafts, editable, busy, onChange, onSave, hints = [], delegations = [], onDelegate }: {
+export default function TaskFields({ item, drafts, editable, busy, onChange, onSave, hints = [], delegations = [], onDelegate, stale }: {
   item: WorkItem; drafts: FieldDrafts; editable: boolean; busy: boolean;
   onChange: (path: string, value: string) => void; onSave: (path: string) => void;
-  hints?: DiaryHint[]; delegations?: DiaryDelegation[]; onDelegate?: (source: DelegateSource) => void;
+  hints?: DiaryHint[]; delegations?: DiaryDelegation[]; onDelegate?: (source: DelegateSource, batch?: DelegateSource[]) => void;
+  stale?: StalePrices | null;
 }) {
   const sectionOf = (path: string) => item.field_schema.find(f => f.field_path === path);
   const delegationList = (list: DiaryDelegation[]) => list.length > 0 && <ul className="task-delegations">
@@ -170,13 +175,38 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
           }
           return section.fields.filter(f => !isDone(f.field_path) && !hidden.has(f.field_path)).map(renderField);
         })()}
+        {stale && section.fields.some(f => f.field_path === 't5_rows') && (() => {
+          // Машины без переоценки больше 10 дней из реестра VIN — поручаются по
+          // одной или все сразу, по отдельной задаче на каждую.
+          const car = (x: StaleCar) => [x.make, x.model, x.production_year].filter(Boolean).join(' ') || x.vin;
+          const src = (x: StaleCar): DelegateSource => ({ section_num: section.num, section_title: section.title,
+            field_path: 'stale_price', vin: x.vin, label: `${car(x)} · ${x.vin}`,
+            text: `${car(x)}, VIN ${x.vin}. Без переоценки ${x.days_without_reprice} дн., на складе ${x.days_on_stock ?? '—'} дн., ${x.supply_type ?? 'тип не указан'}.`
+              + (x.sale_price_rub && x.market_price_rub ? ` Цена ${x.sale_price_rub.toLocaleString('ru-RU')} ₽, рынок ${x.market_price_rub.toLocaleString('ru-RU')} ₽.` : '') });
+          return <details className="task-stale">
+            <summary>Авто без переоценки более {stale.threshold_days} дней: {stale.rows.length}
+              {stale.observed_on && ` · реестр VIN на ${stale.observed_on.slice(8, 10)}.${stale.observed_on.slice(5, 7)}`}</summary>
+            {stale.rows.length === 0 ? <p className="task-fields-note">Таких машин нет.</p> : <>
+              {onDelegate && <button type="button" className="task-field-secondary"
+                onClick={() => onDelegate({ section_num: section.num, section_title: section.title }, stale.rows.map(src))}>
+                Поручить все {stale.rows.length}</button>}
+              <ul>{stale.rows.map(x => <li key={x.vin}>
+                <div><strong>{car(x)}</strong> · {x.vin}</div>
+                <div className="task-fields-note">Без переоценки {x.days_without_reprice} дн. · на складе {x.days_on_stock ?? '—'} дн. · {x.supply_type ?? 'тип не указан'}
+                  {x.sale_price_rub && x.market_price_rub ? ` · цена ${Math.round(x.sale_price_rub / x.market_price_rub * 1000) / 10} % к рынку` : ''}</div>
+                {onDelegate && <button type="button" className="task-field-secondary" onClick={() => onDelegate(src(x))}>Поручить</button>}
+                {delegationList(delegations.filter(d => d.source_ref?.vin === x.vin))}
+              </li>)}</ul>
+            </>}
+          </details>;
+        })()}
         {onDelegate && section.num !== null && !closing && <div className="task-section-delegate">
           <button type="button" className="task-field-secondary"
             onClick={() => onDelegate({ section_num: section.num, section_title: section.title,
               text: section.fields.filter(f => f.type === 'text')
                 .map(f => item.fields.find(x => x.field_path === f.field_path)?.value).filter(Boolean).join('\n') })}>
             Поручить задачу по разделу</button>
-          {delegationList(delegations.filter(d => d.source_ref?.section_num === section.num && d.source_ref?.row_index == null))}
+          {delegationList(delegations.filter(d => d.source_ref?.section_num === section.num && d.source_ref?.row_index == null && !d.source_ref?.vin))}
         </div>}
         {mark && (() => {
           // Отметка выполнения — галочка внизу раздела (решение владельца

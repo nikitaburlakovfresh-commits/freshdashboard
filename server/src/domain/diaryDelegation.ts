@@ -93,7 +93,7 @@ export async function listDiaryDelegations(ctx: ActorContext, diaryId: string) {
 
 export async function createDiaryDelegation(ctx: ActorContext, diaryId: string, raw: any) {
   const b = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-  const allowed = ['assignee_user_id', 'role_code', 'due_date', 'title', 'brief', 'section_num', 'field_path', 'row_index', 'link'];
+  const allowed = ['assignee_user_id', 'role_code', 'due_date', 'title', 'brief', 'section_num', 'field_path', 'row_index', 'link', 'vin'];
   if (Object.keys(b).some(k => !allowed.includes(k))) throw invalid('Неизвестные поля поручения.');
   if (typeof b.assignee_user_id !== 'string' || !uuid.test(b.assignee_user_id)) throw invalid('Выберите исполнителя.');
   if (typeof b.role_code !== 'string' || !/^[A-Z_]{2,40}$/.test(b.role_code)) throw invalid('Выберите роль исполнителя.');
@@ -104,6 +104,7 @@ export async function createDiaryDelegation(ctx: ActorContext, diaryId: string, 
   if (brief && brief.length > 4000) throw invalid('Суть поручения: не длиннее 4000 символов.');
   const link = typeof b.link === 'string' && b.link.trim() ? b.link.trim() : null;
   if (link && (link.length > 2000 || !/^https?:\/\//i.test(link))) throw invalid('Ссылка должна начинаться с http:// или https://.');
+  const vin = typeof b.vin === 'string' && /^[A-Z0-9-]{8,20}$/.test(b.vin) ? b.vin : null;
   const sectionNum = Number.isInteger(b.section_num) ? b.section_num : null;
   const rowIndex = Number.isInteger(b.row_index) && b.row_index >= 0 ? b.row_index : null;
   const fieldPath = typeof b.field_path === 'string' && /^[a-z0-9_]{1,80}$/.test(b.field_path) ? b.field_path : null;
@@ -129,7 +130,7 @@ export async function createDiaryDelegation(ctx: ActorContext, diaryId: string, 
     if (!template) throw invalid('Для этой роли поручения пока не предусмотрены.');
 
     const sourceRef = { diary_work_item_id: diaryId, diary_role: d.role_code, diary_date: d.business_date,
-      section_num: sectionNum, field_path: fieldPath, row_index: rowIndex, link };
+      section_num: sectionNum, field_path: fieldPath, row_index: rowIndex, link, vin };
     const item = (await c.query(
       `INSERT INTO work_items (org_unit_id, template_version_id, title, due_at, created_by,
            status, assignee_user_id, parent_work_item_id, brief, source_ref)

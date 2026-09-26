@@ -74,3 +74,11 @@
 /* Предупреждение сверки с данными портала: и рамкой, и словами. */
 .task-hint[data-warn] { border-left-color: var(--fresh-warning, #b26a00); }
 .task-hint-warn { margin: 6px 0 0 !important; font-weight: 600; color: var(--fresh-warning, #b26a00); }
+
+/* Список машин без переоценки в задаче 5. */
+.task-stale { margin: 8px 14px; border: 1px solid var(--fresh-border); border-radius: 10px; }
+.task-stale > summary { cursor: pointer; padding: 12px 14px; min-height: 44px; box-sizing: border-box; font-weight: 600; font-size: 14px; }
+.task-stale > button, .task-stale > .task-fields-note { margin: 0 14px 8px; }
+.task-stale ul { list-style: none; margin: 0; padding: 0 14px 8px; }
+.task-stale li { border-top: 1px solid var(--fresh-border); padding: 10px 0; overflow-wrap: anywhere; font-size: 14px; }
+@media (max-width: 560px) { .task-stale { margin: 8px 12px; } }

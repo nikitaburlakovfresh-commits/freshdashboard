@@ -100,18 +100,20 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
     // Задача 5 — по реестру VIN. Висяки 45+ бывают по всему складу и по
     // выкупу; в поле подставляется весь склад, выкуп показан рядом, чтобы их
     // можно было отличить (правило владельца).
-    const all = (await aged45(c, [d.org_unit_id], d.business_date, 'ALL')).get(d.org_unit_id);
+    // Висяки 45+ в задаче 5 — только выкуп (решение владельца 26.09.2026):
+    // и доля, и деньги считаются по машинам с типом поставки «Выкуп».
     const buy = (await aged45(c, [d.org_unit_id], d.business_date, 'BUYOUT')).get(d.org_unit_id);
-    if (all) {
-      const note = buy ? `Только выкуп: ${buy.aged} из ${buy.total} шт (${r1(buy.share * 100)} %)` +
-        (buy.aged_cost !== null ? `, ${Math.round(buy.aged_cost).toLocaleString('ru-RU')} ₽` : '') : undefined;
-      hints.push({ field_path: 't5_share_pct', value: r1(all.share * 100), unit: '%', as_of: all.observed_on,
-        period: `срез ${ru(all.observed_on)}`, source: 'Реестр VIN',
-        formula: `${all.aged} машин 45+ дней ÷ ${all.total} машин склада × 100 (весь склад)`, note });
-      if (all.aged_cost !== null)
-        hints.push({ field_path: 't5_share_rub', value: Math.round(all.aged_cost), unit: '₽', as_of: all.observed_on,
-          period: `срез ${ru(all.observed_on)}`, source: 'Реестр VIN',
-          formula: 'Сумма себестоимости машин 45+ дней (весь склад)', note });
+    if (buy) {
+      hints.push({ field_path: 't5_share_pct', value: r1(buy.share * 100), unit: '%', as_of: buy.observed_on,
+        period: `срез ${ru(buy.observed_on)}`, source: 'Реестр VIN, выкуп',
+        formula: `${buy.aged} машин выкупа 45+ дней ÷ ${buy.total} машин выкупа на складе × 100`,
+        check: 'MATCH', tolerance: 0.5 });
+      if (buy.aged_cost !== null)
+        hints.push({ field_path: 't5_share_rub', value: Math.round(buy.aged_cost), unit: '₽', as_of: buy.observed_on,
+          period: `срез ${ru(buy.observed_on)}`, source: 'Реестр VIN, выкуп',
+          formula: `Себестоимость ${buy.aged} машин выкупа 45+ дней`,
+          // Деньги вводят округлённо: расхождение до 1 % или 1 000 ₽ не ошибка.
+          check: 'MATCH', tolerance: Math.max(1000, Math.round(buy.aged_cost * 0.01)) });
     }
     const old = (await c.query(
       `WITH l AS (SELECT max(observed_on) d FROM vehicle_stock_rows WHERE org_unit_id=$1 AND observed_on<=$2::date)
@@ -124,12 +126,27 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
       [d.org_unit_id, d.business_date])).rows[0];
     if (old && Number(old.n) > 0) {
       hints.push({ field_path: 't5_age', value: r1(old.age), unit: 'дн', as_of: old.d, period: `срез ${ru(old.d)}`,
-        source: 'Реестр VIN', formula: `Средние дни на складе у ${old.n} машин старше 30 дней` });
+        source: 'Реестр VIN, выкуп + комиссия', formula: `Средние дни на складе у ${old.n} машин старше 30 дней, выкуп + комиссия` });
       if (Number(old.nm) > 0)
         hints.push({ field_path: 't5_market', value: r1(old.mkt), unit: '%', as_of: old.d, period: `срез ${ru(old.d)}`,
-          source: 'Реестр VIN', formula: `Средняя цена продажи ÷ рыночная цена × 100 по ${old.nm} машинам старше 30 дней`,
+          source: 'Реестр VIN, выкуп + комиссия', formula: `Средняя цена продажи ÷ рыночная цена × 100 по ${old.nm} машинам старше 30 дней, выкуп + комиссия`,
           check: 'MATCH', tolerance: 0.5 });
     }
-    return { business_date: d.business_date, hints };
+    // Машины без переоценки больше 10 дней — список для поручений (решение
+    // владельца 26.09.2026). Основание — колонка выгрузки «Изменения Цены
+    // продажи, дн.»: сколько дней цена не менялась.
+    const stale = (await c.query(
+      `WITH l AS (SELECT max(observed_on) d FROM vehicle_stock_rows WHERE org_unit_id=$1 AND observed_on<=$2::date)
+       SELECT l.d::text observed_on, i.vehicle_key vin, r.make, r.model, r.production_year,
+              r.days_on_stock, r.price_changes_days::float8 days_without_reprice, r.price_changes_count,
+              r.supply_type, r.sale_price_rub::float8 sale_price_rub, r.market_price_rub::float8 market_price_rub
+         FROM l JOIN vehicle_stock_rows r ON r.org_unit_id=$1 AND r.observed_on=l.d
+         JOIN vehicle_identity i ON i.id=r.vehicle_id
+        WHERE r.price_changes_days > $3
+        ORDER BY r.price_changes_days DESC, r.days_on_stock DESC`,
+      [d.org_unit_id, d.business_date, STALE_REPRICE_DAYS])).rows;
+    return { business_date: d.business_date, hints,
+      stale_prices: { threshold_days: STALE_REPRICE_DAYS, observed_on: stale[0]?.observed_on ?? null, rows: stale } };
   });
 }
+const STALE_REPRICE_DAYS = 10;

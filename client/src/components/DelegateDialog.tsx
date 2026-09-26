@@ -5,6 +5,7 @@ import { createDelegation, delegationTargets, moscowToday, type DelegationTarget
 export interface DelegateSource {
   section_num: number | null; section_title: string;
   field_path?: string | null; row_index?: number | null; link?: string | null; text?: string;
+  vin?: string | null; label?: string;
 }
 
 /**
@@ -14,16 +15,17 @@ export interface DelegateSource {
  * (решение владельца 26.09.2026). Поручение себе на будущий день — тот же путь:
  * в выбранный день задача появится в собственном ежедневнике.
  */
-export default function DelegateDialog({ diaryId, source, onClose, onCreated }: {
-  diaryId: string; source: DelegateSource; onClose: () => void; onCreated: () => void;
+export default function DelegateDialog({ diaryId, source, batch, onClose, onCreated }: {
+  diaryId: string; source: DelegateSource; batch?: DelegateSource[]; onClose: () => void; onCreated: () => void;
 }) {
   const [targets, setTargets] = useState<DelegationTarget[]>([]);
   const [selfId, setSelfId] = useState('');
   const [target, setTarget] = useState('');
   const [date, setDate] = useState(moscowToday());
-  const what = source.row_index != null ? `${source.section_title} · запись ${source.row_index + 1}` : source.section_title;
-  const [title, setTitle] = useState(what.slice(0, 200));
-  const [brief, setBrief] = useState([source.text, source.link].filter(Boolean).join('\n'));
+  const what = batch ? `${source.section_title} · ${batch.length} машин, по задаче на каждую`
+    : source.label ? `${source.section_title} · ${source.label}` : source.row_index != null ? `${source.section_title} · запись ${source.row_index + 1}` : source.section_title;
+  const [title, setTitle] = useState((batch || source.label ? 'Переоценка' : what).slice(0, 200));
+  const [brief, setBrief] = useState(batch ? 'Пересмотреть цену: машина без переоценки больше 10 дней.' : [source.text, source.link].filter(Boolean).join('\n'));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -42,9 +44,15 @@ export default function DelegateDialog({ diaryId, source, onClose, onCreated }: 
     if (title.trim().length < 3) { setError('Название задачи — не короче 3 символов.'); return; }
     setBusy(true); setError(null);
     try {
-      await createDelegation(diaryId, { assignee_user_id: t.user_id, role_code: t.role_code, due_date: date,
-        title: title.trim(), brief: brief.trim() || undefined, section_num: source.section_num,
-        field_path: source.field_path ?? null, row_index: source.row_index ?? null, link: source.link || null });
+      // Пакет — по отдельной задаче на каждую машину: каждую можно принять
+      // или вернуть отдельно.
+      for (const src of batch ?? [source]) {
+        const t2 = src.label ? `${title.trim()} · ${src.label}`.slice(0, 200) : title.trim();
+        const b2 = batch ? [brief.trim(), src.text].filter(Boolean).join('\n') : brief.trim();
+        await createDelegation(diaryId, { assignee_user_id: t.user_id, role_code: t.role_code, due_date: date,
+          title: t2, brief: b2 || undefined, section_num: src.section_num,
+          field_path: src.field_path ?? null, row_index: src.row_index ?? null, link: src.link || null, vin: src.vin ?? null });
+      }
       onCreated();
     } catch (err: any) { setError(err?.message ?? 'Не удалось поставить задачу.'); }
     finally { setBusy(false); }
