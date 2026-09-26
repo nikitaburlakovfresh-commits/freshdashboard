@@ -1488,7 +1488,9 @@ export async function getWorkItemHistory(ctx: ActorContext, workItemId: string, 
         (row.assignee_user_id === ctx.authUser.userId || row.created_by === ctx.authUser.userId)) ||
       rmOrgs.has(row.org_unit_id) ||
       (!!daily && diaryOrgs.has(row.org_unit_id)) ||
-      (operationalRoles.has(row.org_unit_id) && row.assignee_user_id === ctx.authUser.userId);
+      (operationalRoles.has(row.org_unit_id) && row.assignee_user_id === ctx.authUser.userId) ||
+      // Постановщик видит историю своей задачи, как и саму карточку (26.09.2026).
+      (operationalRoles.has(row.org_unit_id) && row.created_by === ctx.authUser.userId);
     if (!visible) throw new ApiError('NOT_FOUND', 'Объект не найден.');
     if(daily&&!rmOrgs.has(row.org_unit_id)&&!diaryOrgs.has(row.org_unit_id)&&!operationalRoles.get(row.org_unit_id)?.has(daily.role_code))
       throw new ApiError('NOT_FOUND','Объект не найден.');
