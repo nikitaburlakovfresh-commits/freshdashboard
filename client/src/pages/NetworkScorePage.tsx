@@ -368,11 +368,20 @@ function PeerNetwork({data}:{data:Overview}) {
             <p>{place?`${place} место из ${scored.length} в сети`:'балл не рассчитан'} · <RagBadge status={b.score_rag}/></p></div>
           <strong className="peer-own-score tabnum">{b.score===null?'—':`${Math.round(b.score)}%`}</strong>
         </div>
-        {b.score_components.length>0&&<div className="peer-own-grid">{b.score_components.slice(0,6).map(c=>{
+        {b.score_components.length>0&&<div className="peer-own-grid">{[...b.score_components].sort((x,y)=>y.weight-x.weight).slice(0,6).map(c=>{
+          // Доли приходят дробью (0,43), деньги — рублями: показываем «43 %» и
+          // «11,9 млн ₽», как руководитель читает отчёт.
+          const unit=b.metrics.find(m=>m.metric===c.metric)?.unit
+            ??(/Share|funnel/i.test(c.metric)?'PCT':c.metric==='stockTurnover'?'RATIO':'COUNT');
+          const fmt=(v:number)=>unit==='PCT'?`${Math.round(Math.abs(v)<=1.5?v*100:v)}%`
+            :unit==='RUB'?`${(v/1e6).toLocaleString('ru-RU',{maximumFractionDigits:1})} млн ₽`
+            :unit==='RATIO'?v.toLocaleString('ru-RU',{maximumFractionDigits:2})
+            :Math.round(v).toLocaleString('ru-RU');
           const pct=c.fact!==null&&c.plan!==null&&c.plan>0?Math.round(c.fact/c.plan*100):null;
-          return <div key={c.metric}><span>{c.metric_name}</span>
-            <strong className="tabnum">{c.fact===null?'—':Math.round(c.fact).toLocaleString('ru-RU')}</strong>
-            <small className="tabnum">{c.plan===null?'план не задан':`план ${Math.round(c.plan).toLocaleString('ru-RU')}${pct===null?'':` · ${pct}%`}`}</small></div>;
+          return <div key={c.metric}><span title={c.metric_name}>{c.metric_name}</span>
+            <strong className="tabnum">{c.fact===null?'нет данных':fmt(c.fact)}</strong>
+            <small className="tabnum">{c.plan===null?(c.score!==null?`балл ${Math.round(c.score)}%`:'план не задан')
+              :`план ${fmt(c.plan)}${pct===null?'':` · ${pct}%`}`}</small></div>;
         })}</div>}
         <span className="peer-own-open">Открыть карточку →</span>
       </Link>;
