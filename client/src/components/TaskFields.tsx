@@ -46,8 +46,12 @@ function Scalar({ def, value, onChange, disabled, label }: {
   const common = { 'aria-label': label, value, disabled, onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => onChange(e.target.value) };
   if (def.type === 'text') return <textarea {...common} rows={3} maxLength={def.max_chars ?? 4000}/>;
   if (def.type === 'select') return <select {...common}><option value="">Выберите значение</option>{def.options?.map(o => <option key={o} value={o}>{o}</option>)}</select>;
-  return <input {...common} type={def.type === 'number' ? 'text' : def.type}
-    inputMode={def.type === 'number' ? 'decimal' : undefined} maxLength={def.max_chars}/>;
+  // Числа — только целые (решение владельца 26.09.2026): запятая превращается
+  // в точку, лишние символы отбрасываются, дробь округляется при выходе из поля.
+  if (def.type === 'number') return <input {...common} type="text" inputMode="decimal"
+    onChange={e => onChange(e.target.value.replace(',', '.').replace(/[^\d.-]/g, ''))}
+    onBlur={() => { const n = Number(value); if (value.trim() !== '' && Number.isFinite(n) && String(Math.round(n)) !== value) onChange(String(Math.round(n))); }}/>;
+  return <input {...common} type={def.type} maxLength={def.max_chars}/>;
 }
 
 /**
@@ -141,12 +145,20 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
               ? `По данным портала ${fmt(h.value, h.unit)}, указано ${fmt(entered, h.unit)}. Проверьте значение.`
             : null;
           return <div className="task-hint" key={h.field_path} data-warn={warn ? '' : undefined}>
-            <p><strong>По данным портала: {fmt(h.value, h.unit)}</strong>
+            <p><strong>По данным портала: {fmt(Math.round(h.value), h.unit)}</strong>
               {colorRule?.basis === 'INPUT' && ragOf(colorRule.rule, h.value) && <span className="task-rag" data-rag={ragOf(colorRule.rule, h.value)!}>
                 {RAG_WORD[ragOf(colorRule.rule, h.value)!]}</span>}
               {h.check === 'MIN' && h.min !== undefined && <> · нужно не менее {fmt(h.min, h.unit)}</>} · {h.source}, {h.period}</p>
             <p className="task-fields-note">{h.formula}{h.note ? `. ${h.note}` : ''}</p>
             {warn && <p className="task-hint-warn" role="alert">{warn}</p>}
+            {(() => {
+              // «Подставить»: для плана на день — минимум, нужный для плана;
+              // для остальных — значение портала. Сохраняется автосохранением.
+              const target = h.check === 'MIN' && h.min !== undefined ? Math.ceil(h.min) : Math.round(h.value);
+              return editable && def.type === 'number' && value !== String(target) &&
+                <button type="button" className="task-field-secondary task-hint-apply" disabled={busy}
+                  onClick={() => onChange(def.field_path, String(target))}>Подставить {fmt(target, h.unit)}</button>;
+            })()}
           </div>;
         })}
         {def.type === 'number' && <p className="task-fields-note">Десятичный разделитель: точка.

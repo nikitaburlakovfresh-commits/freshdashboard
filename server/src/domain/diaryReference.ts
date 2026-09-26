@@ -50,7 +50,8 @@ async function facts(c: PoolClient, org: string, date: string) {
 }
 
 const ru = (d: string) => d.slice(8, 10) + '.' + d.slice(5, 7);
-const r1 = (x: number) => Math.round(x * 10) / 10;
+// Решение владельца 26.09.2026: все значения ежедневника — целые числа.
+const r1 = (x: number) => Math.round(x);
 
 export async function diaryReference(ctx: ActorContext, diaryId: string) {
   return withTransaction(async c => {

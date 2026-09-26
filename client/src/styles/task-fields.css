@@ -95,3 +95,6 @@
 .task-field[data-rag="AMBER"] { --rag-color: var(--fresh-warning, #b26a00); }
 .task-field[data-rag="RED"] { --rag-color: var(--fresh-danger, #c0392b); }
 .task-fields .task-field[data-rag] > input, .task-fields .task-field[data-rag] > select { border-color: var(--rag-color); border-width: 2px; }
+
+.task-hint-apply{margin-top:8px;min-height:44px;padding:0 16px}
+@media (max-width:640px){.task-hint-apply{width:100%}}

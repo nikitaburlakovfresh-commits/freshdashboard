@@ -136,7 +136,11 @@ export default function TaskDetailPage() {
     // конфликте версий, а после возврата связи возобновляется сама.
     if(!item?.daily_log?.can_fill||!isOwnExecutor||!['ASSIGNED','IN_PROGRESS'].includes(item.status)
       ||actionBusy||offline||conflicts.length)return;
-    const entry=Object.entries(drafts).find(([,d])=>d.value!==d.baseValue&&d.value.trim().length>0);
+    // Число уходит на сервер только целым: «78.» или «78.9» ждут выхода из поля,
+    // где округляются, — иначе сервер отклонял недописанное значение.
+    const isNum=(p:string)=>item.field_schema.find(f=>f.field_path===p)?.type==='number';
+    const entry=Object.entries(drafts).find(([p,d])=>d.value!==d.baseValue&&d.value.trim().length>0
+      &&(!isNum(p)||/^-?\d+$/.test(d.value.trim())));
     if(!entry)return;
     const [path,draft]=entry;
     const delay=Math.max(700,pauseUntil-Date.now());
