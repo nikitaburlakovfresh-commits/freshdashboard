@@ -53,7 +53,10 @@ export async function diaryFor(c: PoolClient, ctx: ActorContext, diaryId: string
     && SETTER_ROLES.includes(d.role_code);
   // Не раскрываем существование чужого ежедневника: тот же ответ, что на
   // несуществующий.
-  if (!isRm && !isOwner) throw new ApiError('NOT_FOUND', 'Ежедневник не найден.');
+  // РФ и дивизиональный читают ежедневники филиала без права проверки и
+  // постановки поручений (решение владельца 26.09.2026).
+  const isReader = roles.includes('RF') || roles.includes('DIVISION_MANAGER');
+  if (!isRm && !isOwner && !isReader) throw new ApiError('NOT_FOUND', 'Ежедневник не найден.');
   if (forWrite && !isRm && !isOwner) throw new ApiError('FORBIDDEN', 'Ставить поручения из этого ежедневника нельзя.');
   return d;
 }

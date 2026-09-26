@@ -1464,12 +1464,14 @@ export async function getWorkItemHistory(ctx: ActorContext, workItemId: string, 
     if (!row) throw new ApiError('NOT_FOUND', 'Объект не найден.');
     const rmOrgs = await currentRmOrgIds(client, ctx.authUser.userId);
     const operationalRoles = await currentOperationalRolesByOrg(client, ctx.authUser.userId);
+    const daily=await dailyMetadata(client,row.id);
+    const diaryOrgs = await diaryReadOrgIds(client, ctx.authUser.userId);
     const visible =
       rmOrgs.has(row.org_unit_id) ||
+      (!!daily && diaryOrgs.has(row.org_unit_id)) ||
       (operationalRoles.has(row.org_unit_id) && row.assignee_user_id === ctx.authUser.userId);
     if (!visible) throw new ApiError('NOT_FOUND', 'Объект не найден.');
-    const daily=await dailyMetadata(client,row.id);
-    if(daily&&!rmOrgs.has(row.org_unit_id)&&!operationalRoles.get(row.org_unit_id)?.has(daily.role_code))
+    if(daily&&!rmOrgs.has(row.org_unit_id)&&!diaryOrgs.has(row.org_unit_id)&&!operationalRoles.get(row.org_unit_id)?.has(daily.role_code))
       throw new ApiError('NOT_FOUND','Объект не найден.');
 
     let cursorVersion: number | null = null;
