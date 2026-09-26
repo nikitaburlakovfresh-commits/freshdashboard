@@ -79,7 +79,9 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
   const delegationList = (list: DiaryDelegation[]) => list.length > 0 && <ul className="task-delegations">
     {list.map(d => <li key={d.id}><a href={`/tasks/${d.id}`}>{d.assignee_name ?? 'Исполнитель'} · на {d.due_date.slice(8, 10)}.{d.due_date.slice(5, 7)}</a>
       {' '}· {STATUS_RU[d.status] ?? d.status}</li>)}</ul>;
-  const sections = groupFieldsBySection(item.field_schema);
+  // Поля, скрытые настройкой ежедневника (061), не показываются и не считаются в «заполнено N из M».
+  const hiddenByConfig = new Set(item.daily_log?.hidden_fields ?? []);
+  const sections = groupFieldsBySection(item.field_schema.filter(f => !hiddenByConfig.has(f.field_path)));
   const grouped = sections.some(s => s.num !== null);
   // У ежедневника поля сохраняются сами через 0,7 секунды после ввода, поэтому
   // 95 кнопок «Сохранить» здесь только мешают: остаётся признак состояния.
@@ -187,7 +189,7 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
           // (решение владельца 26.09.2026: блок встречи с КЦ свёрнут при «Нет»
           // и раскрывается к заполнению при «Да»). Уже сохранённые значения при
           // «Нет» не стираются — поля только скрываются.
-          const hidden = new Set<string>();
+          const hidden = new Set<string>(item.daily_log?.hidden_fields ?? []);
           let gate: string | null = null;
           for (const f of section.fields) {
             if (f.type === 'select') {

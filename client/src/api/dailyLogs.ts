@@ -3,6 +3,8 @@ export const moscowToday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/M
 export interface DailyMeta {
   work_item_id:string;business_date:string;role_code:string;policy_id:string;
   base_open:string;base_close:string;window_open:string;window_close:string;can_fill:boolean;
+  /** Поля, скрытые настройкой на дату ежедневника; значения в базе сохраняются. */
+  hidden_fields?:string[];
 }
 export interface DailyLink {
   submission_id:string;work_item_id:string;title:string;completion_summary:string;revision:number;

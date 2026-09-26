@@ -41,7 +41,14 @@ export async function dailyMetadata(c:PoolClient,id:string) {
     role_code,policy_id,base_open,base_close,window_open,window_close,
     now() BETWEEN window_open AND window_close AS can_fill
     FROM daily_log_records WHERE work_item_id=$1`,[id]);
-  return result.rows[0]??null;
+  const meta=result.rows[0]??null;
+  if(!meta) return null;
+  // Скрытые поля — последняя версия настройки на дату ежедневника (061).
+  meta.hidden_fields=(await c.query(`SELECT field_path FROM (
+      SELECT DISTINCT ON (field_path) field_path,hidden FROM daily_field_visibility
+       WHERE role_code=$1 AND effective_from<=$2::date ORDER BY field_path,effective_from DESC,version DESC) v
+     WHERE hidden`,[meta.role_code,meta.business_date])).rows.map((r:any)=>r.field_path);
+  return meta;
 }
 export async function assertDailyWindow(c:PoolClient,id:string) {
   const meta=await dailyMetadata(c,id);
