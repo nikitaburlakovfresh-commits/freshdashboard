@@ -13,8 +13,12 @@ interface Bucket {
 const WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_LIMIT = 5;
 const IP_LIMIT = 30;
-const MUTATION_LIMIT = 30; // per session per minute
-const GENERAL_LIMIT = 120; // per session per minute
+// Было 30 изменений в минуту. Ежедневник РФ — 95 полей с автосохранением каждого,
+// и при быстром заполнении лимит срабатывал: владелец получил «Повторите позже» на
+// 72-й версии и не смог сдать день (26.09.2026). Лимит защищает от перебора и
+// сбойного клиента, а не от человека, быстро заполняющего форму.
+const MUTATION_LIMIT = 300; // per session per minute
+const GENERAL_LIMIT = 600; // per session per minute
 const MINUTE_MS = 60 * 1000;
 
 const byLogin = new Map<string, Bucket>();

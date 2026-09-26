@@ -58,6 +58,10 @@ export interface Submission {
 }
 
 export interface WorkItem {
+  brief?: string|null;
+  source_ref?: {diary_work_item_id?:string;diary_role?:string;diary_date?:string;section_num?:number|null;
+    field_path?:string|null;row_index?:number|null;link?:string|null}|null;
+  parent_work_item_id?: string|null;
   daily_log?: import('./dailyLogs').DailyMeta|null;
   daily_links?: import('./dailyLogs').DailyLink[];
   current_business_date?:string;

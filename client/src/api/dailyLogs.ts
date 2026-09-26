@@ -83,3 +83,22 @@ export const savePolicyForAll=(body:{roles?:string[];effective_from:string;base_
   apiFetch<BulkPolicyResult>('/daily-logs/policies-bulk',{method:'POST',body});
 
 export const savePolicy=(org:string,body:unknown)=>apiFetch<{id:string;version:number}>(`/daily-logs/policies/${org}`,{method:'POST',body});
+
+// Поручения из строки ежедневника (решение владельца 26.09.2026): машина,
+// звонок, вывод по трафику — конкретному человеку на конкретный день.
+export interface DelegationTarget { user_id:string;full_name:string;login:string;role_code:string;role_name:string }
+export interface DiaryDelegation {
+  id:string;title:string;status:string;brief:string|null;due_date:string;assignee_name:string|null;template_name:string;
+  source_ref:{section_num:number|null;field_path:string|null;row_index:number|null;link:string|null}|null;
+}
+export interface DelegationDraft {
+  assignee_user_id:string;role_code:string;due_date:string;title:string;brief?:string;
+  section_num?:number|null;field_path?:string|null;row_index?:number|null;link?:string|null;
+}
+export const delegationTargets=(diary:string)=>apiFetch<{self_user_id:string;business_date:string;targets:DelegationTarget[]}>(`/daily-logs/${diary}/delegation-targets`);
+export const diaryDelegations=(diary:string)=>apiFetch<DiaryDelegation[]>(`/daily-logs/${diary}/delegations`);
+export const createDelegation=(diary:string,body:DelegationDraft)=>apiFetch<{id:string;due_date:string}>(`/daily-logs/${diary}/delegations`,{method:'POST',body});
+
+// Подсказки из опубликованных данных портала: значение, источник, срез, формула.
+export interface DiaryHint { field_path:string;value:number;unit:string;as_of:string;period:string;source:string;formula:string;note?:string }
+export const diaryReference=(diary:string)=>apiFetch<{business_date:string;hints:DiaryHint[]}>(`/daily-logs/${diary}/reference`);

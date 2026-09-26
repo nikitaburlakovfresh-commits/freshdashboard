@@ -5,6 +5,8 @@ import { enforceSessionRateLimit } from '../auth/rateLimit';
 import { getPersonalDay, openDailyLog, setDailyPolicy, setDailyPolicyForAll } from '../domain/dailyLogs';
 import { operationalOverview } from '../domain/operationalOverview';
 import { getPersonalNoteDay, openPersonalNote } from '../domain/personalNotes';
+import { diaryReference } from '../domain/diaryReference';
+import { delegationTargets, listDiaryDelegations, createDiaryDelegation } from '../domain/diaryDelegation';
 export const dailyRouter=Router();
 dailyRouter.use(requireSession);
 dailyRouter.use((req,_res,next)=>{try{enforceSessionRateLimit(req.authUser!.sessionId,req.method!=='GET');next();}catch(e){next(e);}});
@@ -17,6 +19,12 @@ dailyRouter.post('/open',requireOrigin,requireCsrf,wrap(async(req,res)=>{res.jso
 dailyRouter.get('/note',wrap(async(req,res)=>{res.json(await getPersonalNoteDay(ctx(req),req.query.org_unit_id as string,req.query.role,req.query.business_date));}));
 dailyRouter.post('/note/open',requireOrigin,requireCsrf,wrap(async(req,res)=>{res.json(await openPersonalNote(ctx(req),req.body??{}));}));
 dailyRouter.get('/overview',wrap(async(req,res)=>{res.json(await operationalOverview(ctx(req),req.query.business_date,req.query.org_unit_id as string|undefined));}));
+// Поручения из строки ежедневника: машина, звонок, вывод по трафику.
+dailyRouter.get('/:id/delegation-targets',wrap(async(req,res)=>{res.json(await delegationTargets(ctx(req),req.params.id));}));
+// Подсказки из опубликованных данных для полей ежедневника.
+dailyRouter.get('/:id/reference',wrap(async(req,res)=>{res.json(await diaryReference(ctx(req),req.params.id));}));
+dailyRouter.get('/:id/delegations',wrap(async(req,res)=>{res.json(await listDiaryDelegations(ctx(req),req.params.id));}));
+dailyRouter.post('/:id/delegations',requireOrigin,requireCsrf,wrap(async(req,res)=>{res.json(await createDiaryDelegation(ctx(req),req.params.id,req.body??{}));}));
 // Одинаковое окно на все филиалы и роли: настраивать 117 форм по одной нельзя.
 dailyRouter.post('/policies-bulk',requireOrigin,requireCsrf,wrap(async(req,res)=>{res.json(await setDailyPolicyForAll(ctx(req),req.body??{}));}));
 dailyRouter.post('/policies/:org',requireOrigin,requireCsrf,wrap(async(req,res)=>{res.json(await setDailyPolicy(ctx(req),req.params.org,req.body??{}));}));

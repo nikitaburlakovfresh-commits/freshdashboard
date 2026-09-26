@@ -29,6 +29,11 @@ export function serializeWorkItem(row: any, template: TemplateRow, fields: any[]
     status: row.status,
     assignee_user_id: row.assignee_user_id,
     created_by: row.created_by,
+    // Суть поручения словами постановщика и строка ежедневника, из которой оно
+    // пришло (машина, звонок). Для обычных задач — null.
+    brief: row.brief ?? null,
+    source_ref: row.source_ref ?? null,
+    parent_work_item_id: row.parent_work_item_id ?? null,
     entity_version: Number(row.entity_version),
     is_blocked: row.is_blocked,
     blocked_reason: row.blocked_reason,

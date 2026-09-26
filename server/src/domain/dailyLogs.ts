@@ -114,10 +114,12 @@ export async function setDailyPolicy(ctx:ActorContext,org:string,body:any) {
 export async function assertSectionNotTooEarly(c:PoolClient,sectionNum:number|null,businessDate:string) {
   if(!sectionNum) return;
   const rule=(await c.query(
-    `SELECT not_before FROM daily_section_time_rules
+    `SELECT not_before,mode FROM daily_section_time_rules
       WHERE section_num=$1 AND effective_from<=$2::date
       ORDER BY effective_from DESC,version DESC LIMIT 1`,[sectionNum,businessDate])).rows[0];
-  if(!rule?.not_before) return;
+  // Режим MARK: раннее заполнение разрешено и только отмечается (решение
+  // владельца 26.09.2026 — запрет закрытия дня до 16:00 не давал сдать день).
+  if(!rule?.not_before||rule.mode!=='BLOCK') return;
   const now=(await c.query("SELECT to_char(now() AT TIME ZONE 'Europe/Moscow','HH24:MI') t, "+
     "to_char(now() AT TIME ZONE 'Europe/Moscow','YYYY-MM-DD') d")).rows[0];
   // Правило действует только в свои сутки: вчерашний ежедневник дозаполняют

@@ -18,6 +18,8 @@ import { useAuth } from '../auth/AuthContext';
 import StatusBadge from '../components/StatusBadge';
 import { apiFetch } from '../api/client';
 import TaskFields from '../components/TaskFields';
+import DelegateDialog, { type DelegateSource } from '../components/DelegateDialog';
+import { diaryDelegations, diaryReference, type DiaryDelegation, type DiaryHint } from '../api/dailyLogs';
 import { hasUnsavedFields, mergeSavedFields, requiredFieldsPresent } from '../domain/taskForm';
 import { saveLocalDraft, restoreLocalDraft, clearLocalDraft } from '../domain/draftStorage';
 import type { FieldDrafts } from '../domain/taskForm';
@@ -58,6 +60,12 @@ export default function TaskDetailPage() {
   const [offline, setOffline] = useState(!navigator.onLine);
   const [retryAt, setRetryAt] = useState<number|null>(null);
   const [restoredPaths, setRestoredPaths] = useState<string[]>([]);
+  // Превышен лимит частоты: пауза до указанного сервером времени, затем
+  // автосохранение продолжается само. Ошибкой это человеку не показывается.
+  const [pauseUntil, setPauseUntil] = useState(0);
+  const [hints, setHints] = useState<DiaryHint[]>([]);
+  const [delegations, setDelegations] = useState<DiaryDelegation[]>([]);
+  const [delegateFrom, setDelegateFrom] = useState<DelegateSource | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -125,9 +133,21 @@ export default function TaskDetailPage() {
     const entry=Object.entries(drafts).find(([,d])=>d.value!==d.baseValue&&d.value.trim().length>0);
     if(!entry)return;
     const [path,draft]=entry;
-    const timer=window.setTimeout(()=>{runAction(()=>patchWorkItemFields(item.id,{changes:[{field_path:path,expected_version:draft.version,new_value:draft.value}]}),path);},700);
+    const delay=Math.max(700,pauseUntil-Date.now());
+    const timer=window.setTimeout(()=>{runAction(()=>patchWorkItemFields(item.id,{changes:[{field_path:path,expected_version:draft.version,new_value:draft.value}]}),path);},delay);
     return()=>window.clearTimeout(timer);
-  },[drafts,item?.id,item?.daily_log?.can_fill,item?.status,isOwnExecutor,actionBusy,offline,conflicts.length,retryAt]);
+  },[drafts,item?.id,item?.daily_log?.can_fill,item?.status,isOwnExecutor,actionBusy,offline,conflicts.length,retryAt,pauseUntil]);
+  // Подсказки из данных портала и поручения из этого ежедневника.
+  const canDelegate=!!item?.daily_log&&['RF','ROP','ROO'].includes(item.daily_log.role_code)&&(isOwnExecutor||isRm);
+  const loadDelegations=useCallback(()=>{
+    if(!item?.id||!canDelegate)return;
+    diaryDelegations(item.id).then(setDelegations).catch(()=>setDelegations([]));
+  },[item?.id,canDelegate]);
+  useEffect(()=>{
+    if(!item?.id||!canDelegate)return;
+    loadDelegations();
+    diaryReference(item.id).then(r=>setHints(r.hints)).catch(()=>setHints([]));
+  },[item?.id,canDelegate,loadDelegations]);
   useEffect(() => {
     if (!dirty) return;
     const unload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
@@ -167,7 +187,10 @@ export default function TaskDetailPage() {
       // Конфликт версии поля — не ошибка сети и не повод терять набранное:
       // показываем оба значения и даём выбрать человеку.
       const raw=err?.details?.conflicts;
-      if (err?.code==='FIELD_VERSION_CONFLICT' && Array.isArray(raw)) {
+      if (err?.code==='RATE_LIMITED' && savedPath) {
+        const secs=Number(err?.details?.retry_after_seconds)||10;
+        setPauseUntil(Date.now()+secs*1000);
+      } else if (err?.code==='FIELD_VERSION_CONFLICT' && Array.isArray(raw)) {
         setConflicts(raw as Array<{field_path:string;current_value:string|null;current_version:number}>);
         setError('Поле изменилось на сервере. Сравните значения и выберите, какое оставить.');
       } else if (!navigator.onLine) {
@@ -234,6 +257,17 @@ export default function TaskDetailPage() {
         <button disabled={actionBusy} onClick={() => { if (!dirty || window.confirm('Загрузить серверную версию и отбросить несохранённые поля?')) load(); }}>Загрузить актуальную версию</button>
       </div>}
 
+      {item.brief!=null||item.source_ref?<section style={card}>
+        <h2 style={cardTitle}>Суть поручения</h2>
+        {item.brief&&<p style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{item.brief}</p>}
+        {item.source_ref?.link&&<p style={{overflowWrap:'anywhere'}}><a href={item.source_ref.link} target="_blank" rel="noreferrer">{item.source_ref.link}</a></p>}
+        {item.source_ref?.diary_date&&<p style={{fontSize:13,color:'var(--fresh-text-muted)'}}>Из ежедневника {item.source_ref.diary_role} за {item.source_ref.diary_date}
+          {item.parent_work_item_id&&<> · <Link to={`/tasks/${item.parent_work_item_id}`}>открыть ежедневник</Link></>}</p>}
+      </section>:null}
+
+      {delegateFrom&&item.daily_log&&<DelegateDialog diaryId={item.id} source={delegateFrom}
+        onClose={()=>setDelegateFrom(null)} onCreated={()=>{setDelegateFrom(null);loadDelegations();}}/>}
+
       {item.daily_log&&<section style={card}><h2 style={cardTitle}>Личная дневная запись · {item.daily_log.business_date}</h2>
         <p>Роль {item.daily_log.role_code}. Основное хранилище: PostgreSQL. Синхронизация с Диском не требуется.</p>
         <p>Окно заполнения: {new Date(item.daily_log.window_open).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} — {new Date(item.daily_log.window_close).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК.</p>
@@ -275,6 +309,8 @@ export default function TaskDetailPage() {
         <h2 style={cardTitle}>Результат выполнения</h2>
         <TaskFields item={item} drafts={drafts} editable={isOwnExecutor && ['ASSIGNED','IN_PROGRESS'].includes(item.status) && item.daily_log?.can_fill!==false}
           busy={actionBusy}
+          hints={hints} delegations={delegations}
+          onDelegate={canDelegate ? setDelegateFrom : undefined}
           onChange={(path,value) => {setError(null);setDrafts(current => ({...current,[path]:{...current[path],value}}));}}
           onSave={path => {
             const draft = drafts[path];
@@ -332,7 +368,7 @@ export default function TaskDetailPage() {
             </button>
           )}
 
-          {isRm && !isOwnExecutor && item.status === 'SUBMITTED' && item.current_submission && (
+          {(isRm || item.created_by === me?.user.id) && !isOwnExecutor && item.status === 'SUBMITTED' && item.current_submission && (
             <>
               <button
                 disabled={actionBusy}

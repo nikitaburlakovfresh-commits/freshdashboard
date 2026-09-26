@@ -517,9 +517,12 @@ export async function getWorkItem(ctx: ActorContext, workItemId: string) {
     if (!row) throw new ApiError('NOT_FOUND', 'Объект не найден.');
     const rmOrgs = await currentRmOrgIds(client, ctx.authUser.userId);
     const operationalRoles = await currentOperationalRolesByOrg(client, ctx.authUser.userId);
+    // Автор поручения обязан видеть поставленную задачу: иначе он не может её
+    // принять, а приёмка автором введена 21.09.2026.
     const visible =
       rmOrgs.has(row.org_unit_id) ||
-      (operationalRoles.has(row.org_unit_id) && row.assignee_user_id === ctx.authUser.userId);
+      (operationalRoles.has(row.org_unit_id) && row.assignee_user_id === ctx.authUser.userId) ||
+      (operationalRoles.has(row.org_unit_id) && row.created_by === ctx.authUser.userId);
     if (!visible) throw new ApiError('NOT_FOUND', 'Объект не найден.');
     const daily=await dailyMetadata(client,row.id);
     if(daily&&!rmOrgs.has(row.org_unit_id)&&!operationalRoles.get(row.org_unit_id)?.has(daily.role_code))

@@ -2,7 +2,22 @@ import React from 'react';
 import type { FieldDef, WorkItem } from '../api/types';
 import type { FieldDrafts } from '../domain/taskForm';
 import { parseGroup } from '../domain/taskForm';
+import type { DiaryDelegation, DiaryHint } from '../api/dailyLogs';
+import type { DelegateSource } from './DelegateDialog';
 import '../styles/task-fields.css';
+
+/**
+ * Пояснения к полям, которых нет в неизменяемом шаблоне. Решение владельца
+ * 26.09.2026: у процента план/факт должно быть видно, что он на дату.
+ */
+const FIELD_NOTES: Record<string, string> = {
+  t1_sales_pct: '% выполнения плана месяца на дату последнего отчёта: факт продаж с начала месяца ÷ план месяца.',
+  t1_supply_pct: '% выполнения плана поставок на дату последнего отчёта: факт поставок с начала месяца ÷ план поставок за тот же период.',
+};
+const STATUS_RU: Record<string, string> = { ASSIGNED: 'назначена', IN_PROGRESS: 'в работе',
+  SUBMITTED: 'на проверке у вас', COMPLETED: 'принята', CANCELLED: 'отменена', DRAFT: 'черновик' };
+const isDone = (path: string) => /_done$/.test(path);
+const fmt = (v: number, unit: string) => `${v.toLocaleString('ru-RU')} ${unit}`;
 
 function Scalar({ def, value, onChange, disabled, label }: {
   def: FieldDef; value: string; onChange: (v: string) => void; disabled: boolean; label: string;
@@ -33,10 +48,15 @@ export function groupFieldsBySection(schema: FieldDef[]): Section[] {
   return out;
 }
 
-export default function TaskFields({ item, drafts, editable, busy, onChange, onSave }: {
+export default function TaskFields({ item, drafts, editable, busy, onChange, onSave, hints = [], delegations = [], onDelegate }: {
   item: WorkItem; drafts: FieldDrafts; editable: boolean; busy: boolean;
   onChange: (path: string, value: string) => void; onSave: (path: string) => void;
+  hints?: DiaryHint[]; delegations?: DiaryDelegation[]; onDelegate?: (source: DelegateSource) => void;
 }) {
+  const sectionOf = (path: string) => item.field_schema.find(f => f.field_path === path);
+  const delegationList = (list: DiaryDelegation[]) => list.length > 0 && <ul className="task-delegations">
+    {list.map(d => <li key={d.id}><a href={`/tasks/${d.id}`}>{d.assignee_name ?? 'Исполнитель'} · на {d.due_date.slice(8, 10)}.{d.due_date.slice(5, 7)}</a>
+      {' '}· {STATUS_RU[d.status] ?? d.status}</li>)}</ul>;
   const sections = groupFieldsBySection(item.field_schema);
   const grouped = sections.some(s => s.num !== null);
   // У ежедневника поля сохраняются сами через 0,7 секунды после ввода, поэтому
@@ -61,8 +81,13 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
                   onChange={v => onChange(def.field_path, JSON.stringify(rows.map((r, i) => i === index ? { ...r, [child.field_path]: v } : r)))}/>
                   : <p className="task-field-value">{row[child.field_path] || 'Не заполнено'}</p>}
               </label>)}
+              {onDelegate && <button type="button" className="task-field-secondary"
+                onClick={() => onDelegate({ section_num: def.section_num ?? null, section_title: def.section_title || def.label,
+                  field_path: def.field_path, row_index: index, link: row.link ?? null,
+                  text: Object.entries(row).filter(([k, v]) => k !== 'link' && v).map(([, v]) => v).join('\n') })}>Поручить запись {index + 1}</button>}
               {editable && <button type="button" className="task-field-secondary" disabled={busy}
                 onClick={() => onChange(def.field_path, JSON.stringify(rows.filter((_, i) => i !== index)))}>Удалить запись {index + 1}</button>}
+              {delegationList(delegations.filter(d => d.source_ref?.field_path === def.field_path && d.source_ref?.row_index === index))}
             </fieldset>)}
             {!rows.length && <p className="task-fields-note">Записей нет.</p>}
             {editable && <button type="button" disabled={busy || rows.length >= (def.max_items ?? 100)} className="task-field-secondary"
@@ -73,6 +98,13 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
           </>}
         </div> : editable ? <Scalar def={def} value={value} onChange={v => onChange(def.field_path, v)} disabled={busy} label={def.label}/>
           : <p className="task-field-value">{value || 'Не заполнено'}</p>}
+        {FIELD_NOTES[def.field_path] && <p className="task-fields-note">{FIELD_NOTES[def.field_path]}</p>}
+        {hints.filter(h => h.field_path === def.field_path).map(h => <div className="task-hint" key={h.field_path}>
+          <p><strong>По данным портала: {fmt(h.value, h.unit)}</strong> · {h.source}, {h.period}</p>
+          <p className="task-fields-note">{h.formula}{h.note ? `. ${h.note}` : ''}</p>
+          {editable && value !== String(h.value) && <button type="button" className="task-field-secondary" disabled={busy}
+            onClick={() => onChange(def.field_path, String(h.value))}>Подставить {fmt(h.value, h.unit)}</button>}
+        </div>)}
         {def.type === 'number' && <p className="task-fields-note">Десятичный разделитель: точка.
           {def.min_value !== undefined && ` Минимум: ${def.min_value}.`}{def.max_value !== undefined && ` Максимум: ${def.max_value}.`} Отсутствие данных не равно нулю.</p>}
         {editable && <div className="task-field-footer">
@@ -108,7 +140,28 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
         </summary>
         {section.hints.length > 0 && <ul className="task-section-hints">
           {section.hints.map((hint, i) => <li key={i}>{hint}</li>)}</ul>}
-        {section.fields.map(renderField)}
+        {section.fields.filter(f => !isDone(f.field_path)).map(renderField)}
+        {onDelegate && section.num !== null && !closing && <div className="task-section-delegate">
+          <button type="button" className="task-field-secondary"
+            onClick={() => onDelegate({ section_num: section.num, section_title: section.title,
+              text: section.fields.filter(f => f.type === 'text')
+                .map(f => item.fields.find(x => x.field_path === f.field_path)?.value).filter(Boolean).join('\n') })}>
+            Поручить задачу по разделу</button>
+          {delegationList(delegations.filter(d => d.source_ref?.section_num === section.num && d.source_ref?.row_index == null))}
+        </div>}
+        {mark && (() => {
+          // Отметка выполнения — галочка внизу раздела (решение владельца
+          // 26.09.2026): сделал задачу — поставил галочку. Хранится то же
+          // значение «Выполнено» / «Не выполнено», шаблон не меняется.
+          const draftValue = editable ? drafts[mark.field_path]?.value ?? markValue : markValue;
+          return <label className="task-done-check">
+            <input type="checkbox" checked={draftValue === 'Выполнено'} disabled={!editable || busy}
+              onChange={e => onChange(mark.field_path, e.target.checked ? 'Выполнено' : 'Не выполнено')} />
+            <span>Выполнено</span>
+            {editable && drafts[mark.field_path] && drafts[mark.field_path].value !== drafts[mark.field_path].baseValue
+              && <small>{busy ? 'сохраняю…' : 'не сохранено'}</small>}
+          </label>;
+        })()}
       </details>;
     })}
   </div>;
