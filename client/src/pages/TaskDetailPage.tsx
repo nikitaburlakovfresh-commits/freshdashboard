@@ -111,6 +111,9 @@ export default function TaskDetailPage() {
       && item.assignee_user_id === me?.user.id
     : false;
   const dirty = hasUnsavedFields(drafts);
+  // Обязательные задачи от руководителя, по которым ещё нет сдачи: день не сдаётся.
+  const mandatoryOpen = (item?.daily_log ? item.assigned_tasks ?? [] : [])
+    .filter(t => t.mandatory && ['ASSIGNED', 'IN_PROGRESS'].includes(t.status));
   // Черновик пишется в браузер на каждое изменение: между вводом и отправкой на
   // сервер есть окно, в котором раньше терялось всё набранное.
   useEffect(()=>{
@@ -325,6 +328,8 @@ export default function TaskDetailPage() {
         return <section style={card}>
           <h2 style={cardTitle}>Задачи от руководителя</h2>
           <h3 style={{fontSize:14,margin:'12px 0 8px'}}>Обязательно сегодня: {must.length}</h3>
+          {mandatoryOpen.length>0&&<p role="alert" style={{fontSize:13,color:'var(--fresh-danger, #c0392b)',margin:'0 0 8px'}}>
+            День нельзя сдать, пока не сданы эти задачи: {mandatoryOpen.length}. Если выполнить не удалось — сдайте задачу с описанием причины.</p>}
           {must.length?<div className="personal-task-list">{must.map(row)}</div>:<p style={{fontSize:13,color:'var(--fresh-text-muted)'}}>Обязательных задач на этот день нет.</p>}
           {later.length>0&&<details style={{marginTop:12}}><summary style={{cursor:'pointer',minHeight:44,display:'flex',alignItems:'center',fontSize:14}}>
             Необязательно сегодня: {later.length}</summary><div className="personal-task-list">{later.map(row)}</div></details>}
@@ -385,17 +390,12 @@ export default function TaskDetailPage() {
 
           {isOwnExecutor && ['ASSIGNED', 'IN_PROGRESS'].includes(item.status) && !item.is_blocked && (
             <button
-              disabled={actionBusy || dirty || item.daily_log?.can_fill===false || !requiredFieldsPresent(item.field_schema, item.fields)}
+              disabled={actionBusy || dirty || item.daily_log?.can_fill===false || mandatoryOpen.length>0 || !requiredFieldsPresent(item.field_schema, item.fields)}
               onClick={() => {
-                // Сдача дня не блокируется (решение владельца: без блокеров), но
-                // несданные обязательные задачи называются перед сдачей.
-                const open=(item.assigned_tasks??[]).filter(t=>t.mandatory&&['ASSIGNED','IN_PROGRESS'].includes(t.status));
-                if(item.daily_log&&open.length&&!window.confirm(`Не сдано обязательных задач от руководителя: ${open.length}.\n`
-                  +open.map(t=>`— ${t.title}`).join('\n')+'\n\nСдать день всё равно? Задачи останутся в работе и будут видны руководителю как невыполненные.'))return;
                 runAction(() => submitWorkItem(item.id, { expected_entity_version: item.entity_version,
                 ...(!item.daily_log&&['RF','ROP','ROO'].includes(item.owner_role??'')?{add_to_daily_log:addToDaily,business_date:dailyDate}:{}) }));}}
               style={primaryBtn(actionBusy)}
-              title={dirty ? 'Сначала сохраните изменения' : 'Сервер проверит все обязательные поля'}
+              title={dirty ? 'Сначала сохраните изменения' : mandatoryOpen.length ? 'Сначала сдайте обязательные задачи от руководителя' : 'Сервер проверит все обязательные поля'}
             >
               Сдать на проверку
             </button>

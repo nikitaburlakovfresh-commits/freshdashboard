@@ -991,6 +991,20 @@ export async function submitWorkItem(ctx: ActorContext, workItemId: string, idem
       if (workItem.is_blocked) {
         throw new ApiError('WORK_ITEM_BLOCKED', 'Нельзя сдать заблокированную задачу.');
       }
+      // Жёсткий запрет (решение владельца 26.09.2026): день не сдаётся, пока не
+      // сданы обязательные задачи от руководителя — со сроком на этот день и
+      // просроченные. Касается ежедневников и личных записей дня.
+      const dayOf:string|undefined=daily?.business_date??(await client.query(
+        `SELECT business_date::text d FROM personal_day_notes WHERE work_item_id=$1`,[workItemId])).rows[0]?.d;
+      if(dayOf&&workItem.assignee_user_id){
+        const open=(await assignedTasksForDay(client,workItem.org_unit_id,workItem.assignee_user_id,dayOf))
+          .filter((t:any)=>t.mandatory&&['ASSIGNED','IN_PROGRESS'].includes(t.status));
+        if(open.length) throw new ApiError('VALIDATION_ERROR',
+          `Нельзя сдать день: не сданы обязательные задачи от руководителя (${open.length}): `
+          +open.slice(0,5).map((t:any)=>`«${t.title}»`).join(', ')+(open.length>5?' и другие':'')
+          +'. Сдайте по ним результат — если выполнить не удалось, опишите причину.',
+          {issues:open.map((t:any)=>({path:'assigned_tasks',issue:'mandatory_open',work_item_id:t.id}))});
+      }
       // Every field on this work item is locked and validated together at
       // submit time (not just one hardcoded field) so a future multi-field
       // template cannot be submitted with some fields silently unfilled.

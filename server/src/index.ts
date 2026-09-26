@@ -2,6 +2,7 @@ import { createApp } from './app';
 import { config } from './config';
 import { startNotificationConsumerLoop } from './workers/notificationConsumer';
 import { pool } from './db/pool';
+import { startOverdueNotifierLoop } from './workers/overdueNotifier';
 
 const app = createApp();
 
@@ -11,6 +12,7 @@ const server = app.listen(config.port, () => {
 });
 
 startNotificationConsumerLoop(500);
+startOverdueNotifierLoop();
 
 function shutdown() {
   // eslint-disable-next-line no-console
