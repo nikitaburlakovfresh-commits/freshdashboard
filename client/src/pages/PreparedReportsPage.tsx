@@ -150,6 +150,7 @@ export default function PreparedReportsPage() {
               ?auto.recognized.map(r=>`${REPORT_NAMES[r.kind as ReportKind]??r.kind} (${r.rows} строк)`).join(', ')
               :'нет'}</li>
             <li>Привязано строк к филиалам: {auto.mapped_rows}</li>
+            {auto.vin_registry&&<li>{auto.vin_registry.message}</li>}
             {auto.published_metrics.length>0&&<li>Опубликованы показатели: {auto.published_metrics.join(', ')}</li>}
             {auto.withheld_metrics.length>0&&<li>Не опубликованы (нет разрешения на показатель): {auto.withheld_metrics.join(', ')}</li>}
             {auto.skipped_files.length>0&&<li>Файлы вне публикации: {auto.skipped_files

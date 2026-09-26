@@ -249,13 +249,14 @@ export async function upwardRepricingEvents(
        FROM vehicle_stock_rows r JOIN in_stock s ON s.vehicle_id = r.vehicle_id
        WHERE r.org_unit_id = $1 AND r.observed_on <= $2::date AND r.sale_price_rub IS NOT NULL
      )
-     SELECT i.vehicle_key, i.key_kind, i.crm_url, v.make, v.model, v.production_year,
+     SELECT i.vehicle_key, i.key_kind, cl.crm_url, v.make, v.model, v.production_year,
        to_char(h.observed_on, 'YYYY-MM-DD') changed_on, h.previous::float8 price_before,
        h.sale_price_rub::float8 price_after, (h.sale_price_rub - h.previous)::float8 increase_rub,
        s.days_on_stock, s.supply_type, s.current_price::float8 current_price
      FROM history h
      JOIN in_stock s ON s.vehicle_id = h.vehicle_id
      JOIN vehicle_identity i ON i.id = h.vehicle_id
+     LEFT JOIN vehicle_crm_links cl ON cl.vehicle_id = h.vehicle_id
      JOIN LATERAL (SELECT make, model, production_year FROM vehicle_stock_rows x
         WHERE x.vehicle_id = h.vehicle_id AND x.org_unit_id = $1 ORDER BY x.observed_on DESC LIMIT 1) v ON true
      -- Нулевая прежняя цена — машина только поступила и получила первую цену,

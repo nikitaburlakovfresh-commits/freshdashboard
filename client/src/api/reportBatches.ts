@@ -42,6 +42,7 @@ export interface AutoPublishResult {
   excluded_rows:{row:number;kind:string;name:string;reason:string}[];
   unresolved_rows:{row:number;kind:string;name:string;why:string}[];
   published_metrics:string[];withheld_metrics:string[];message:string;
+  vin_registry?:{observed_on:string;published:number;message:string}|null;
 }
 /** Приём пакета одной операцией: загрузка, привязка филиалов и публикация. */
 export async function autoPublishStagingBatch(network_id:string,period:StagingPeriod,files:File[]) {

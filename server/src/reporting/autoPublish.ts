@@ -11,6 +11,7 @@ import { resolveSourceAliases, resolveSourceExclusions } from '../domain/sourceN
 import { uploadBatch, probeBatch } from './service';
 import { getReview, saveReview } from './review';
 import { scanBatch, previewPublication, commitPublication, publicationState } from './factPublication';
+import { previewDetail, commitDetail } from './detailPublication';
 import { REPORT_SPECS, FUNNEL_CHANNELS, type ReportKind, type FunnelChannel } from './shared/reportModel';
 import { METRIC_NAMES } from './shared/metricCatalog';
 import type { UploadFile } from './storage';
@@ -33,6 +34,8 @@ export interface AutoPublishResult {
   published_metrics: string[];
   withheld_metrics: string[];
   message: string;
+  // Реестр автомобилей (VIN) из «Анализа склада» того же пакета.
+  vin_registry?: { observed_on: string; published: number; message: string } | null;
 }
 
 const empty = (period: { start: string; end: string }): AutoPublishResult => ({
@@ -120,6 +123,11 @@ export async function autoPublishPackage(auth: AuthedUser, metadata: any,
 
   await scanBatch(auth, uploaded.id, {}, randomUUID());
 
+  // Реестр VIN публикуется вместе с пакетом (26.09.2026): прежде «Анализ склада»
+  // распознавался, но его строки никто не публиковал, и реестр в карточке
+  // филиала отставал на дни. Дата среза — объявленная дата пакета.
+  out.vin_registry = await publishVinRegistry(auth, uploaded.id, probed, period.end);
+
   // Состав публикации: показатели распознанных отчётов, на которые есть
   // действующее разрешение публикации. Остальные честно объявляются отложенными.
   const state: any = await publicationState(auth, uploaded.id);
@@ -198,4 +206,26 @@ export async function autoPublishPackage(auth: AuthedUser, metadata: any,
   out.published_metrics = active.map(c => METRIC_NAMES[c.metric as keyof typeof METRIC_NAMES] ?? c.metric);
   out.message = `Опубликовано ${out.published} значений; метрики обзора пересчитаны по опубликованным показателям.`;
   return out;
+}
+
+async function publishVinRegistry(auth: AuthedUser, batchId: string, probed: any, observedOn: string) {
+  const detail = (probed.preview?.details ?? []).find((d: any) => d.kind === 'vinInventory');
+  if (!detail) return null;
+  const file = (probed.files ?? []).find((f: any) => f.display_name === detail.name)
+    ?? (probed.preview?.files ?? []).find((f: any) => f.display_name === detail.name);
+  if (!file) return { observed_on: observedOn, published: 0, message: 'Файл «Анализ склада» не найден в пакете.' };
+  try {
+    const preview: any = await previewDetail(auth, batchId, { kind: 'vinInventory', file_id: file.id,
+      observed_on: observedOn, confirm_detail_rows: true,
+      declaration: `Реестр автомобилей на ${observedOn} из отчёта «Анализ склада» QLIK, загружен через портал.` });
+    if (!preview.can_commit)
+      return { observed_on: observedOn, published: 0, message: (preview.blockers ?? []).join('; ') || 'Реестр не прошёл проверку.' };
+    const committed: any = await commitDetail(auth, batchId,
+      { preview_id: preview.preview_id, proposal_hash: preview.proposal_hash, confirm: true },
+      `detail-vin-${batchId.slice(0, 8)}-${Date.now()}`, randomUUID());
+    const n = Number(committed.count ?? preview.accepted_rows ?? 0);
+    return { observed_on: observedOn, published: n, message: `Реестр VIN на ${observedOn}: ${n} автомобилей.` };
+  } catch (e: any) {
+    return { observed_on: observedOn, published: 0, message: e?.message ?? 'Реестр VIN не опубликован.' };
+  }
 }
