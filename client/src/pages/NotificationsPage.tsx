@@ -35,6 +35,7 @@ export default function NotificationsPage() {
   async function markRead(n: Notification) {
     try {
       const updated = await readNotification(n.id, { expected_entity_version: n.entity_version });
+      window.dispatchEvent(new Event('fresh:notifications-changed'));
       setItems((prev) => unreadOnly ? prev.filter(it => it.id !== n.id) : prev.map((it) => (it.id === n.id ? updated : it)));
     } catch (err: any) {
       setError(err?.message ?? 'Не удалось отметить уведомление. Повторите попытку.');

@@ -221,3 +221,10 @@
     -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 9%,#000 91%,transparent 100%);
     mask-image:linear-gradient(to bottom,transparent 0,#000 9%,#000 91%,transparent 100%)}
 }
+
+/* Счётчик непрочитанных уведомлений. Заявки на доступ — второй кружок слева
+   внизу, чтобы две цифры не сливались. */
+.shell-bell-badge{min-width:18px;height:18px;line-height:18px;font-size:11px}
+.shell-bell-badge-reg{top:auto;bottom:-2px;right:auto;left:-2px;background:#1d4ed8}
+.shell-nav-count{margin-left:auto;min-width:22px;height:20px;padding:0 6px;border-radius:10px;background:#c2410c;
+  color:#fff;font-size:12px;font-weight:700;line-height:20px;text-align:center}

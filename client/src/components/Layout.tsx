@@ -8,6 +8,7 @@ import { getOrganizationTree } from '../api/organization';
 import { useReportDate } from '../state/reportDate';
 import RoleViewBar from './RoleViewBar';
 import { getPendingRegistrations } from '../api/adminSettings';
+import { listNotifications } from '../api/endpoints';
 
 type NavGroup = { label: string; links: NavLinkDef<IconName>[] };
 
@@ -103,6 +104,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     const id = window.setInterval(tick, 60000);
     return () => { alive = false; window.clearInterval(id); };
   }, [isOwner]);
+  // Счётчик непрочитанных уведомлений на колокольчике (просьба владельца
+  // 26.09.2026): иначе новые задачи и просрочки не видны. Обновляется раз в
+  // минуту и при каждом переходе между страницами — после прочтения цифра
+  // уменьшается сразу, как только человек уходит со страницы уведомлений.
+  const [unread, setUnread] = useState<{ n: number; more: boolean }>({ n: 0, more: false });
+  useEffect(() => {
+    let alive = true;
+    const tick = () => { listNotifications({ unread_only: true, limit: 100 })
+      .then(r => { if (alive) setUnread({ n: r.items.length, more: !!r.next_cursor }); }).catch(() => {}); };
+    tick();
+    const id = window.setInterval(tick, 60000);
+    const onRead = () => tick();
+    window.addEventListener('fresh:notifications-changed', onRead);
+    return () => { alive = false; window.clearInterval(id); window.removeEventListener('fresh:notifications-changed', onRead); };
+  }, [pathname]);
+  const unreadText = unread.more || unread.n > 99 ? '99+' : String(unread.n);
   const visible = (groups: NavGroup[]) => groups
     .map(group => ({ ...group, links: group.links.filter(link => canSeeNavLink(link, grants, permissions)) }))
     .filter(group => group.links.length > 0);
@@ -137,6 +154,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     end={link.path === '/'} onClick={close}
     className={({ isActive }) => `shell-nav-link${isActive ? ' active' : ''}`}>
     <Icon name={link.icon} /><span>{link.label}</span>
+    {link.path === '/notifications' && unread.n > 0 && <span className="shell-nav-count"
+      aria-label={`Непрочитанных: ${unreadText}`}>{unreadText}</span>}
     {link.future && <span className="shell-future"
       title={link.path === '/diary' ? 'Рабочий beta-сценарий; полный каталог ещё в разработке' : 'Навигационный каркас · следующий этап'}
       aria-label={link.path === '/diary' ? 'Beta' : 'Следующий этап'}>{link.path === '/diary' ? 'β' : '○'}</span>}
@@ -233,11 +252,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </NavLink>}
           <button className="shell-icon-button" aria-label={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
             onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Сменить тему"><Icon name={theme === 'dark' ? 'sun' : 'moon'} /></button>
-          <NavLink className="shell-icon-button shell-bell" to={pendingReg > 0 ? '/access/registrations' : '/notifications'}
-            aria-label={pendingReg > 0 ? `Заявок на доступ: ${pendingReg}` : 'Открыть уведомления'}
-            title={pendingReg > 0 ? `Новых заявок на доступ: ${pendingReg}` : 'Уведомления'}>
+          <NavLink className="shell-icon-button shell-bell" to={unread.n === 0 && pendingReg > 0 ? '/access/registrations' : '/notifications'}
+            aria-label={`Уведомления: непрочитанных ${unreadText}${pendingReg > 0 ? `, заявок на доступ ${pendingReg}` : ''}`}
+            title={[unread.n > 0 ? `Непрочитанных уведомлений: ${unreadText}` : 'Новых уведомлений нет',
+              pendingReg > 0 ? `новых заявок на доступ: ${pendingReg}` : ''].filter(Boolean).join(', ')}>
             <Icon name="bell" />
-            {pendingReg > 0 && <span className="shell-bell-badge">{pendingReg}</span>}
+            {unread.n > 0 && <span className="shell-bell-badge">{unreadText}</span>}
+            {pendingReg > 0 && <span className="shell-bell-badge shell-bell-badge-reg" title="Заявки на доступ">{pendingReg}</span>}
           </NavLink>
           <RoleViewBar isOwner={isOwner} slot="button" />
         </div>
