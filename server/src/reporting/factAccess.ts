@@ -41,3 +41,24 @@ export async function publisher(c:PoolClient,auth:AuthedUser) {
   if(grants.length!==1)throw new ApiError('FORBIDDEN','Нужно отдельное разрешение на публикацию агрегатов. Доступ к черновикам его не даёт.');
   return grants[0];
 }
+
+/**
+ * Просмотр всей сети без управления (право metric.network.peer_view, решение
+ * владельца 26.09.2026). Возвращает null, если права нет. Иначе — допуск на
+ * чтение всех незакрытых филиалов по всем опубликованным показателям и список
+ * собственных филиалов пользователя (для большой плитки «мой филиал»).
+ * Задачи, фамилии и изменения этим правом не открываются — это решают
+ * вызывающие функции.
+ */
+export async function peerAccess(c:PoolClient,auth:AuthedUser) {
+  const own=(await c.query(`SELECT DISTINCT g.org_unit_id FROM role_grants g
+    JOIN role_permissions rp ON rp.role_code=g.role_code AND rp.permission_code='metric.network.peer_view'
+    WHERE g.user_id=$1 AND g.org_unit_id IS NOT NULL AND g.revoked_at IS NULL AND g.valid_from<=now()
+      AND (g.valid_until IS NULL OR g.valid_until>now())`,[auth.userId])).rows.map((r:any)=>r.org_unit_id as string);
+  if(!own.length) return null;
+  const metrics=(await c.query(`SELECT DISTINCT metric FROM report_fact_current`)).rows.map((r:any)=>r.metric as string);
+  const orgs=(await c.query(`SELECT id FROM org_directory_units
+    WHERE kind='ORG_UNIT' AND lifecycle_state<>'CLOSED' AND NOT is_demo`)).rows.map((r:any)=>r.id as string);
+  return {own_org_unit_ids:own,
+    grants:orgs.map(org_unit_id=>({grant_id:'peer',org_unit_id,metrics}))};
+}

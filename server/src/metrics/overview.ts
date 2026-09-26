@@ -1,6 +1,6 @@
 import type { AuthedUser } from '../auth/session';
 import { withTransaction } from '../db/pool';
-import { factAccess } from '../reporting/factAccess';
+import { factAccess, peerAccess } from '../reporting/factAccess';
 import { METRIC_NAMES } from '../reporting/shared/reportModel';
 import { ApiError } from '../util/errors';
 import { uuid } from '../reporting/storage';
@@ -83,7 +83,11 @@ export async function branchOverview(auth:AuthedUser,query:any) {
   if(!validDate(q.start)||!validDate(q.end)||q.start>q.end)throw invalid('Укажите точный период опубликованного среза.');
   if(q.org!==undefined&&(typeof q.org!=='string'||!uuid.test(q.org)))throw invalid('Филиал указан неверно.');
   return withTransaction(async c=>{
-    const grants=await factAccess(c,auth,'READ');
+    const own=await factAccess(c,auth,'READ');
+    // Режим «вся сеть для просмотра» (РФ): свои допуски дополняются чтением
+    // всех филиалов, а из ответа убираются фамилии, зоны РМ и задачи.
+    const peer=await peerAccess(c,auth);
+    const grants=peer?[...own,...peer.grants.filter(p=>!own.some(g=>g.org_unit_id===p.org_unit_id))]:own;
     if(!grants.length)throw new ApiError('FORBIDDEN','Нет отдельного доступа к опубликованным бизнес-показателям.');
     if(q.org&&!grants.some(g=>g.org_unit_id===q.org))throw new ApiError('NOT_FOUND','Филиал недоступен.');
     const allowed=grants.filter(g=>!q.org||g.org_unit_id===q.org)
@@ -196,6 +200,13 @@ export async function branchOverview(auth:AuthedUser,query:any) {
         division_name:zone[0]?.division_name??null,branches:zone.length,
         ...computeRmRating(rmModel,sums,on)};
     }).sort((x,y)=>(y.rating??-1)-(x.rating??-1)||x.group_label.localeCompare(y.group_label,'ru')):[];
+    if(peer) {
+      const strip=branches.map(b=>({...b,manager_user_id:null,manager_name:null,group_key:'network',
+        group_label:'Сеть FRESH',cluster_id:null,cluster_name:null,division_id:null,division_name:null,
+        metrics:b.metrics.map(m=>({...m,deviation_task:null}))}));
+      branches.splice(0,branches.length,...strip);
+      managerRatings.splice(0,managerRatings.length);
+    }
     const scored=branches.filter(b=>b.score!==null);
     const count=(rag:Rag)=>scored.filter(b=>b.score_rag===rag).length;
     return {mode:'PUBLISHED_SOURCE_AGGREGATES',period_start:from,period_end:on,
@@ -225,6 +236,7 @@ export async function branchOverview(auth:AuthedUser,query:any) {
         // кода фокуса опубликованному показателю: подмена источника недопустима.
         slots:(focus?.slots??[]).map(s=>({...s,fact:null,
           fact_basis:'NOT_MAPPED_TO_PUBLISHED_METRIC' as const}))},
+      peer_view:peer?{own_org_unit_ids:peer.own_org_unit_ids}:null,
       aggregation:'NONE',freshness:'NOT_EVALUATED'};
   });
 }
@@ -236,7 +248,8 @@ export async function branchOverview(auth:AuthedUser,query:any) {
  */
 export async function publishedPeriods(auth:AuthedUser) {
   return withTransaction(async c=>{
-    const grants=await factAccess(c,auth,'READ');
+    const peer=await peerAccess(c,auth);
+    const grants=[...await factAccess(c,auth,'READ'),...(peer?.grants??[])];
     if(!grants.length)return {periods:[]};
     const orgs=grants.map(g=>g.org_unit_id).filter((v):v is string=>!!v);
     if(!orgs.length)return {periods:[]};

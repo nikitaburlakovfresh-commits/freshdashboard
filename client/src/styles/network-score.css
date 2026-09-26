@@ -196,3 +196,35 @@ button.score-tile:hover{border-color:currentColor}
 .branch-mini-tile small{font-size:12px;color:var(--fresh-text-muted)}
 .branch-mini-details{margin:8px 0}
 .branch-mini-details summary{cursor:pointer;font-size:13px;color:#003DFF}
+
+/* Стартовый экран РФ: свой филиал крупно, вся сеть плитками. */
+.peer-network .peer-own{display:block;text-decoration:none;color:inherit;background:var(--fresh-surface,#fff);
+  border:1px solid var(--fresh-border);border-left:6px solid var(--rag-color,var(--fresh-border));border-radius:16px;
+  padding:20px 22px;margin:8px 0 24px}
+.peer-network [data-rag="GREEN"]{--rag-color:#1c8f4b}.peer-network [data-rag="AMBER"]{--rag-color:#d99a00}
+.peer-network [data-rag="RED"]{--rag-color:#c0392b}
+.peer-own-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.peer-own-eyebrow{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--fresh-text-muted)}
+.peer-own h2{margin:4px 0 6px;font-size:24px;display:flex;align-items:center;gap:8px}
+.peer-own p{margin:0;font-size:14px;color:var(--fresh-text-muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.peer-own-score{font-size:44px;line-height:1;color:var(--rag-color,var(--fresh-dark))}
+.peer-own-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:16px}
+.peer-own-grid>div{background:var(--fresh-bg,#f3f6fa);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.peer-own-grid span{font-size:12px;color:var(--fresh-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.peer-own-grid strong{font-size:18px}.peer-own-grid small{font-size:12px;color:var(--fresh-text-muted)}
+.peer-own-open{display:inline-block;margin-top:14px;font-size:14px;color:var(--fresh-primary,#1d4ed8);font-weight:600}
+.peer-title{font-size:18px;margin:0 0 12px}
+.peer-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.peer-tile{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:8px;text-decoration:none;color:inherit;
+  background:var(--fresh-surface,#fff);border:1px solid var(--fresh-border);border-left:4px solid var(--rag-color,var(--fresh-border));
+  border-radius:12px;padding:12px 14px;min-height:52px}
+.peer-tile:hover{border-color:var(--fresh-primary,#1d4ed8)}
+.peer-tile[data-own="1"]{box-shadow:0 0 0 2px var(--fresh-primary,#1d4ed8) inset}
+.peer-tile-place{font-size:12px;color:var(--fresh-text-muted)}
+.peer-tile-name{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.peer-tile-score{font-size:16px;font-weight:700}
+@media (max-width:640px){
+  .peer-own{padding:16px}.peer-own h2{font-size:20px}.peer-own-score{font-size:34px}
+  .peer-own-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .peer-grid{grid-template-columns:1fr}
+}

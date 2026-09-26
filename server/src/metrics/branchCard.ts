@@ -1,6 +1,6 @@
 import type { AuthedUser } from '../auth/session';
 import { withTransaction } from '../db/pool';
-import { factAccess } from '../reporting/factAccess';
+import { factAccess, peerAccess } from '../reporting/factAccess';
 import { METRIC_NAMES } from '../reporting/shared/reportModel';
 import { uuid } from '../reporting/storage';
 import { ApiError } from '../util/errors';
@@ -57,7 +57,12 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
   if(!validDate(q.start)||!validDate(q.end)||q.start>q.end)throw invalid('Укажите точный период опубликованного среза.');
   return withTransaction(async c=>{
     const grants=await factAccess(c,auth,'READ');
-    const grant=grants.find(g=>g.org_unit_id===orgUnitId);
+    const peer=await peerAccess(c,auth);
+    // Карточка чужого филиала в режиме «вся сеть для просмотра»: показатели и
+    // балл видны, задачи филиала — нет.
+    const grant=grants.find(g=>g.org_unit_id===orgUnitId)??peer?.grants.find(g=>g.org_unit_id===orgUnitId);
+    const peerOnly=!!peer&&!grants.some(g=>g.org_unit_id===orgUnitId);
+    const ownBranch=!!peer?.own_org_unit_ids.includes(orgUnitId);
     if(!grant)throw new ApiError('NOT_FOUND','Филиал недоступен.');
     const unit=(await c.query(`SELECT u.id,u.code,u.lifecycle_state,n.display_name
       FROM org_directory_units u JOIN org_directory_name_history n ON n.org_unit_id=u.id AND n.effective_to IS NULL
@@ -149,8 +154,8 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
       LEFT JOIN report_fact_current p ON p.org_unit_id=d.org_unit_id AND p.metric=d.metric
         AND p.period_start=d.period_start AND p.period_end=d.period_end
       LEFT JOIN report_fact_snapshots cur ON cur.id=p.snapshot_id
-      WHERE d.org_unit_id=$1 AND d.metric=ANY($2::text[])
-      ORDER BY d.created_at DESC LIMIT 200`,[orgUnitId,grant.metrics])).rows;
+      WHERE d.org_unit_id=$1 AND d.metric=ANY($2::text[]) AND NOT $3::boolean
+      ORDER BY d.created_at DESC LIMIT 200`,[orgUnitId,grant.metrics,peerOnly&&!ownBranch])).rows;
 
     const deviations=await Promise.all(hist.map(async (r:any)=>{
       // Статус текущего значения считается по порогам, действующим на конец
@@ -186,6 +191,7 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
         vehicles:repricing?.vehicles??null,events:repricing?.events??null},
       score:{configured:model!==null,value:score.score,rag:score.rag,
         components:score.components,reasons:score.reasons,model_id:model?.id??null},
+      read_only:!!peer,own_branch:ownBranch,
       aggregation:'NONE',freshness:'NOT_EVALUATED'};
   });
 }

@@ -30,6 +30,10 @@ export const NAV_REQUIRED_PERMISSION: Record<string, string> = {
   '/settings/focus': 'metric.focus.manage',
   '/settings/notifications': 'notification.policy.manage',
   '/modules': 'portal.setting.manage',
+  // Сетевые экраны управления задачами — для постановщиков (РМ, дивизион,
+  // владелец). РФ видит сеть на стартовом экране только для просмотра.
+  '/operational': 'work_item.assign',
+  '/division-summary': 'work_item.assign',
 };
 
 /**

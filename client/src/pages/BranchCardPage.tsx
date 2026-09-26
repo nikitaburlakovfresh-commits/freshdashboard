@@ -80,7 +80,7 @@ export default function BranchCardPage() {
         onChange={e=>{setData(null);setEnd(e.target.value);}}/></label>
       <button className="btn" disabled={busy}>{busy?'Читаю…':'Показать карточку'}</button>
       <Link className="btn btn-ghost" to="/">К сетке филиалов</Link>
-      {data&&<Link className="btn btn-ghost" to={`/branch-card/${id}/vin?observed_on=${data.period_end}`}>
+      {data&&(!data.read_only||data.own_branch)&&<Link className="btn btn-ghost" to={`/branch-card/${id}/vin?observed_on=${data.period_end}`}>
         Реестр авто (VIN)</Link>}
     </form>
     {error&&<p role="alert">{error}</p>}
@@ -202,6 +202,7 @@ export default function BranchCardPage() {
           {data.metrics_without_threshold.map(m=>data.metric_names[m]??m).join(', ')}</p>}
       </details>
 
+{(!data.read_only||data.own_branch)&&<>
       <h2>История отклонений и результат</h2>
       <p className="portal-muted">Результат подтверждается только новой публикацией показателя за тот же период.
         Закрытие задачи само по себе не является влиянием на показатель.</p>
@@ -223,6 +224,7 @@ export default function BranchCardPage() {
               {d.task.assignee_user_id?'':' · ответственный не назначен'}</small></td>
         </tr>)}</tbody>
       </table>}
+      </>}
     </>}
   </section>;
 }

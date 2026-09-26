@@ -117,6 +117,7 @@ export default function NetworkScorePage() {
     .filter(b=>ragFilter===null||b.score_rag===ragFilter);
   const branchesByManager=groupByManager(visibleBranches,data?.manager_rating?.managers??[]);
 
+  if(data?.peer_view) return <PeerNetwork data={data}/>;
   return <div className="portal-page network-kpi">
     <header className="overview-head">
       <div>
@@ -336,4 +337,52 @@ function BranchRow({branch:b,period,open,onToggle}:{branch:BranchCard;
         Показатели без настроенного порога: {b.metrics_without_threshold.length||'нет'}.</p>
     </div>}
   </article>;
+}
+
+/**
+ * Стартовый экран РФ (решение владельца 26.09.2026): свой филиал большой
+ * плиткой в шапке, ниже все филиалы сети плитками с баллом. Без фамилий
+ * региональных менеджеров, без задач и настроек — только просмотр карточки.
+ */
+function PeerNetwork({data}:{data:Overview}) {
+  const own=data.peer_view!.own_org_unit_ids;
+  const q=`?start=${data.period_start}&end=${data.period_end}`;
+  const ranked=[...data.branches].sort((a,b)=>(b.score??-1)-(a.score??-1)||a.display_name.localeCompare(b.display_name,'ru'));
+  const scored=ranked.filter(b=>b.score!==null);
+  const mine=ranked.filter(b=>own.includes(b.org_unit_id));
+  const net=data.network;
+  return <div className="portal-page network-kpi peer-network">
+    <header className="overview-head"><div>
+      <h1>Сеть FRESH</h1>
+      <p className="overview-subline">Срез на {RU_DATE(data.period_end)} · {data.branches.length} филиалов
+        {net.average_score!==null&&<> · средний балл сети {Math.round(net.average_score)}%</>}</p>
+      {data.data_is_stale&&<p className="overview-stale" role="status">
+        Отчёты за {RU_DATE(data.requested_end)} ещё не загружены — показаны данные на {RU_DATE(data.period_end)}.</p>}
+    </div></header>
+    {mine.map(b=>{
+      const place=b.score===null?null:scored.findIndex(x=>x.org_unit_id===b.org_unit_id)+1;
+      return <Link key={b.org_unit_id} to={`/branch-card/${b.org_unit_id}${q}`} className="peer-own" data-rag={b.score_rag}>
+        <div className="peer-own-head">
+          <div><span className="peer-own-eyebrow">Мой филиал</span>
+            <h2><RagDot status={b.score_rag}/>{b.display_name}</h2>
+            <p>{place?`${place} место из ${scored.length} в сети`:'балл не рассчитан'} · <RagBadge status={b.score_rag}/></p></div>
+          <strong className="peer-own-score tabnum">{b.score===null?'—':`${Math.round(b.score)}%`}</strong>
+        </div>
+        {b.score_components.length>0&&<div className="peer-own-grid">{b.score_components.slice(0,6).map(c=>{
+          const pct=c.fact!==null&&c.plan!==null&&c.plan>0?Math.round(c.fact/c.plan*100):null;
+          return <div key={c.metric}><span>{c.metric_name}</span>
+            <strong className="tabnum">{c.fact===null?'—':Math.round(c.fact).toLocaleString('ru-RU')}</strong>
+            <small className="tabnum">{c.plan===null?'план не задан':`план ${Math.round(c.plan).toLocaleString('ru-RU')}${pct===null?'':` · ${pct}%`}`}</small></div>;
+        })}</div>}
+        <span className="peer-own-open">Открыть карточку →</span>
+      </Link>;
+    })}
+    <h2 className="peer-title">Все филиалы сети</h2>
+    <div className="peer-grid">{ranked.map((b,i)=><Link key={b.org_unit_id} to={`/branch-card/${b.org_unit_id}${q}`}
+      className="peer-tile" data-rag={b.score_rag} data-own={own.includes(b.org_unit_id)?'1':undefined}>
+      <span className="peer-tile-place tabnum">{b.score===null?'—':i+1}</span>
+      <span className="peer-tile-name"><RagDot status={b.score_rag}/>{b.display_name}</span>
+      <strong className="peer-tile-score tabnum">{b.score===null?'—':`${Math.round(b.score)}%`}</strong>
+    </Link>)}</div>
+  </div>;
 }

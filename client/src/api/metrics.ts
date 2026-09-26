@@ -36,6 +36,8 @@ export interface RunRateTile {
   format:'PCT'|'COUNT'|'RUB'|'RATIO'; fact:number|null; plan:number|null; basis:string|null;
 }
 export interface Overview {
+  /** Режим «вся сеть для просмотра» (РФ): без фамилий, зон и задач. */
+  peer_view?:{own_org_unit_ids:string[]}|null;
   mode:string; period_start:string; period_end:string;
   // Выбранная дата и дата данных различаются, когда отчёты за выбранное число
   // ещё не загружены: экран обязан назвать настоящую дату данных.
@@ -94,6 +96,7 @@ export interface DeviationHistoryRow {
   rag_now:Rag|null; task_closed?:boolean;
 }
 export interface BranchCardData {
+  read_only?:boolean;own_branch?:boolean;
   mode:string; period_start:string; period_end:string;
   branch:{org_unit_id:string;code:string;display_name:string;lifecycle_state:string};
   metrics:(Omit<MetricCell,'deviation_task'>&{direction:'HIGHER_IS_BETTER'|'LOWER_IS_BETTER'|null})[];
