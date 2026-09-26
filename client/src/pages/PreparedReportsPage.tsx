@@ -15,6 +15,7 @@ import '../styles/report-staging.css';
 
 const number=(v:number|null|undefined)=>v==null?'Нет данных':v.toLocaleString('ru-RU',{maximumFractionDigits:2});
 export default function PreparedReportsPage() {
+  const [funnel,setFunnel]=useState<'APPEALS'|'CALLS'>('APPEALS');
   const {me}=useAuth();
   const intake=useReportIntakeEnabled();
   const [cap,setCap]=useState<StagingCapabilities|null>(null),[batches,setBatches]=useState<StagingBatch[]>([]);
@@ -74,7 +75,7 @@ export default function PreparedReportsPage() {
       if(!network)throw new Error('Подтверждённой корневой сети нет: создайте её в редакторе структуры.');
       if(!asOf)throw new Error('Укажите дату, по состоянию на которую собраны отчёты.');
       const meta=periodMetadata(true,period,confirmation);
-      const result=await autoPublishStagingBatch(network,meta,files);
+      const result=await autoPublishStagingBatch(network,meta,files,funnel);
       const list=await listStagingBatches();
       if(!alive.current)return;
       setAuto(result);setBatches(list.items);setFiles([]);if(input.current)input.current.value='';
@@ -125,6 +126,9 @@ export default function PreparedReportsPage() {
             <label>Отчёты QLIK · XLSX, до 10 файлов, до 8 МиБ каждый
               <input ref={input} type="file" accept=".xlsx" multiple
                 onChange={e=>setFiles(Array.from(e.target.files ?? []))}/></label>
+            <label>Воронка в пакете
+              <select value={funnel} onChange={e=>setFunnel(e.target.value as 'APPEALS'|'CALLS')}>
+                <option value="APPEALS">Обращения</option><option value="CALLS">Звонки</option></select></label>
             <label>Данные по состоянию на
               <input type="date" required value={asOf} max={new Date().toISOString().slice(0,10)}
                 onChange={e=>setAsOf(e.target.value)}/></label>

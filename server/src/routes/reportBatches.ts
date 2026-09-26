@@ -10,6 +10,7 @@ import { ApiError } from '../util/errors';
 import { getReview,saveReview,savedOverview,savedBranch } from '../reporting/review';
 import { requireReportIntake } from '../middleware/featureGate';
 import { autoPublishPackage } from '../reporting/autoPublish';
+import { FUNNEL_CHANNEL_KEYS, type FunnelChannel } from '../reporting/shared/reportModel';
 
 export const reportBatchesRouter=Router();
 const wrap=(fn:(req:Request,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{
@@ -27,7 +28,9 @@ reportBatchesRouter.use((req,res,next)=>{
   try {enforceSessionRateLimit(req.authUser!.sessionId,req.method!=='GET');next();} catch(e){next(e);}
 });
 reportBatchesRouter.use((req,_res,next)=>{
-  if(Object.keys(req.query).length) return next(new ApiError('VALIDATION_ERROR','Scope и фильтры клиента не принимаются.'));
+  // Единственный допустимый параметр — канал воронки при приёме одной кнопкой.
+  const extra=Object.keys(req.query).filter(k=>!(k==='funnel_channel'&&req.method==='POST'&&req.path==='/auto-publish'));
+  if(extra.length) return next(new ApiError('VALIDATION_ERROR','Scope и фильтры клиента не принимаются.'));
   withTransaction(c=>stagingAccess(c,req.authUser!)).then(()=>next(),next);
 });
 reportBatchesRouter.get('/capabilities',wrap(async(req,res)=>{res.json(await capabilities(req.authUser!));}));
@@ -56,7 +59,12 @@ reportBatchesRouter.post('/auto-publish',requireOrigin,requireCsrf,requireReport
   receiving=true;
   try {
     const upload=await readUpload(req);
-    res.status(200).json(await autoPublishPackage(req.authUser!,upload.metadata,upload.files,req.ctx.requestId));
+    // Канал воронки объявляет загружающий: по файлу обращения и звонки неотличимы.
+    const ch=req.query.funnel_channel;
+    if(ch!==undefined&&!(FUNNEL_CHANNEL_KEYS as string[]).includes(String(ch)))
+      throw new ApiError('VALIDATION_ERROR','Неизвестный канал воронки.');
+    res.status(200).json(await autoPublishPackage(req.authUser!,upload.metadata,upload.files,req.ctx.requestId,
+      ch?{funnel:ch as FunnelChannel}:{}));
   } finally {receiving=false;}
 }));
 reportBatchesRouter.post('/:id/probe',requireOrigin,requireCsrf,requireReportIntake,wrap(async(req,res)=>{

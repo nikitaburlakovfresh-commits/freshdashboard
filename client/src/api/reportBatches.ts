@@ -45,12 +45,12 @@ export interface AutoPublishResult {
   vin_registry?:{observed_on:string;published:number;message:string}|null;
 }
 /** Приём пакета одной операцией: загрузка, привязка филиалов и публикация. */
-export async function autoPublishStagingBatch(network_id:string,period:StagingPeriod,files:File[]) {
+export async function autoPublishStagingBatch(network_id:string,period:StagingPeriod,files:File[],funnelChannel?:'APPEALS'|'CALLS') {
   const form=new FormData();
   form.append('metadata',JSON.stringify({network_id,period}));
   for(const file of files) form.append('files',file);
   const csrf=getCsrfToken();
-  const response=await fetch('/api/v1/report-batches/auto-publish',{method:'POST',credentials:'same-origin',
+  const response=await fetch('/api/v1/report-batches/auto-publish'+(funnelChannel?`?funnel_channel=${funnelChannel}`:''),{method:'POST',credentials:'same-origin',
     headers:csrf?{'X-CSRF-Token':csrf}:{},body:form});
   const body=await response.json().catch(()=>null);
   if(!response.ok) throw new ApiError(body ?? {code:'UNKNOWN',message:'Не удалось принять пакет. Обновите список перед повтором.',details:{},request_id:''},response.status);
