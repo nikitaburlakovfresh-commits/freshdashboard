@@ -91,6 +91,7 @@ export const savePolicy=(org:string,body:unknown)=>apiFetch<{id:string;version:n
 // Поручения из строки ежедневника (решение владельца 26.09.2026): машина,
 // звонок, вывод по трафику — конкретному человеку на конкретный день.
 export interface DelegationTarget { user_id:string;full_name:string;login:string;role_code:string;role_name:string }
+export interface RoleRef { code:string;display_name:string }
 export interface DiaryDelegation {
   id:string;title:string;status:string;brief:string|null;due_date:string;assignee_name:string|null;template_name:string;
   source_ref:{section_num:number|null;field_path:string|null;row_index:number|null;link:string|null;vin?:string|null}|null;
@@ -99,7 +100,7 @@ export interface DelegationDraft {
   assignee_user_id:string;role_code:string;due_date:string;title:string;brief?:string;
   section_num?:number|null;field_path?:string|null;row_index?:number|null;link?:string|null;vin?:string|null;
 }
-export const delegationTargets=(diary:string)=>apiFetch<{self_user_id:string;business_date:string;targets:DelegationTarget[]}>(`/daily-logs/${diary}/delegation-targets`);
+export const delegationTargets=(diary:string)=>apiFetch<{self_user_id:string;business_date:string;targets:DelegationTarget[];roles:RoleRef[]}>(`/daily-logs/${diary}/delegation-targets`);
 export const diaryDelegations=(diary:string)=>apiFetch<DiaryDelegation[]>(`/daily-logs/${diary}/delegations`);
 export const createDelegation=(diary:string,body:DelegationDraft)=>apiFetch<{id:string;due_date:string}>(`/daily-logs/${diary}/delegations`,{method:'POST',body});
 

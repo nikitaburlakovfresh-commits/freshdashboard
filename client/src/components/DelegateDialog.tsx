@@ -6,6 +6,8 @@ export interface DelegateSource {
   section_num: number | null; section_title: string;
   field_path?: string | null; row_index?: number | null; link?: string | null; text?: string;
   vin?: string | null; label?: string;
+  /** Задача себе: исполнитель — сам автор, день по умолчанию — завтра. */
+  self?: boolean;
 }
 
 /**
@@ -21,17 +23,19 @@ export default function DelegateDialog({ diaryId, source, batch, onClose, onCrea
   const [targets, setTargets] = useState<DelegationTarget[]>([]);
   const [selfId, setSelfId] = useState('');
   const [target, setTarget] = useState('');
-  const [date, setDate] = useState(moscowToday());
+  const tomorrow = (() => { const d = new Date(moscowToday() + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
+  const [date, setDate] = useState(source.self ? tomorrow : moscowToday());
   const what = batch ? `${source.section_title} · ${batch.length} машин, по задаче на каждую`
     : source.label ? `${source.section_title} · ${source.label}` : source.row_index != null ? `${source.section_title} · запись ${source.row_index + 1}` : source.section_title;
-  const [title, setTitle] = useState((batch || source.label ? 'Переоценка' : what).slice(0, 200));
+  const [title, setTitle] = useState(source.self ? '' : (batch || source.label ? 'Переоценка' : what).slice(0, 200));
   const [brief, setBrief] = useState(batch ? 'Пересмотреть цену: машина без переоценки больше 10 дней.' : [source.text, source.link].filter(Boolean).join('\n'));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let live = true;
-    delegationTargets(diaryId).then(d => { if (live) { setTargets(d.targets); setSelfId(d.self_user_id); } })
+    delegationTargets(diaryId).then(d => { if (live) { setTargets(d.targets); setSelfId(d.self_user_id);
+      if (source.self) { const me = d.targets.find(t => t.user_id === d.self_user_id); if (me) setTarget(`${me.user_id}|${me.role_code}`); } } })
       .catch(e => { if (live) setError(e?.message ?? 'Не удалось загрузить сотрудников филиала.'); });
     return () => { live = false; };
   }, [diaryId]);
@@ -61,7 +65,7 @@ export default function DelegateDialog({ diaryId, source, batch, onClose, onCrea
   return <div className="portal-modal-backdrop" onClick={onClose} role="presentation">
     <form className="portal-modal" onClick={e => e.stopPropagation()} onSubmit={submit}
       role="dialog" aria-modal="true" aria-label="Поручить задачу">
-      <h3>Поручить задачу</h3>
+      <h3>{source.self ? 'Задача себе на будущий день' : 'Поручить задачу'}</h3>
       <p className="portal-muted">{what}</p>
       <label>Кому
         <select value={target} onChange={e => setTarget(e.target.value)}>
@@ -85,7 +89,7 @@ export default function DelegateDialog({ diaryId, source, batch, onClose, onCrea
       {error && <p role="alert">{error}</p>}
       <div className="portal-modal-actions">
         <button type="button" className="btn btn-ghost" onClick={onClose}>Отмена</button>
-        <button className="btn" disabled={busy}>{busy ? 'Ставлю…' : 'Поручить'}</button>
+        <button className="btn" disabled={busy}>{busy ? 'Ставлю…' : source.self ? 'Поставить себе' : 'Поручить'}</button>
       </div>
     </form>
   </div>;

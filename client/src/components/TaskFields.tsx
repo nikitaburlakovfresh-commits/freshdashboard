@@ -2,7 +2,7 @@ import React from 'react';
 import type { FieldDef, WorkItem } from '../api/types';
 import type { FieldDrafts } from '../domain/taskForm';
 import { parseGroup } from '../domain/taskForm';
-import type { DiaryDelegation, DiaryHint, StalePrices, StaleCar, ColorRule, Rag } from '../api/dailyLogs';
+import type { DiaryDelegation, DiaryHint, StalePrices, StaleCar, ColorRule, Rag, DelegationTarget, RoleRef } from '../api/dailyLogs';
 
 /** Зона по правилу цвета; вне заданных зон — без цвета. */
 export function ragOf(rule: ColorRule['rule'], raw: string | number | null | undefined): Rag | null {
@@ -38,7 +38,36 @@ const FIELD_NOTES: Record<string, string> = {
 const STATUS_RU: Record<string, string> = { ASSIGNED: 'назначена', IN_PROGRESS: 'в работе',
   SUBMITTED: 'на проверке у вас', COMPLETED: 'принята', CANCELLED: 'отменена', DRAFT: 'черновик' };
 const isDone = (path: string) => /_done$/.test(path);
+/** Задачи ответственным по итогам встречи: финальный срок и промежуточная точка. */
+export interface MeetingTaskRequest {
+  section_num: number; section_title: string; field_path: string; row_index: number | null;
+  owners: string[]; goal: string; summary: string; due: string; next: string;
+}
 const fmt = (v: number, unit: string) => `${v.toLocaleString('ru-RU')} ${unit}`;
+
+/** Список «Роль; Роль» ↔ массив. Точка с запятой — разделитель, в названиях ролей её нет. */
+export const splitPick = (v: string) => v.split(/;|,/).map(x => x.trim()).filter(Boolean);
+/** Раскрывающийся список с галочками: можно отметить несколько вариантов. */
+function MultiPick({ value, groups, onChange, disabled, label }: {
+  value: string; groups: { title: string; items: string[] }[]; onChange: (v: string) => void; disabled: boolean; label: string;
+}) {
+  const picked = splitPick(value);
+  const known = new Set(groups.flatMap(g => g.items));
+  const extra = picked.filter(x => !known.has(x));
+  const toggle = (x: string) => onChange((picked.includes(x) ? picked.filter(y => y !== x) : [...picked, x]).join('; '));
+  return <details className="task-multipick">
+    <summary aria-label={label}>{picked.length ? picked.join(', ') : 'Выберите из списка'}</summary>
+    {[...groups, ...(extra.length ? [{ title: 'Указано ранее', items: extra }] : [])].map(g => g.items.length > 0 &&
+      <fieldset key={g.title} disabled={disabled}><legend>{g.title}</legend>
+        {g.items.map(x => <label key={x} className="task-multipick-item">
+          <input type="checkbox" checked={picked.includes(x)} onChange={() => toggle(x)} /> {x}</label>)}
+      </fieldset>)}
+  </details>;
+}
+
+// Роли управляющей компании FRESH — остальные роли справочника считаются ролями филиала.
+const UC_ROLES = new Set(['REGIONAL_MANAGER', 'DIVISION_MANAGER', 'COMMERCIAL_DIRECTOR', 'FINANCE_HEAD', 'HR_UC', 'LEGAL_UC',
+  'FRESH_ACADEMY', 'QUALITY_CONTROL', 'KSO_HEAD']);
 
 function Scalar({ def, value, onChange, disabled, label }: {
   def: FieldDef; value: string; onChange: (v: string) => void; disabled: boolean; label: string;
@@ -73,16 +102,37 @@ export function groupFieldsBySection(schema: FieldDef[]): Section[] {
   return out;
 }
 
-export default function TaskFields({ item, drafts, editable, busy, onChange, onSave, hints = [], delegations = [], onDelegate, stale, colorRules = [] }: {
+export default function TaskFields({ item, drafts, editable, busy, onChange, onSave, hints = [], delegations = [], onDelegate, stale, colorRules = [], people, onMeetingTasks }: {
   item: WorkItem; drafts: FieldDrafts; editable: boolean; busy: boolean;
   onChange: (path: string, value: string) => void; onSave: (path: string) => void;
   hints?: DiaryHint[]; delegations?: DiaryDelegation[]; onDelegate?: (source: DelegateSource, batch?: DelegateSource[]) => void;
   stale?: StalePrices | null; colorRules?: ColorRule[];
+  people?: { targets: DelegationTarget[]; roles: RoleRef[] } | null;
+  onMeetingTasks?: (m: MeetingTaskRequest) => void;
 }) {
   const sectionOf = (path: string) => item.field_schema.find(f => f.field_path === path);
   const delegationList = (list: DiaryDelegation[]) => list.length > 0 && <ul className="task-delegations">
     {list.map(d => <li key={d.id}><a href={`/tasks/${d.id}`}>{d.assignee_name ?? 'Исполнитель'} · на {d.due_date.slice(8, 10)}.{d.due_date.slice(5, 7)}</a>
       {' '}· {STATUS_RU[d.status] ?? d.status}</li>)}</ul>;
+  // Участники встречи — любые роли филиала и УК FRESH; ответственные — роли
+  // филиала, в которых есть сотрудники, чтобы задача дошла до человека.
+  const participantGroups = people ? [
+    { title: 'Филиал', items: people.roles.filter(r => !UC_ROLES.has(r.code)).map(r => r.display_name) },
+    { title: 'УК FRESH', items: people.roles.filter(r => UC_ROLES.has(r.code)).map(r => r.display_name) }] : [];
+  const ownerGroups = people ? [{ title: 'Роли филиала с сотрудниками',
+    items: [...new Set(people.targets.map(t => t.role_name))] }] : [];
+  const pickFor = (path: string) => !people ? null : path === 'people' ? participantGroups
+    : path === 'owner' || path === 't9_mowner' ? ownerGroups : null;
+  const meetingButton = (m: Omit<MeetingTaskRequest, 'owners'> & { owners: string }, list: DiaryDelegation[]) => onMeetingTasks &&
+    <div className="task-meeting-tasks">
+      <button type="button" className="task-field-secondary" disabled={busy || !splitPick(m.owners).length || !m.due}
+        title={!splitPick(m.owners).length ? 'Выберите ответственных' : !m.due ? 'Укажите срок исполнения' : ''}
+        onClick={() => onMeetingTasks({ ...m, owners: splitPick(m.owners) })}>
+        Поставить задачи ответственным</button>
+      <p className="task-fields-note">Каждому сотруднику выбранных ролей: задача на срок исполнения и, если указана,
+        отдельная задача на промежуточную точку. Появятся в их задачах и ежедневниках в эти дни.</p>
+      {delegationList(list)}
+    </div>;
   // Поля, скрытые настройкой ежедневника (061), не показываются и не считаются в «заполнено N из M».
   const hiddenByConfig = new Set(item.daily_log?.hidden_fields ?? []);
   const sections = groupFieldsBySection(item.field_schema.filter(f => !hiddenByConfig.has(f.field_path)));
@@ -90,6 +140,7 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
   // У ежедневника поля сохраняются сами через 0,7 секунды после ввода, поэтому
   // 95 кнопок «Сохранить» здесь только мешают: остаётся признак состояния.
   const autosaves = !!item.daily_log;
+  const cur = (p: string) => (editable ? drafts[p]?.value : undefined) ?? item.fields.find(f => f.field_path === p)?.value ?? '';
   const renderField = (def: FieldDef) => {
       const saved = item.fields.find(f => f.field_path === def.field_path);
       const draft = drafts[def.field_path];
@@ -110,7 +161,10 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
               <legend>Запись {index + 1}</legend>
               {(def.child_fields ?? []).map(child => <label key={child.field_path}>
                 <span>{child.label}{child.required ? ' · обязательно' : ''}</span>
-                {editable ? <Scalar def={child} value={row[child.field_path] ?? ''} disabled={busy}
+                {editable && pickFor(child.field_path) ? <MultiPick value={row[child.field_path] ?? ''} disabled={busy}
+                  groups={pickFor(child.field_path)!} label={`${def.label} · ${index + 1} · ${child.label}`}
+                  onChange={v => onChange(def.field_path, JSON.stringify(rows.map((r, i) => i === index ? { ...r, [child.field_path]: v } : r)))}/>
+                : editable ? <Scalar def={child} value={row[child.field_path] ?? ''} disabled={busy}
                   label={`${def.label} · ${index + 1} · ${child.label}`}
                   onChange={v => onChange(def.field_path, JSON.stringify(rows.map((r, i) => i === index ? { ...r, [child.field_path]: v } : r)))}/>
                   : <p className="task-field-value">{row[child.field_path] || 'Не заполнено'}</p>}
@@ -119,6 +173,10 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
                 onClick={() => onDelegate({ section_num: def.section_num ?? null, section_title: def.section_title || def.label,
                   field_path: def.field_path, row_index: index, link: row.link ?? null,
                   text: Object.entries(row).filter(([k, v]) => k !== 'link' && v).map(([, v]) => v).join('\n') })}>Поручить запись {index + 1}</button>}
+              {(def.child_fields ?? []).some(c => c.field_path === 'owner') && meetingButton({ section_num: def.section_num ?? 0,
+                section_title: def.section_title || def.label, field_path: def.field_path, row_index: index,
+                owners: row.owner ?? '', goal: row.goal ?? '', summary: row.summary ?? '', due: row.due ?? '', next: row.next ?? '' },
+                delegations.filter(d => d.source_ref?.field_path === def.field_path && d.source_ref?.row_index === index))}
               {editable && <button type="button" className="task-field-secondary" disabled={busy}
                 onClick={() => onChange(def.field_path, JSON.stringify(rows.filter((_, i) => i !== index)))}>Удалить запись {index + 1}</button>}
               {delegationList(delegations.filter(d => d.source_ref?.field_path === def.field_path && d.source_ref?.row_index === index))}
@@ -130,8 +188,13 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
               onClick={() => onChange(def.field_path, '[]')}>Подтвердить отсутствие записей</button>}
             <p className="task-fields-note">Записей: {rows.length}. Минимум: {def.min_items ?? 0}, максимум: {def.max_items ?? 100}.</p>
           </>}
-        </div> : editable ? <Scalar def={def} value={value} onChange={v => onChange(def.field_path, v)} disabled={busy} label={def.label}/>
+        </div> : editable && pickFor(def.field_path) ? <MultiPick value={value} groups={pickFor(def.field_path)!} disabled={busy}
+            label={def.label} onChange={v => onChange(def.field_path, v)}/>
+          : editable ? <Scalar def={def} value={value} onChange={v => onChange(def.field_path, v)} disabled={busy} label={def.label}/>
           : <p className="task-field-value">{value || 'Не заполнено'}</p>}
+        {def.field_path === 't9_mnext' && meetingButton({ section_num: def.section_num ?? 9, section_title: def.section_title || 'Встреча с КЦ',
+          field_path: 't9_mowner', row_index: null, owners: cur('t9_mowner'), goal: cur('t9_mgoal'), summary: cur('t9_msummary'),
+          due: cur('t9_mdue'), next: value }, delegations.filter(d => d.source_ref?.field_path === 't9_mowner'))}
         {FIELD_NOTES[def.field_path] && <p className="task-fields-note">{FIELD_NOTES[def.field_path]}</p>}
         {hints.filter(h => h.field_path === def.field_path).map(h => {
           // Значение портала в поле не ставится (решение владельца 26.09.2026):
@@ -239,13 +302,20 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
             </>}
           </details>;
         })()}
+        {onDelegate && closing && <div className="task-section-delegate">
+          <button type="button" className="task-field-secondary"
+            onClick={() => onDelegate({ section_num: 99, section_title: 'Закрытие дня', self: true })}>
+            Поставить задачу себе на будущий день</button>
+          <p className="task-fields-note">Задача появится в вашем ежедневнике в выбранный день.</p>
+          {delegationList(delegations.filter(d => d.source_ref?.section_num === 99))}
+        </div>}
         {onDelegate && section.num !== null && !closing && <div className="task-section-delegate">
           <button type="button" className="task-field-secondary"
             onClick={() => onDelegate({ section_num: section.num, section_title: section.title,
               text: section.fields.filter(f => f.type === 'text')
                 .map(f => item.fields.find(x => x.field_path === f.field_path)?.value).filter(Boolean).join('\n') })}>
             Поручить задачу по разделу</button>
-          {delegationList(delegations.filter(d => d.source_ref?.section_num === section.num && d.source_ref?.row_index == null && !d.source_ref?.vin))}
+          {delegationList(delegations.filter(d => d.source_ref?.section_num === section.num && d.source_ref?.row_index == null && !d.source_ref?.vin && d.source_ref?.field_path !== 't9_mowner'))}
         </div>}
         {mark && (() => {
           // Отметка выполнения — галочка внизу раздела (решение владельца

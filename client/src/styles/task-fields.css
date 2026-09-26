@@ -98,3 +98,13 @@
 
 .task-hint-apply{margin-top:8px;min-height:44px;padding:0 16px}
 @media (max-width:640px){.task-hint-apply{width:100%}}
+
+/* Множественный выбор: участники встречи, ответственные. */
+.task-multipick{border:1px solid var(--fresh-border,#e2e8f0);border-radius:10px;background:var(--fresh-surface,#fff)}
+.task-multipick>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;padding:8px 12px;overflow-wrap:anywhere}
+.task-multipick fieldset{border:0;margin:0;padding:4px 12px 10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:2px 12px}
+.task-multipick legend{font-size:12px;font-weight:600;color:var(--fresh-text-muted,#64748b);padding:6px 0 2px}
+.task-multipick-item{display:flex;align-items:center;gap:8px;min-height:40px;font-size:14px;cursor:pointer}
+.task-multipick-item input{width:18px;height:18px;flex:none}
+.task-meeting-tasks{margin-top:10px}
+@media (max-width:640px){.task-multipick fieldset{grid-template-columns:1fr}}

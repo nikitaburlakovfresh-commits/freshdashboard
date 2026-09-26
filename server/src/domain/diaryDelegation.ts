@@ -71,7 +71,13 @@ export async function delegationTargets(ctx: ActorContext, diaryId: string) {
         WHERE g.org_unit_id = $1 AND g.revoked_at IS NULL
           AND g.valid_from <= now() AND (g.valid_until IS NULL OR g.valid_until > now())
         ORDER BY r.display_name, u.full_name`, [d.org_unit_id])).rows;
-    return { org_unit_id: d.org_unit_id, business_date: d.business_date, self_user_id: ctx.authUser.userId, targets: rows };
+    // Каталог ролей для выбора участников встречи: роли филиала и УК FRESH
+    // берутся из справочника ролей, а не из кода.
+    const roles = (await c.query(
+      `SELECT code, display_name FROM roles
+        WHERE code NOT IN ('SUPER_ADMIN','SHARED_LOGIN','ACTING_BH','ACTING_RF','LAUNCH_TEAM','TECHNICAL_COORDINATOR')
+        ORDER BY display_name`)).rows;
+    return { org_unit_id: d.org_unit_id, business_date: d.business_date, self_user_id: ctx.authUser.userId, targets: rows, roles };
   });
 }
 

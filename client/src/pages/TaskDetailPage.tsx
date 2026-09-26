@@ -17,9 +17,9 @@ import type { WorkItem, HistoryEntry } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import StatusBadge from '../components/StatusBadge';
 import { apiFetch } from '../api/client';
-import TaskFields from '../components/TaskFields';
+import TaskFields, { type MeetingTaskRequest } from '../components/TaskFields';
 import DelegateDialog, { type DelegateSource } from '../components/DelegateDialog';
-import { diaryDelegations, diaryReference, type DiaryDelegation, type DiaryHint, type StalePrices, type ColorRule } from '../api/dailyLogs';
+import { diaryDelegations, diaryReference, delegationTargets, createDelegation, type DiaryDelegation, type DiaryHint, type StalePrices, type ColorRule, type DelegationTarget, type RoleRef } from '../api/dailyLogs';
 import { hasUnsavedFields, mergeSavedFields, requiredFieldsPresent } from '../domain/taskForm';
 import { saveLocalDraft, restoreLocalDraft, clearLocalDraft } from '../domain/draftStorage';
 import type { FieldDrafts } from '../domain/taskForm';
@@ -157,7 +157,33 @@ export default function TaskDetailPage() {
     if(!item?.id||!canDelegate)return;
     loadDelegations();
     diaryReference(item.id).then(r=>{setHints(r.hints);setStale(r.stale_prices??null);setColorRules(r.color_rules??[]);}).catch(()=>setHints([]));
+    delegationTargets(item.id).then(r=>setPeople({targets:r.targets,roles:r.roles??[]})).catch(()=>setPeople(null));
   },[item?.id,canDelegate,loadDelegations]);
+  // Задачи ответственным по итогам встречи (разделы 27 и 9): каждому сотруднику
+  // выбранных ролей — задача на срок исполнения и, если указана раньше срока,
+  // отдельная задача на промежуточную точку.
+  const [people,setPeople]=useState<{targets:DelegationTarget[];roles:RoleRef[]}|null>(null);
+  const [meetingMsg,setMeetingMsg]=useState<string|null>(null);
+  const meetingTasks=async(m:MeetingTaskRequest)=>{
+    if(!item||!people)return;
+    const today=moscowToday();
+    if(m.due<today){setMeetingMsg('Срок исполнения уже прошёл — укажите будущую дату.');return;}
+    const who=people.targets.filter(t=>m.owners.includes(t.role_name));
+    if(!who.length){setMeetingMsg('В выбранных ролях нет сотрудников филиала.');return;}
+    const topic=(m.goal||m.section_title).trim();
+    const brief=[m.goal&&`Цель: ${m.goal}`,m.summary&&`Резюме: ${m.summary}`,`Срок исполнения: ${m.due.split('-').reverse().join('.')}`].filter(Boolean).join('\n');
+    const plan:{due:string;title:string}[]=[{due:m.due,title:`Встреча: ${topic}`}];
+    if(m.next&&m.next>=today&&m.next<m.due)plan.unshift({due:m.next,title:`Промежуточная точка: ${topic}`});
+    setActionBusy(true);setMeetingMsg(null);
+    try{
+      let n=0;
+      for(const t of who)for(const p of plan){
+        await createDelegation(item.id,{assignee_user_id:t.user_id,role_code:t.role_code,due_date:p.due,title:p.title.slice(0,200),
+          brief,section_num:m.section_num,field_path:m.field_path,row_index:m.row_index,link:null,vin:null});n++;}
+      setMeetingMsg(`Поставлено задач: ${n}.`);loadDelegations();
+    }catch(e:any){setMeetingMsg(e?.message??'Не удалось поставить задачи.');loadDelegations();}
+    finally{setActionBusy(false);}
+  };
   useEffect(() => {
     if (!dirty) return;
     const unload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
@@ -342,10 +368,11 @@ export default function TaskDetailPage() {
 
       <section style={card}>
         <h2 style={cardTitle}>Результат выполнения</h2>
+        {meetingMsg&&<p role="status" style={{margin:'0 0 12px',fontSize:13,fontWeight:600}}>{meetingMsg}</p>}
         <TaskFields item={item} drafts={drafts} editable={isOwnExecutor && ['ASSIGNED','IN_PROGRESS'].includes(item.status) && item.daily_log?.can_fill!==false}
           busy={actionBusy}
           hints={hints} delegations={delegations}
-          stale={stale} colorRules={colorRules}
+          stale={stale} colorRules={colorRules} people={people} onMeetingTasks={canDelegate?meetingTasks:undefined}
           onDelegate={canDelegate ? (s,b)=>{setDelegateFrom(s);setDelegateBatch(b);} : undefined}
           onChange={(path,value) => {setError(null);setDrafts(current => ({...current,[path]:{...current[path],value}}));}}
           onSave={path => {
@@ -481,9 +508,10 @@ export default function TaskDetailPage() {
         />
       )}
 
-      <section style={card}>
-        <h2 style={cardTitle}>История</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <details style={card}>
+        {/* История свёрнута (решение владельца 26.09.2026): нужна редко. */}
+        <summary style={{ ...cardTitle, cursor: 'pointer', minHeight: 44, display: 'flex', alignItems: 'center' }}>История · {history.length}</summary>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
           {history.length === 0 && <span style={{ color: 'var(--fresh-text-muted)', fontSize: 13 }}>Событий пока нет.</span>}
           {history.map((h) => (
             <div key={h.event_id} style={{ borderLeft: '2px solid var(--fresh-border)', paddingLeft: 12 }}>
@@ -493,7 +521,7 @@ export default function TaskDetailPage() {
             </div>
           ))}
         </div>
-      </section>
+      </details>
     </div>
   );
 }
