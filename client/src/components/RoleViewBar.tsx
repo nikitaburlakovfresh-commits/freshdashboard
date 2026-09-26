@@ -120,6 +120,7 @@ export default function RoleViewBar({ isOwner, slot }: { isOwner: boolean; slot:
         Портал только показывает данные, изменения недоступны.
         {status.expires_at && <> · {formatLeft(status.expires_at)}</>}
       </span>
+      {error && <span className="role-view-text" role="alert">{error}</span>}
       <button type="button" className="role-view-exit" onClick={leave} disabled={busy}>
         Вернуться к своей учётной записи{status.admin?.full_name ? ` · ${status.admin.full_name}` : ''}
       </button>

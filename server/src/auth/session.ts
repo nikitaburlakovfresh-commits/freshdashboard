@@ -195,7 +195,9 @@ export async function loadSession(rawToken: string): Promise<AuthedUser | null> 
 export function blockWritesWhileViewing(req: Request, _res: Response, next: NextFunction) {
   if (!req.authUser?.viewAs) return next();
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
-  if (req.path === '/api/v1/view-as/exit') return next();
+  // Внутри роутера req.path — '/exit', поэтому сверяем полный адрес (26.09.2026):
+  // иначе кнопка возврата к своей учётной записи получала отказ.
+  if (req.originalUrl.split('?')[0] === '/api/v1/view-as/exit') return next();
   return next(new ApiError(
     'VIEW_AS_READ_ONLY',
     'Включён просмотр глазами роли — портал только показывает. Вернитесь к своей учётной записи, чтобы изменять данные.',
