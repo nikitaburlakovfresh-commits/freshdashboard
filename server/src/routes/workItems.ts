@@ -4,6 +4,7 @@ import { requireOrigin } from '../middleware/origin';
 import { requireSession, requireCsrf } from '../auth/session';
 import { enforceSessionRateLimit } from '../auth/rateLimit';
 import * as svc from '../domain/workItemService';
+import { assignOptions, createDirectTask } from '../domain/directTasks';
 
 export const workItemsRouter = Router();
 
@@ -69,6 +70,15 @@ workItemsRouter.post(
     res.status(result.status).json(result.body);
   }),
 );
+
+// Постановка задач сверху вниз и «Запрос в УК» (26.09.2026).
+workItemsRouter.get('/assign-options', requireSession, wrap(async (req, res) => {
+  res.status(200).json(await assignOptions(buildCtx(req)));
+}));
+workItemsRouter.post('/direct', requireOrigin, requireSession, requireCsrf, wrap(async (req, res) => {
+  enforceSessionRateLimit(req.authUser!.sessionId, true);
+  res.status(201).json(await createDirectTask(buildCtx(req), req.body ?? {}));
+}));
 
 workItemsRouter.get('/templates', requireSession, wrap(async (req, res) => {
   enforceSessionRateLimit(req.authUser!.sessionId, false);

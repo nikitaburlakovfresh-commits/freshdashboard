@@ -51,6 +51,14 @@ async function currentRmOrgIds(client: PoolClient, userId: string): Promise<Set<
 //    patch/submit/reopen/assign/eligible-assignees), via
 //    map.get(orgUnitId)?.has(requiredRole) -- required wherever an action
 //    is gated to the exact role a template names as its field owner.
+/** Роли, в которых актор может исполнять задачу филиала: операционные и РМ
+ * (РМ отвечает на «Запрос в УК», 26.09.2026). */
+async function executorRoles(client: PoolClient, userId: string, orgUnitId: string): Promise<Set<string>> {
+  const set = new Set((await currentOperationalRolesByOrg(client, userId)).get(orgUnitId) ?? []);
+  if ((await currentRmOrgIds(client, userId)).has(orgUnitId)) set.add('REGIONAL_MANAGER');
+  return set;
+}
+
 async function currentOperationalRolesByOrg(client: PoolClient, userId: string): Promise<Map<string, Set<string>>> {
   const grants = await getEffectiveGrants(client, userId);
   const map = new Map<string, Set<string>>();
@@ -368,7 +376,7 @@ export async function listWorkItems(
 
     // RF-own restriction unless also RM in that org.
     conditions.push(
-      `(wi.org_unit_id = ANY($${idx}::uuid[]) OR wi.assignee_user_id = $${idx + 1})`,
+      `(wi.org_unit_id = ANY($${idx}::uuid[]) OR wi.assignee_user_id = $${idx + 1} OR wi.created_by = $${idx + 1})`,
     );
     values.push(Array.from(rmOrgs));
     values.push(ctx.authUser.userId);
@@ -433,6 +441,24 @@ export async function listWorkItems(
       const fields = await getFields(client, row.id);
       const submission = await getCurrentSubmission(client, row);
       items.push(serializeWorkItem(row, template, fields, submission));
+    }
+    // Ярлыки у задачи в списке (решение владельца 26.09.2026): отклонение по
+    // показателю, МБО, запрос в УК, поручение — как ярлык «MBO» старого портала.
+    const ids = res.rows.map((r: any) => r.id);
+    if (ids.length) {
+      const dev = new Map((await client.query(`SELECT work_item_id, metric, rag FROM metric_deviation_tasks WHERE work_item_id = ANY($1::uuid[])`, [ids])).rows.map((r: any) => [r.work_item_id, r]));
+      const mbo = new Set((await client.query(`SELECT work_item_id FROM mbo_card_task_links WHERE work_item_id = ANY($1::uuid[])`, [ids])).rows.map((r: any) => r.work_item_id));
+      for (let i = 0; i < items.length; i++) {
+        const row: any = res.rows[i];
+        const d: any = dev.get(row.id);
+        (items[i] as any).labels = {
+          deviation: d ? { metric: d.metric, rag: d.rag } : null,
+          mbo: mbo.has(row.id),
+          uk_request: row.source_ref?.kind === 'UK_REQUEST',
+          delegated: !!row.source_ref && row.source_ref?.kind !== 'UK_REQUEST',
+          created_by_me: row.created_by === ctx.authUser.userId && row.assignee_user_id !== ctx.authUser.userId,
+        };
+      }
     }
     const nextCursor =
       res.rows.length === params.limit
@@ -767,7 +793,7 @@ export async function startWorkItem(ctx: ActorContext, workItemId: string, idemK
       const startTemplate = await getTemplateById(client, workItem.template_version_id);
       if (!startTemplate) throw new ApiError('NOT_FOUND', 'Объект не найден.');
       const startOwnerRole = deriveTemplateOwnerRole(startTemplate);
-      const startRolesHeld = (await currentOperationalRolesByOrg(client, ctx.authUser.userId)).get(workItem.org_unit_id) ?? new Set<string>();
+      const startRolesHeld = await executorRoles(client, ctx.authUser.userId, workItem.org_unit_id);
       const isOwnExecutor = startRolesHeld.has(startOwnerRole) && workItem.assignee_user_id === ctx.authUser.userId;
       if (!isOwnExecutor) throw new ApiError('FORBIDDEN', 'Действие не разрешено.');
       await assertDailyWindow(client,workItemId);
@@ -847,7 +873,7 @@ export async function patchWorkItemFields(
       // is the assignee) -- same "still an active branch employee" freshness
       // check the RF-only code used to do; the field-specific role match
       // happens below once the field's declared owner role is known.
-      const rolesHeld = (await currentOperationalRolesByOrg(client, ctx.authUser.userId)).get(workItem.org_unit_id) ?? new Set<string>();
+      const rolesHeld = await executorRoles(client, ctx.authUser.userId, workItem.org_unit_id);
       const isOwnExecutor = rolesHeld.size > 0 && workItem.assignee_user_id === ctx.authUser.userId;
       if (!isOwnExecutor) throw new ApiError('FORBIDDEN_FIELD', 'Действие с полем не разрешено.');
 
@@ -972,7 +998,7 @@ export async function submitWorkItem(ctx: ActorContext, workItemId: string, idem
       const submitTemplate = await getTemplateById(client, workItem.template_version_id);
       if (!submitTemplate) throw new ApiError('NOT_FOUND', 'Объект не найден.');
       const submitOwnerRole = deriveTemplateOwnerRole(submitTemplate);
-      const submitRolesHeld = (await currentOperationalRolesByOrg(client, ctx.authUser.userId)).get(workItem.org_unit_id) ?? new Set<string>();
+      const submitRolesHeld = await executorRoles(client, ctx.authUser.userId, workItem.org_unit_id);
       const isOwnExecutorSubmit = submitRolesHeld.has(submitOwnerRole) && workItem.assignee_user_id === ctx.authUser.userId;
       if (!isOwnExecutorSubmit) throw new ApiError('FORBIDDEN', 'Действие не разрешено.');
       await liveFence(client,ctx);

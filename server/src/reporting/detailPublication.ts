@@ -9,7 +9,7 @@ import { beginIdempotent,completeIdempotent } from '../domain/idempotency';
 import { writeAuditAndOutbox } from '../domain/auditOutbox';
 import { reviewContext } from './review';
 import { detailAccess,detailPublisher } from './detailAccess';
-import { factAccess } from './factAccess';
+import { factAccess, peerAccess } from './factAccess';
 import { readSource,uuid } from './storage';
 import { parseAnyWorkbook } from './shared/parseWorkbook';
 import { validDate,normalize } from './shared/reportModel';
@@ -259,7 +259,10 @@ export async function readDetailStock(auth:AuthedUser,query:any) {
     // отдельных защит. Персональные столбцы источника в портал не переносятся,
     // поэтому отдельного режима обработки они не требуют.
     const grants=await factAccess(c,auth,'READ');
-    const allowed=[...new Set(grants.map(g=>g.org_unit_id))];
+    // РФ видит реестр своего филиала (26.09.2026): свои филиалы из режима
+    // «вся сеть для просмотра». Чужие филиалы этим правом не открываются.
+    const peer=await peerAccess(c,auth);
+    const allowed=[...new Set([...grants.map(g=>g.org_unit_id),...(peer?.own_org_unit_ids??[])])];
     if(!allowed.length)throw new ApiError('FORBIDDEN','Нет доступа к показателям филиалов.');
     if(q.org&&!allowed.includes(q.org))throw new ApiError('NOT_FOUND','Филиал недоступен.');
     const orgs=q.org?[q.org]:allowed;

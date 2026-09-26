@@ -7,6 +7,13 @@ import StatusBadge from '../components/StatusBadge';
 import CreateTaskModal from './CreateTaskModal';
 import { displayTitle } from '../domain/taskTitle';
 import { useOrgNames } from '../state/orgNames';
+import DirectTaskDialog from '../components/DirectTaskDialog';
+import { getAssignOptions, type AssignScope } from '../api/directTasks';
+import '../styles/task-fields.css';
+
+const METRIC_RU: Record<string,string> = { sales:'продажи', margin:'маржа', kso:'КСО', revenue:'выручка',
+  suppliesFact:'поставки', stock:'склад', stockTurnover:'оборачиваемость', buyback45Share:'45+', creditShareFact:'доля кредита' };
+const RAG_RU: Record<string,string> = { RED:'красная зона', AMBER:'жёлтая зона', GREEN:'зелёная зона' };
 
 const STATUS_OPTIONS: { value: WorkItemStatus | ''; label: string }[] = [
   { value: '', label: 'Все статусы' },
@@ -32,6 +39,10 @@ export default function TaskListPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
+  const [scopes, setScopes] = useState<AssignScope[]>([]);
+  const [showDirect, setShowDirect] = useState(false);
+  useEffect(() => { getAssignOptions().then(r => setScopes(r.scopes)).catch(() => setScopes([])); }, []);
+  const canDirect = scopes.some(s => s.people.length > 0 || s.uk_request);
 
   const grants = me?.grants ?? [];
   const canCreate = grants.some((g) => g.role === 'REGIONAL_MANAGER');
@@ -67,11 +78,14 @@ export default function TaskListPage() {
     <div className="task-list-page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <h1 style={{ fontSize: 22, margin: 0, color: 'var(--fresh-dark)' }}>Задачи</h1>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+        {canDirect && <button onClick={() => setShowDirect(true)} style={createBtn}>+ Поставить задачу</button>}
         {canCreate && (
           <button onClick={() => setShowCreate(true)} style={createBtn}>
             + Новая задача
           </button>
         )}
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
@@ -126,6 +140,15 @@ export default function TaskListPage() {
                   Срок: {new Date(item.due_at).toLocaleString('ru-RU', {timeZone:'Europe/Moscow'})} МСК
                   {item.rework_count > 0 && ` · доработок: ${item.rework_count}`}
                 </div>
+                {(()=>{const l=(item as any).labels; if(!l) return null;
+                  const chips=[
+                    l.deviation&&<span key="d" className="task-label" data-kind="deviation" data-rag={l.deviation.rag}>
+                      Отклонение · {METRIC_RU[l.deviation.metric]??l.deviation.metric}{RAG_RU[l.deviation.rag]?`, ${RAG_RU[l.deviation.rag]}`:''}</span>,
+                    l.mbo&&<span key="m" className="task-label" data-kind="mbo">МБО</span>,
+                    l.uk_request&&<span key="u" className="task-label" data-kind="uk">Запрос в УК</span>,
+                    l.created_by_me&&<span key="c" className="task-label" data-kind="mine">Поставлена мной</span>,
+                  ].filter(Boolean);
+                  return chips.length?<div className="task-labels">{chips}</div>:null;})()}
               </div>
               <StatusBadge status={item.status} />
             </div>
@@ -139,6 +162,8 @@ export default function TaskListPage() {
         </button>
       )}
 
+      {showDirect && <DirectTaskDialog scopes={scopes} onClose={() => setShowDirect(false)}
+        onCreated={(id) => { setShowDirect(false); navigate(`/tasks/${id}`); }}/>}
       {showCreate && (
         <CreateTaskModal grants={grants} onClose={() => setShowCreate(false)} onCreated={() => load()} />
       )}

@@ -25,7 +25,8 @@ const workGroups: NavGroup[] = [
   ] },
   { label: 'Моя работа', links: [
     { path: '/tasks', label: 'Задачи', icon: 'check', work: true },
-    { path: '/my-deviations', label: 'Мои задачи по отклонениям', icon: 'target', work: true },
+    // «Мои задачи по отклонениям» убраны из меню (решение владельца 26.09.2026):
+    // такие задачи в общем списке с ярлыком «Отклонение · показатель».
     { path: '/diary', label: 'AI-Трекер задач', icon: 'calendar', work: true, future: true },
     { path: '/notifications', label: 'Уведомления', icon: 'bell', work: true },
   ] },

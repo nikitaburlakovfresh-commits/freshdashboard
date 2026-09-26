@@ -124,3 +124,26 @@
 .day-scale-legend span{display:inline-flex;align-items:center;gap:6px}
 .day-scale-legend span::before{content:"";width:10px;height:10px;border-radius:3px;background:#1c8f4b}
 .day-scale-legend span[data-kind="opt"]::before{background:#6aa7e8}
+
+/* Окно «Поставить задачу» и ярлыки в списке задач. */
+.direct-task-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.direct-task{background:var(--fresh-surface,#fff);border-radius:16px;padding:22px;width:min(520px,100%);max-height:calc(100vh - 32px);overflow:auto;display:flex;flex-direction:column;gap:12px}
+.direct-task h2{margin:0;font-size:20px}
+.direct-task label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}
+.direct-task input,.direct-task select,.direct-task textarea{font:inherit;font-weight:400;font-size:14px;padding:10px 12px;border:1px solid var(--fresh-border);border-radius:10px;min-height:44px;background:var(--fresh-surface,#fff);color:inherit}
+.direct-task small,.direct-task-note{font-size:13px;font-weight:400;color:var(--fresh-text-muted);margin:0}
+.direct-task-kind{display:flex;gap:8px;flex-wrap:wrap}
+.direct-task-kind button{flex:1;min-height:44px;border-radius:10px;border:1px solid var(--fresh-border);background:transparent;font:inherit;font-size:14px;cursor:pointer}
+.direct-task-kind button[aria-pressed="true"]{border-color:#003DFF;background:rgba(0,61,255,.08);color:#003DFF;font-weight:600}
+.direct-task-actions{display:flex;justify-content:flex-end;gap:8px}
+.direct-task-actions button{min-height:44px;padding:0 18px;border-radius:12px;border:1px solid var(--fresh-border);background:transparent;font:inherit;cursor:pointer}
+.direct-task-actions .direct-task-primary{background:#003DFF;color:#fff;border-color:#003DFF;font-weight:600}
+.direct-task-error{color:var(--fresh-danger,#c0392b);margin:0;font-size:13px}
+.task-labels{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.task-label{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--fresh-border);color:var(--fresh-dark)}
+.task-label[data-kind="deviation"][data-rag="RED"]{background:#fde8e6;color:#b42318}
+.task-label[data-kind="deviation"][data-rag="AMBER"]{background:#fff4d6;color:#8a5a00}
+.task-label[data-kind="mbo"]{background:#e6ecff;color:#003DFF}
+.task-label[data-kind="uk"]{background:#efe7ff;color:#5b2bbf}
+.task-label[data-kind="mine"]{background:#e8f5ee;color:#1c7a43}
+@media (max-width:640px){.direct-task{padding:16px}.direct-task-actions button{flex:1}}
