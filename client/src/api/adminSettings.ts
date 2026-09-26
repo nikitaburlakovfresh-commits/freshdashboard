@@ -51,3 +51,15 @@ export const getRegistrationDirectory = () =>
 
 export const submitRegistration = (body: Record<string, string>) =>
   apiFetch<{ ok: true; message: string }>('/registration', { method: 'POST', body });
+
+// Восстановление пароля: заявка открыта до входа, решение — владелец платформы.
+export interface PasswordResetRequest {
+  id: string; login: string; full_name: string; primary_email: string | null;
+  comment: string | null; created_at: string;
+}
+export const submitPasswordReset = (body: { login: string; password: string; comment?: string }) =>
+  apiFetch<{ ok: true; message: string }>('/registration/password-reset', { method: 'POST', body });
+export const listPasswordResets = () =>
+  apiFetch<{ items: PasswordResetRequest[] }>('/admin-settings/password-resets');
+export const decidePasswordReset = (id: string, action: 'approve' | 'reject', body: { reason?: string }) =>
+  apiFetch<{ ok: true; status: string }>(`/admin-settings/password-resets/${encodeURIComponent(id)}/${action}`, { method: 'POST', body });

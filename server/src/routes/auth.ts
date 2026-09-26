@@ -41,7 +41,7 @@ authRouter.post(
       });
     }
 
-    enforceLoginRateLimit(login, ip);
+    enforceLoginRateLimit(login.trim().toLowerCase(), ip);
 
     // The whole login — credential check, session insert, and audit/outbox
     // — commits as ONE transaction per contract §4/§7, so a session row is
@@ -52,8 +52,10 @@ authRouter.post(
     const { rawToken, csrfToken, expiresAt, sessionId, user } = await withTransaction(async (client) => {
       const userRes = await client.query(
         `SELECT id, password_hash, is_active, user_kind, password_last_shared_indicator, full_name
-         FROM app_users WHERE login = $1`,
-        [login],
+         FROM app_users WHERE lower(login) = lower($1)`,
+        // Регистр и пробелы по краям не важны: телефон сам делает первую букву
+        // заглавной (26.09.2026, Ev.Karpenko не мог войти).
+        [login.trim()],
       );
       const row = userRes.rows[0];
       const passwordHash = row ? row.password_hash : null;

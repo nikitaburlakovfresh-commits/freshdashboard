@@ -7,6 +7,8 @@ import {
   registrationDirectory, submitRegistration, listRegistrationRequests,
   decideRegistration, pendingRegistrationCount,
 } from '../domain/registration';
+import { submitPasswordReset, listPasswordResets, decidePasswordReset, pendingPasswordResetCount } from '../domain/passwordReset';
+import { enforceLoginRateLimit } from '../auth/rateLimit';
 
 const wrap = (fn: (req: Request, res: Response) => Promise<void>) =>
   (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
@@ -19,6 +21,12 @@ publicRegistrationRouter.get('/directory', wrap(async (_req, res) => {
 }));
 publicRegistrationRouter.post('/', requireOrigin, wrap(async (req, res) => {
   res.status(201).json(await submitRegistration(req.body));
+}));
+
+// Восстановление пароля: открыто до входа, ограничено по частоте как вход.
+publicRegistrationRouter.post('/password-reset', requireOrigin, wrap(async (req, res) => {
+  enforceLoginRateLimit('reset:' + String(req.body?.login ?? '').trim().toLowerCase().slice(0, 64), req.ip ?? null);
+  res.status(201).json(await submitPasswordReset(req.body));
 }));
 
 /** Закрытый контур: настройка прав и решения по заявкам. */
@@ -37,8 +45,17 @@ adminSettingsRouter.post('/roles/:code/permissions', requireOrigin, requireCsrf,
 }));
 
 adminSettingsRouter.get('/registrations/pending-count', wrap(async (req, res) => {
-  res.json(await pendingRegistrationCount(req.authUser!));
+  const reg = await pendingRegistrationCount(req.authUser!);
+  res.json({ pending: reg.pending + await pendingPasswordResetCount(req.authUser!) });
 }));
+adminSettingsRouter.get('/password-resets', wrap(async (req, res) => {
+  res.json(await listPasswordResets(req.authUser!));
+}));
+for (const action of ['approve', 'reject'] as const) {
+  adminSettingsRouter.post(`/password-resets/:id/${action}`, requireOrigin, requireCsrf, wrap(async (req, res) => {
+    res.json(await decidePasswordReset(req.authUser!, req.params.id, action, req.body, req.ctx.requestId));
+  }));
+}
 adminSettingsRouter.get('/registrations', wrap(async (req, res) => {
   res.json(await listRegistrationRequests(req.authUser!, String(req.query.status ?? 'PENDING')));
 }));

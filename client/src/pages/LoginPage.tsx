@@ -73,7 +73,8 @@ export default function LoginPage() {
           onChange={(e) => setLoginValue(e.target.value)}
           autoFocus
           autoComplete="username"
-          placeholder="rm_a"
+          autoCapitalize="none" autoCorrect="off" spellCheck={false}
+          placeholder="Ваш логин"
           style={inputStyle}
         />
 
@@ -100,7 +101,10 @@ export default function LoginPage() {
           Личный вход в тестовый контур пилота. Если открыт во встроенном предпросмотре без
           cookie-поддержки, откройте приложение по прямой ссылке в отдельной вкладке.
         </p>
-        <p style={{ marginTop: 18, fontSize: 13, textAlign: 'center' }}>
+        <p style={{ marginTop: 14, fontSize: 13, textAlign: 'center' }}>
+          <a href="/reset-password">Забыли пароль?</a>
+        </p>
+        <p style={{ marginTop: 10, fontSize: 13, textAlign: 'center' }}>
           Нет доступа? <a href="/register">Зарегистрироваться</a> — администратор портала
           подтвердит учётную запись.
         </p>

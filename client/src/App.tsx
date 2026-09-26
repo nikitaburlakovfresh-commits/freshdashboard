@@ -30,6 +30,7 @@ import ModuleReadinessPage from './pages/ModuleReadinessPage';
 import PersonalDayPage from './pages/PersonalDayPage';
 import ReportPublicationPage from './pages/ReportPublicationPage';
 import NetworkScorePage from './pages/NetworkScorePage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import ScoringModelPage from './pages/ScoringModelPage';
 import FocusConfigPage from './pages/FocusConfigPage';
 
@@ -39,6 +40,7 @@ export default function App() {
   if(pathname==='/activate-account')return <ActivateAccountPage/>;
   // Регистрация открыта до входа: человека ещё нет в портале.
   if(pathname==='/register')return <RegisterPage/>;
+  if(pathname==='/reset-password')return <ResetPasswordPage/>;
 
   if (loading) {
     return (

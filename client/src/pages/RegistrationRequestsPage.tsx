@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { listRegistrations, decideRegistration, type RegistrationRequest, type RegistrationZone } from '../api/adminSettings';
-import { getRegistrationDirectory } from '../api/adminSettings';
+import { getRegistrationDirectory, listPasswordResets, decidePasswordReset, type PasswordResetRequest } from '../api/adminSettings';
 
 /**
  * Очередь заявок на доступ.
@@ -19,6 +19,20 @@ export default function RegistrationRequestsPage() {
   const [zones, setZones] = useState<RegistrationZone[]>([]);
   const [edits, setEdits] = useState<Record<string, { role_code: string; org_unit_id: string; reason: string }>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [resets, setResets] = useState<PasswordResetRequest[]>([]);
+  const [resetReason, setResetReason] = useState<Record<string, string>>({});
+  const loadResets = useCallback(() => { listPasswordResets().then(r => setResets(r.items)).catch(() => {}); }, []);
+  useEffect(() => { loadResets(); }, [loadResets]);
+  const decideReset = async (r: PasswordResetRequest, action: 'approve' | 'reject') => {
+    setBusy(r.id); setError(null); setDone(null);
+    try {
+      await decidePasswordReset(r.id, action, { reason: resetReason[r.id] || undefined });
+      setDone(action === 'approve' ? `Новый пароль ${r.login} действует. Прежние входы завершены.` : `Заявка ${r.login} на смену пароля отклонена.`);
+      loadResets();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось применить решение.');
+    } finally { setBusy(null); }
+  };
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
@@ -99,7 +113,24 @@ export default function RegistrationRequestsPage() {
 
     {error && <p className="role-view-error">{error}</p>}
     {done && <p className="org-small">{done}</p>}
-    {items.length === 0 && <section className="portal-panel"><p>Заявок в этом состоянии нет.</p></section>}
+    {status === 'PENDING' && resets.map(r => <section className="portal-panel" key={r.id}>
+      <h2>Смена пароля · {r.full_name} · {r.login}</h2>
+      <p className="org-small">
+        Подана {r.created_at}{r.primary_email ? ` · ${r.primary_email}` : ''}.
+        Новый пароль сотрудник задал сам. Подтверждайте, только убедившись, что просит именно он (например, звонком).
+      </p>
+      {r.comment && <p className="org-small">Комментарий: {r.comment}</p>}
+      <label className="role-view-field"><span>Основание решения (обязательно для отказа)</span>
+        <input type="text" maxLength={500} value={resetReason[r.id] ?? ''}
+          onChange={e => setResetReason(p => ({ ...p, [r.id]: e.target.value }))} /></label>
+      <div className="role-view-actions">
+        <button type="button" className="btn" disabled={busy === r.id} onClick={() => decideReset(r, 'reject')}>Отклонить</button>
+        <button type="button" className="btn role-view-primary" disabled={busy === r.id}
+          onClick={() => decideReset(r, 'approve')}>Подтвердить новый пароль</button>
+      </div>
+    </section>)}
+
+    {items.length === 0 && (status !== 'PENDING' || resets.length === 0) && <section className="portal-panel"><p>Заявок в этом состоянии нет.</p></section>}
 
     {items.map(r => <section className="portal-panel" key={r.id}>
       <h2>{r.full_name} · {r.login}</h2>
