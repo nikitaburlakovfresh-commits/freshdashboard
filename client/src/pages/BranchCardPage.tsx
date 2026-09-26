@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react';
-import { Link,useParams,useSearchParams } from 'react-router-dom';
-import { readBranchCard,type BranchCardData } from '../api/metrics';
+import { Link,useParams } from 'react-router-dom';
+import { readBranchCard,readBranchRepricing,type BranchCardData,type RepricingEvent } from '../api/metrics';
+import { useReportDate } from '../state/reportDate';
 import { formatValue,ragReason,RAG_LABELS } from '../components/metricThresholdModel';
 import { OUTCOME_LABELS,outcomeTone,deltaLabel } from '../components/deviationOutcomeModel';
 import RagBadge,{ RagDot } from '../components/RagBadge';
@@ -17,6 +18,7 @@ import '../styles/branch-card.css';
 
 const RUB=new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0});
 const pct=(v:number|null|undefined)=>v===null||v===undefined?'—':`${(v*100).toFixed(1).replace('.',',')}%`;
+const ru=(d:string)=>d.split('-').reverse().join('.');
 const rub=(v:number|null|undefined)=>v===null||v===undefined?'—':`${RUB.format(Math.round(v))} ₽`;
 
 /** Показатели ежедневного контроля — как в блоке старого портала. */
@@ -35,23 +37,30 @@ const FOCUS_TILES:{metric:string;label:string;kind:'PCT'|'RUB'|'COUNT'|'STOCK'}[
 
 export default function BranchCardPage() {
   const {id=''}=useParams();
-  const [params]=useSearchParams();
-  const [start,setStart]=useState(params.get('start')??'');
-  const [end,setEnd]=useState(params.get('end')??'');
+  // Период карточки — от начала месяца до даты в верхней панели: одна дата на
+  // весь портал, отдельного выбора периода нет (решение владельца 26.09.2026).
+  const {reportDate,periodStart}=useReportDate();
+  const start=periodStart,end=reportDate;
   const [data,setData]=useState<BranchCardData|null>(null);
+  const [repricing,setRepricing]=useState<{window_days:number;items:RepricingEvent[]}|null>(null);
+  const [showRepricing,setShowRepricing]=useState(false);
   const [error,setError]=useState(''),[busy,setBusy]=useState(false);
   const [showAll,setShowAll]=useState(false);
   const [picked,setPicked]=useState<string[]>([]);
 
-  async function load(e?:React.FormEvent) {
-    e?.preventDefault();
+  useEffect(()=>{
     if(!start||!end)return;
-    setBusy(true);setError('');setData(null);
-    try{setData(await readBranchCard(id,start,end));}
-    catch(err:any){setError(err?.message??'Не удалось прочитать карточку филиала.');}
-    finally{setBusy(false);}
-  }
-  useEffect(()=>{if(start&&end)void load();},[id]);
+    let alive=true;
+    setBusy(true);setError('');setRepricing(null);
+    readBranchCard(id,start,end).then(d=>{
+      if(!alive)return;
+      setData(d);
+      if(!d.read_only||d.own_branch)
+        readBranchRepricing(id,d.period_end).then(r=>{if(alive)setRepricing(r);}).catch(()=>{});
+    }).catch((err:any)=>{if(alive){setData(null);setError(err?.message??'Не удалось прочитать карточку филиала.');}})
+      .finally(()=>{if(alive)setBusy(false);});
+    return()=>{alive=false;};
+  },[id,start,end]);
 
   // Значения показателей и расчётных величин в одном справочнике: плитки и
   // разбивка берут их отсюда, не пересчитывая ничего заново.
@@ -61,30 +70,40 @@ export default function BranchCardPage() {
     for(const d of data?.derived??[])map.set(d.metric,{value:d.value,unit:d.unit,computed:true,name:d.metric_name});
     return map;
   },[data]);
+  // Последняя публикация того же месяца для показателей, которых нет в срезе.
+  const latestBy=useMemo(()=>{
+    const map=new Map<string,{value:number;unit:string;as_of:string}>();
+    for(const m of data?.latest??[])map.set(m.metric,m);
+    return map;
+  },[data]);
 
   const components=data?.score.components??[];
   const shown=picked.length?components.filter(c=>picked.includes(c.metric)):components;
 
+  const canVin=!!data&&(!data.read_only||!!data.own_branch);
   return <section className="portal-panel">
-    <div className="portal-section-head">
-      <h1>{data?.branch.display_name??'Карточка филиала'}</h1>
-      {data&&<RagBadge status={data.score.rag}/>}
+    <div className="card-head">
+      <Link className="card-back" to="/" aria-label="Назад к сетке филиалов">
+        <span className="card-back-arrow" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </span>
+        <span className="card-back-text">К сетке филиалов</span>
+      </Link>
+      <div className="card-head-title">
+        <h1>{data?.branch.display_name??'Карточка филиала'}</h1>
+        {data&&<p className="portal-muted">Данные на {ru(data.period_end)}
+          {data.score.value!==null&&<> · балл <strong>{Math.round(data.score.value)}</strong></>}</p>}
+      </div>
+      <div className="card-head-side">
+        {data&&<RagBadge status={data.score.rag}/>}
+        {canVin&&<Link className="card-vin-btn" to={`/branch-card/${id}/vin?observed_on=${data!.stock_snapshot?.observed_on??data!.period_end}`}>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 11l1.5-4.5A2 2 0 018.4 5h7.2a2 2 0 011.9 1.5L19 11m-14 0h14m-14 0v6h2v-2h10v2h2v-6M7.5 13.5h.01M16.5 13.5h.01" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          <span>Реестр авто по VIN{data!.stock_snapshot?.stock!=null&&<small>{Math.round(data!.stock_snapshot.stock)} авто</small>}</span>
+        </Link>}
+      </div>
     </div>
-    {data&&<p className="portal-muted">Код {data.branch.code} · состояние {data.branch.lifecycle_state} ·
-      период {data.period_start} — {data.period_end}
-      {data.score.value!==null&&<> · балл <strong>{Math.round(data.score.value)}</strong></>}</p>}
-    <form className="beta-filters" onSubmit={load}>
-      <label>Период: с<input required aria-label="Период: с" type="date" value={start}
-        onChange={e=>{setData(null);setStart(e.target.value);}}/></label>
-      <label>Период: по<input required aria-label="Период: по" type="date" min={start} value={end}
-        onChange={e=>{setData(null);setEnd(e.target.value);}}/></label>
-      <button className="btn" disabled={busy}>{busy?'Читаю…':'Показать карточку'}</button>
-      <Link className="btn btn-ghost" to="/">К сетке филиалов</Link>
-      {data&&(!data.read_only||data.own_branch)&&<Link className="btn btn-ghost" to={`/branch-card/${id}/vin?observed_on=${data.period_end}`}>
-        Реестр авто (VIN)</Link>}
-    </form>
     {error&&<p role="alert">{error}</p>}
-    {!data&&!error&&!busy&&<p>Выберите точный период опубликованного среза.</p>}
+    {busy&&!data&&<p className="portal-muted">Загрузка…</p>}
     {data&&<>
       {!data.score.configured&&<p role="status" className="branch-grid-warning">
         Модель балла не настроена: балл и разбивка не считаются.</p>}
@@ -112,13 +131,16 @@ export default function BranchCardPage() {
                   {snap&&<> · срез {snap.observed_on}</>}</>}</p>
             </article>;
           }
+          const late=!cell?latestBy.get(tile.metric):undefined;
+          const v=cell??late;
           return <article key={tile.metric} className="card-tile">
             <h3>{tile.label}</h3>
-            <p className="card-tile-value">{!cell?'—'
-              :tile.kind==='PCT'?pct(cell.value)
-                :tile.kind==='RUB'?rub(cell.value):formatValue(cell.value,cell.unit)}</p>
-            <p className="card-tile-note">{!cell?'нет опубликованного значения'
-              :cell.computed?'расчёт портала из опубликованного':'опубликованный показатель'}</p>
+            <p className="card-tile-value">{!v?'—'
+              :tile.kind==='PCT'?pct(v.value)
+                :tile.kind==='RUB'?rub(v.value):formatValue(v.value,v.unit)}</p>
+            <p className="card-tile-note">{late?`по данным на ${ru(late.as_of)}`
+              :!cell?(tile.metric.startsWith('funnel')?'отчёт «Воронка» не загружен':'отчёт с этим показателем не загружен')
+              :cell.computed?'расчёт портала':`на ${ru(data.period_end)}`}</p>
           </article>;
         })}
 
@@ -131,15 +153,28 @@ export default function BranchCardPage() {
             : 'реестр авто на эту дату не опубликован'}</p>
         </article>
 
-        <article className="card-tile">
+        {(()=>{const n=repricing?repricing.items.length:null;
+          const cars=repricing?new Set(repricing.items.map(x=>x.vehicle_key)).size:null;
+          const sum=repricing?repricing.items.reduce((a,x)=>a+x.increase_rub,0):null;
+          return repricing?<button type="button" className="card-tile card-tile-action" onClick={()=>setShowRepricing(true)}
+            disabled={!n} aria-haspopup="dialog">
+          <h3>Переоценки вверх ({repricing.window_days} дн)</h3>
+          <p className="card-tile-value">{cars}</p>
+          <p className="card-tile-note">{n?<>{n} повышений цены на {rub(sum)} · <span className="card-tile-link">открыть список →</span></>
+            :'повышений цены за этот срок нет'}</p>
+        </button>:null;})()}
+        {!repricing&&<article className="card-tile">
           <h3>Переоценки вверх ({data.repricing.window_days} дн)</h3>
           <p className="card-tile-value">{data.repricing.snapshots<2?'—'
             :data.repricing.vehicles===null?'0':String(data.repricing.vehicles)}</p>
           <p className="card-tile-note">{data.repricing.snapshots<2
             ? `срезов реестра за период: ${data.repricing.snapshots} — переоценку определяет сравнение двух срезов`
-            : `${data.repricing.events??0} изменений цены вверх · срезов ${data.repricing.snapshots}`}</p>
-        </article>
+            : `${data.repricing.events??0} изменений цены вверх`}</p>
+        </article>}
       </div>
+
+      {showRepricing&&repricing&&<RepricingDialog items={repricing.items} days={repricing.window_days}
+        onClose={()=>setShowRepricing(false)}/>}
 
       <h2>Разбивка по метрикам (балл)</h2>
       {!components.length&&<p role="status">Ни один показатель модели балла не опубликован за этот период.</p>}
@@ -227,4 +262,39 @@ export default function BranchCardPage() {
       </>}
     </>}
   </section>;
+}
+
+/** Список переоценок вверх: строка ведёт сразу в карточку автомобиля в CRM. */
+function RepricingDialog({items,days,onClose}:{items:RepricingEvent[];days:number;onClose:()=>void}) {
+  useEffect(()=>{const k=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose();};
+    window.addEventListener('keydown',k);return()=>window.removeEventListener('keydown',k);},[onClose]);
+  return <div className="repricing-backdrop" role="dialog" aria-modal="true" aria-labelledby="repricing-title"
+    onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+    <div className="repricing-dialog">
+      <div className="repricing-head">
+        <h2 id="repricing-title">Переоценки вверх за {days} дней</h2>
+        <button type="button" className="repricing-close" onClick={onClose} aria-label="Закрыть">×</button>
+      </div>
+      <p className="portal-muted">Автомобиль остаётся в списке {days} дней с даты повышения цены. Нажмите на строку — откроется карточка в CRM.</p>
+      <div className="repricing-scroll">
+        <table className="local-table repricing-table">
+          <thead><tr><th>Автомобиль</th><th>VIN</th><th className="tabnum">Повышение</th><th className="tabnum">Было → стало</th>
+            <th>Дата изменения</th><th className="tabnum">На складе, дн</th></tr></thead>
+          <tbody>{items.map((x,i)=>{
+            const open=()=>{if(x.crm_url)window.open(x.crm_url,'_blank','noopener');};
+            return <tr key={x.vehicle_key+x.changed_on+i} className={x.crm_url?'repricing-row':''}
+              onClick={open} tabIndex={x.crm_url?0:-1} onKeyDown={e=>{if(e.key==='Enter')open();}}
+              title={x.crm_url?'Открыть в CRM':'Ссылка на CRM не пришла в отчёте'}>
+              <td>{[x.make,x.model,x.production_year].filter(Boolean).join(' ')||'—'}
+                {x.supply_type&&<small className="portal-muted"> · {x.supply_type}</small>}</td>
+              <td>{x.crm_url?<a href={x.crm_url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}>{x.vehicle_key}</a>:x.vehicle_key}</td>
+              <td className="tabnum repricing-up">+{RUB.format(Math.round(x.increase_rub))} ₽</td>
+              <td className="tabnum">{RUB.format(Math.round(x.price_before))} → {RUB.format(Math.round(x.price_after))}</td>
+              <td>{ru(x.changed_on)}</td>
+              <td className="tabnum">{x.days_on_stock??'—'}</td>
+            </tr>;})}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>;
 }

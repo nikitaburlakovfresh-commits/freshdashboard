@@ -106,6 +106,7 @@ export interface BranchCardData {
   // опубликованного и помечает расчётными.
   derived:{metric:string;metric_name:string;value:number;unit:string;
     formula:string|null;components:string[]}[];
+  latest?:{metric:string;metric_name:string;value:number;unit:string;as_of:string}[];
   // Склад — состояние на дату: точечный срез, не итог периода.
   stock_snapshot:{observed_on:string;stock:number|null;stock_cost:number|null}|null;
   buyback45:{share:number;aged:number;total:number;
@@ -127,7 +128,15 @@ export interface VehicleStockRow {
   color:string|null; mileage:number|null; advertising_status:string|null;
   market_diff_rub:number|null; price_changes_count:number|null;
   price_changes_sum_rub:number|null; price_changes_days:number|null;
+  crm_url?:string|null;
 }
+export interface RepricingEvent {
+  vehicle_key:string; key_kind:string; crm_url:string|null; make:string|null; model:string|null;
+  production_year:number|null; changed_on:string; price_before:number; price_after:number;
+  increase_rub:number; days_on_stock:number|null; supply_type:string|null; current_price:number|null;
+}
+export const readBranchRepricing=(org:string,on:string)=>
+  apiFetch<{window_days:number;on:string;items:RepricingEvent[]}>(`/metrics/branches/${org}/repricing`,{query:{on}});
 export const readVehicleStock=(observed_on:string,org?:string)=>
   apiFetch<{mode:string;observed_on:string;items:VehicleStockRow[];aggregation:string}>(
     '/report-detail/stock',{query:org?{observed_on,org}:{observed_on}});

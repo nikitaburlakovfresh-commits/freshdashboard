@@ -8,7 +8,7 @@ import { listScoringModels,setScoringModel } from '../metrics/scoring';
 import { listFocusCatalog,setFocusConfiguration } from '../metrics/focus';
 import { divisionDeviationSummary } from '../metrics/divisionSummary';
 import { createDeviationTask,listDeviationTasks,myDeviationTasks } from '../metrics/deviationTasks';
-import { branchCard } from '../metrics/branchCard';
+import { branchCard, branchRepricing } from '../metrics/branchCard';
 import { listNotificationPolicies,setNotificationPolicy } from '../settings/notificationPolicies';
 import { listPortalSettings,setPortalSetting } from '../settings/portalSettings';
 import { listSourceNaming,setSourceAlias,excludeSourceName,revokeSourceExclusion } from '../domain/sourceNaming';
@@ -22,6 +22,7 @@ metricsRouter.use((req,res,next)=>{
 });
 metricsRouter.get('/published-periods',wrap(async(req,res)=>{res.json(await publishedPeriods(req.authUser!));}));
 metricsRouter.get('/overview',wrap(async(req,res)=>{res.json(await branchOverview(req.authUser!,req.query));}));
+metricsRouter.get('/branches/:id/repricing',wrap(async(req,res)=>{res.json(await branchRepricing(req.authUser!,req.params.id,req.query));}));
 metricsRouter.get('/branches/:id',wrap(async(req,res)=>{res.json(await branchCard(req.authUser!,req.params.id,req.query));}));
 metricsRouter.get('/portal-settings',wrap(async(req,res)=>{
   res.json(await listPortalSettings(req.authUser!,req.query));}));

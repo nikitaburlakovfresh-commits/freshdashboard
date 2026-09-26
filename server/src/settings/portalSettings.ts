@@ -25,6 +25,8 @@ export const SETTING_SPECS:Record<string,{title:string;unit:string;min:number;ma
     unit:'POINTS',min:0,max:1000,integer:true},
   risk_weight_task_overdue:{title:'Вес просроченной задачи по отклонению',
     unit:'POINTS',min:0,max:1000,integer:true},
+  repricing_window_days:{title:'Сколько дней переоценка вверх держится в списке карточки филиала',
+    unit:'DAYS',min:1,max:90,integer:true},
   risk_weight_branch_without_data:{title:'Вес филиала без опубликованных данных',
     unit:'POINTS',min:0,max:1000,integer:true},
 };

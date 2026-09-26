@@ -6,12 +6,13 @@ import { uuid } from '../reporting/storage';
 import { ApiError } from '../util/errors';
 import { evaluateRag, resolveThresholds, thresholdFor, type Rag } from './thresholds';
 import { resolveEffectivePeriod } from './effectivePeriod';
-import { funnelConversions, buyback45Shares, upwardRepricing, stockTurnover,
+import { funnelConversions, buyback45Shares, upwardRepricing, upwardRepricingEvents, stockTurnover,
   DERIVED_METRICS } from './derived';
+import { settingNumber } from '../settings/portalSettings';
 import { resolveScoringModel, computeBranchScore } from './scoring';
 
-/** Окно переоценок: как на старом портале — 30 дней. */
-const REPRICING_WINDOW_DAYS=30;
+/** Окно переоценок — настройка портала repricing_window_days (по решению 26.09.2026 — 10 дней). */
+const repricingWindow=(c:any)=>settingNumber(c,'repricing_window_days');
 
 const invalid=(s:string)=>new ApiError('VALIDATION_ERROR',s);
 const validDate=(v:unknown):v is string=>{
@@ -88,6 +89,21 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
         direction:t?.direction??null,revision:r.revision,published_at:r.created_at,snapshot_id:r.snapshot_id};
     });
 
+    // Показатели, которых нет в основном срезе: отчёты приходят в разные дни, и
+    // рентабельность или оборачиваемость могла быть опубликована по 20-е, а продажи
+    // по 25-е. Для плиток ежедневного контроля берём последнюю публикацию того же
+    // месяца не позже выбранной даты и подписываем её дату. В балл они не входят:
+    // балл считается по одному срезу.
+    const have=new Set(rows.map((r:any)=>r.metric));
+    const latest=(await c.query(`SELECT DISTINCT ON (s.metric) s.metric,s.value::text value,s.unit,
+        to_char(s.period_end,'YYYY-MM-DD') as_of
+      FROM report_fact_snapshots s JOIN report_fact_current p ON p.snapshot_id=s.id
+      WHERE s.org_unit_id=$1 AND s.period_start=$2::date AND s.period_end<$3::date
+        AND s.metric=ANY($4::text[]) AND NOT (s.metric=ANY($5::text[]))
+      ORDER BY s.metric,s.period_end DESC`,[orgUnitId,from,on,grant.metrics,[...have]])).rows
+      .map((r:any)=>({metric:r.metric,value:Number(r.value),unit:r.unit,as_of:r.as_of,
+        metric_name:(METRIC_NAMES as Record<string,string>)[r.metric]??r.metric}));
+
     // Склад — состояние на дату, а не итог периода: он публикуется точечным
     // срезом (период из одного дня), тогда как план на конец месяца приходит
     // за период. Поэтому факт склада читается отдельно — последним срезом не
@@ -118,6 +134,7 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
     if(turnover!==null)values.set('stockTurnover',turnover);
     const buyback=(await buyback45Shares(c,[orgUnitId],on)).get(orgUnitId)??null;
     if(buyback)values.set('buyback45Share',buyback.share);
+    const REPRICING_WINDOW_DAYS=await repricingWindow(c);
     const repricing=(await upwardRepricing(c,[orgUnitId],on,REPRICING_WINDOW_DAYS)).get(orgUnitId)??null;
     // Сколько срезов реестра накоплено: по одному срезу переоценку определить
     // нельзя, и выдавать её отсутствие за ноль нельзя тоже.
@@ -184,7 +201,7 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
       branch:{org_unit_id:unit.id,code:unit.code,display_name:unit.display_name,lifecycle_state:unit.lifecycle_state},
       metrics,metrics_without_threshold:metrics.filter(m=>!m.threshold_id).map(m=>m.metric),
       deviations,metric_names:METRIC_NAMES,thresholds_configured:thresholds.length>0,
-      derived,
+      derived,latest,
       stock_snapshot:stockSnapshot,
       buyback45:buyback,
       repricing:{window_days:REPRICING_WINDOW_DAYS,snapshots,
@@ -193,5 +210,23 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
         components:score.components,reasons:score.reasons,model_id:model?.id??null},
       read_only:!!peer,own_branch:ownBranch,
       aggregation:'NONE',freshness:'NOT_EVALUATED'};
+  });
+}
+
+/** Список переоценок вверх филиала: автомобиль, ссылка в CRM, сумма, дата. */
+export async function branchRepricing(auth:AuthedUser,orgUnitId:string,query:any) {
+  const q=query??{};
+  if(Object.keys(q).some(k=>k!=='on'))throw invalid('Фильтры не принимаются.');
+  if(typeof orgUnitId!=='string'||!uuid.test(orgUnitId))throw invalid('Филиал указан неверно.');
+  if(!validDate(q.on))throw invalid('Укажите дату.');
+  return withTransaction(async c=>{
+    // Та же область, что у реестра VIN: филиалы допуска и свой филиал РФ.
+    const grants=await factAccess(c,auth,'READ');
+    const peer=await peerAccess(c,auth);
+    const allowed=new Set([...grants.map(g=>g.org_unit_id),...(peer?.own_org_unit_ids??[])]);
+    if(!allowed.has(orgUnitId))throw new ApiError('NOT_FOUND','Филиал недоступен.');
+    const days=await repricingWindow(c);
+    const items=await upwardRepricingEvents(c,orgUnitId,q.on,days);
+    return {window_days:days,on:q.on,items};
   });
 }

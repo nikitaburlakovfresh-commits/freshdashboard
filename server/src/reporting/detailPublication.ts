@@ -122,7 +122,7 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
         advertising_status:v.advertisingStatus,ppp_sum_rub:v.pppSumRub,market_diff_rub:v.marketDiffRub,
         price_changes_count:v.priceChangesCount,price_changes_sum_rub:v.priceChangesSumRub,
         price_changes_days:v.priceChangesDays,erk_count:v.erkCount,erk_days:v.erkDays,
-        avito_cost_rub:v.avitoCostRub});
+        avito_cost_rub:v.avitoCostRub,crm_url:v.crmUrl});
     }
     if(!vehicles.length)blockers.push('Нет ни одной строки склада с подтверждённой привязкой к филиалу.');
   } else {
@@ -231,6 +231,8 @@ export async function commitDetail(auth:AuthedUser,id:string,raw:any,key:string|
         row.city,row.make,row.model,row.production_year,row.color,row.mileage,row.advertising_status,
         row.ppp_sum_rub,row.market_diff_rub,row.price_changes_count,row.price_changes_sum_rub,
         row.price_changes_days,row.erk_count,row.erk_days,row.avito_cost_rub]);
+      if(row.crm_url)await c.query(`UPDATE vehicle_identity SET crm_url=$2 WHERE vehicle_key=$1 AND crm_url IS DISTINCT FROM $2`,
+        [row.vehicle_key,row.crm_url]);
     }
     for(const row of p.data.discounts) {
       await c.query(`INSERT INTO manager_discount_rows(id,publication_id,source_row,source_manager_name,vehicle_id,
@@ -270,7 +272,8 @@ export async function readDetailStock(auth:AuthedUser,query:any) {
       r.margin_rub,r.profitability,r.cost_rub,r.sale_price_rub,r.market_price_rub,r.leads,r.not_advertised_share,
       r.city,r.make,r.model,r.production_year,r.color,r.mileage,r.advertising_status,r.market_diff_rub,
       r.price_changes_count,r.price_changes_sum_rub,r.price_changes_days,
-      to_char(r.arrival_date,'YYYY-MM-DD') arrival_date,to_char(r.advertised_date,'YYYY-MM-DD') advertised_date
+      to_char(r.arrival_date,'YYYY-MM-DD') arrival_date,to_char(r.advertised_date,'YYYY-MM-DD') advertised_date,
+      i.crm_url
       FROM vehicle_stock_rows r JOIN vehicle_identity i ON i.id=r.vehicle_id
       WHERE r.observed_on=$1 AND r.org_unit_id=ANY($2::uuid[])
       ORDER BY r.org_unit_id,i.vehicle_key LIMIT 2001`,[q.observed_on,orgs])).rows;

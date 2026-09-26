@@ -45,3 +45,45 @@
   .card-bars li{grid-template-columns:1fr auto auto;row-gap:4px}
   .card-bars li>:first-child{grid-column:1/-1}
 }
+
+/* Шапка карточки (26.09.2026): жёлтая стрелка назад, название, реестр VIN кнопкой. */
+.card-head{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:14px}
+.card-head-title{flex:1 1 220px;min-width:0}
+.card-head-title h1{margin:0}
+.card-head-title p{margin:4px 0 0}
+.card-back{display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:var(--fresh-text-muted);
+  font-size:.72rem;font-weight:600;min-width:64px}
+.card-back-arrow{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;
+  background:var(--fresh-warning,#ffd12d);color:#1b1b1b;transition:transform .15s ease}
+.card-back:hover .card-back-arrow,.card-back:focus-visible .card-back-arrow{transform:translateX(-3px)}
+.card-back-text{white-space:nowrap}
+.card-head-side{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.card-vin-btn{display:inline-flex;align-items:center;gap:10px;min-height:48px;padding:8px 18px;border-radius:14px;
+  background:#003DFF;color:#fff;text-decoration:none;font-weight:600;font-size:.92rem;box-shadow:0 2px 8px rgba(0,61,255,.25)}
+.card-vin-btn:hover{background:#0033d6}
+.card-vin-btn span{display:flex;flex-direction:column;line-height:1.15}
+.card-vin-btn small{font-weight:500;font-size:.72rem;opacity:.85}
+/* Плитка-кнопка: переоценки вверх открывают список. */
+.card-tile-action{text-align:left;font:inherit;cursor:pointer;width:100%}
+.card-tile-action:not(:disabled):hover{border-color:#003DFF}
+.card-tile-action:disabled{cursor:default}
+.card-tile-link{color:#4d7bff;font-weight:600}
+.repricing-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:60;display:flex;align-items:center;justify-content:center;padding:16px}
+.repricing-dialog{background:var(--fresh-surface);color:var(--fresh-dark);border-radius:16px;width:min(980px,100%);
+  max-height:calc(100vh - 32px);display:flex;flex-direction:column;padding:18px 20px;gap:8px}
+.repricing-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.repricing-head h2{margin:0;font-size:1.15rem}
+.repricing-close{width:44px;height:44px;border-radius:50%;border:1px solid var(--fresh-border);background:transparent;
+  color:inherit;font-size:1.4rem;cursor:pointer}
+.repricing-scroll{overflow:auto;-webkit-overflow-scrolling:touch}
+.repricing-table{min-width:720px}
+.repricing-table .tabnum{text-align:right;white-space:nowrap}
+.repricing-row{cursor:pointer}
+.repricing-row:hover td{background:var(--fresh-raised)}
+.repricing-up{color:var(--rag-green,#1c7a43);font-weight:700}
+@media(max-width:640px){
+  .card-head{gap:12px}
+  .card-head-side{width:100%}
+  .card-vin-btn{flex:1;justify-content:center}
+  .repricing-dialog{padding:14px;border-radius:12px}
+}

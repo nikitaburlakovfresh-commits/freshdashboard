@@ -15,7 +15,10 @@ export const DETAIL_NAMES: Record<DetailKind, string> = {
 // намеренно НЕ переносятся в состояние портала на этом этапе: основания
 // обработки и срок хранения по 152-ФЗ отдельно не утверждены.
 export const VIN_PERSONAL_COLUMNS = ['Эксперт-Оценщик', 'Подтвердил Сделку', 'Диагност', 'Технический Координатор'];
-export const VIN_EXTERNAL_COLUMNS = ['Ссылка на ТС'];
+// «Ссылка на ТС» с 26.09.2026 переносится: руководитель переходит из портала
+// сразу в карточку автомобиля в CRM. Принимается только адрес CRM FreshAuto.
+export const VIN_EXTERNAL_COLUMNS: string[] = [];
+const CRM_URL = /^https:\/\/crm\.freshauto\.ru\/[A-Za-z0-9/_.\-]{1,300}$/;
 
 const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/;
 const FRAME_RE = /^[A-Z0-9-]{8,20}$/;
@@ -49,6 +52,7 @@ export interface VehicleRow {
   pppSumRub: number | null; marketDiffRub: number | null;
   priceChangesCount: number | null; priceChangesSumRub: number | null; priceChangesDays: number | null;
   erkCount: number | null; erkDays: number | null; avitoCostRub: number | null;
+  crmUrl: string | null;
 }
 export interface ManagerDiscountRow {
   row: number; manager: string; managerKey: string; carsIssued: number | null; discountCount: number | null;
@@ -150,6 +154,7 @@ export function parseDetail(rows: unknown[][], kind: DetailKind, file: string, s
         priceChangesSumRub: num(raw, 'Z', row, false),
         advertisingStatus: cell(raw, 'AB').trim() || null,
         avitoCostRub: num(raw, 'AD', row, false),
+        crmUrl: at(rows[0], 'AL', 'Ссылка на ТС') && CRM_URL.test(cell(raw, 'AL').trim()) ? cell(raw, 'AL').trim() : null,
       });
     }
     report.locations = [...locations].sort((a, b) => a.localeCompare(b, 'ru'));

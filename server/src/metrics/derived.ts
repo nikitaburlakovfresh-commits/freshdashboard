@@ -216,9 +216,52 @@ export async function upwardRepricing(
          AND r.sale_price_rub IS NOT NULL
      )
      SELECT org_unit_id, count(DISTINCT vehicle_id) AS vehicles, count(*) AS events
-     FROM history WHERE previous IS NOT NULL AND sale_price_rub > previous
+     FROM history WHERE previous > 0 AND sale_price_rub > previous
      GROUP BY org_unit_id`,
     [orgUnitIds, observedOn, days])).rows;
   for (const r of rows) out.set(r.org_unit_id, { vehicles: Number(r.vehicles), events: Number(r.events) });
   return out;
+}
+
+/**
+ * Список переоценок вверх для карточки филиала (решение владельца 26.09.2026):
+ * автомобиль, ссылка на карточку в CRM, сумма повышения и дата изменения.
+ * Событие — повышение цены продажи между двумя соседними срезами реестра;
+ * дата изменения — день среза, в котором новая цена появилась впервые.
+ * Событие держится в списке `days` дней, затем уходит. Проданные автомобили
+ * (их нет в последнем срезе) в список не попадают.
+ */
+export async function upwardRepricingEvents(
+  c: PoolClient, orgUnitId: string, observedOn: string, days: number,
+) {
+  return (await c.query(
+    `WITH latest AS (
+       SELECT max(observed_on) AS observed_on FROM vehicle_stock_rows
+       WHERE org_unit_id = $1 AND observed_on <= $2::date
+     ),
+     in_stock AS (
+       SELECT r.vehicle_id, r.days_on_stock, r.sale_price_rub AS current_price, r.supply_type
+       FROM vehicle_stock_rows r JOIN latest l ON l.observed_on = r.observed_on WHERE r.org_unit_id = $1
+     ),
+     history AS (
+       SELECT r.vehicle_id, r.observed_on, r.sale_price_rub,
+         lag(r.sale_price_rub) OVER (PARTITION BY r.vehicle_id ORDER BY r.observed_on) AS previous
+       FROM vehicle_stock_rows r JOIN in_stock s ON s.vehicle_id = r.vehicle_id
+       WHERE r.org_unit_id = $1 AND r.observed_on <= $2::date AND r.sale_price_rub IS NOT NULL
+     )
+     SELECT i.vehicle_key, i.key_kind, i.crm_url, v.make, v.model, v.production_year,
+       to_char(h.observed_on, 'YYYY-MM-DD') changed_on, h.previous::float8 price_before,
+       h.sale_price_rub::float8 price_after, (h.sale_price_rub - h.previous)::float8 increase_rub,
+       s.days_on_stock, s.supply_type, s.current_price::float8 current_price
+     FROM history h
+     JOIN in_stock s ON s.vehicle_id = h.vehicle_id
+     JOIN vehicle_identity i ON i.id = h.vehicle_id
+     JOIN LATERAL (SELECT make, model, production_year FROM vehicle_stock_rows x
+        WHERE x.vehicle_id = h.vehicle_id AND x.org_unit_id = $1 ORDER BY x.observed_on DESC LIMIT 1) v ON true
+     -- Нулевая прежняя цена — машина только поступила и получила первую цену,
+     -- это не переоценка.
+     WHERE h.previous > 0 AND h.sale_price_rub > h.previous
+       AND h.observed_on > $2::date - $3::int
+     ORDER BY h.observed_on DESC, increase_rub DESC`,
+    [orgUnitId, observedOn, days])).rows;
 }
