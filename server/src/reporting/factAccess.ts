@@ -56,6 +56,12 @@ export async function peerAccess(c:PoolClient,auth:AuthedUser) {
     WHERE g.user_id=$1 AND g.org_unit_id IS NOT NULL AND g.revoked_at IS NULL AND g.valid_from<=now()
       AND (g.valid_until IS NULL OR g.valid_until>now())`,[auth.userId])).rows.map((r:any)=>r.org_unit_id as string);
   if(!own.length) return null;
+  // Режим РФ — только для тех, чей обычный допуск не шире своего филиала.
+  // Руководитель с допуском к другим филиалам (РМ, дивизиональный, администратор)
+  // остаётся в полном режиме, даже если у него есть и роль РФ — например, для
+  // проверки ежедневников филиала (26.09.2026).
+  const wider=(await factAccess(c,auth,'READ')).some(g=>!g.org_unit_id||!own.includes(g.org_unit_id));
+  if(wider) return null;
   const metrics=(await c.query(`SELECT DISTINCT metric FROM report_fact_current`)).rows.map((r:any)=>r.metric as string);
   const orgs=(await c.query(`SELECT id FROM org_directory_units
     WHERE kind='ORG_UNIT' AND lifecycle_state<>'CLOSED' AND NOT is_demo`)).rows.map((r:any)=>r.id as string);
