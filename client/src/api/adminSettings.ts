@@ -18,6 +18,12 @@ export interface RegistrationRequest {
   created_at: string; decided_at: string | null; decided_by_login: string | null;
 }
 
+/** Зона РМ или дивизион с филиалами — для закрепления РМ/ДР целиком. */
+export interface RegistrationZone {
+  id: string; kind: 'CLUSTER' | 'DIVISION'; display_name: string;
+  branches: { id: string; display_name: string }[];
+}
+
 export const getRoleMatrix = () =>
   apiFetch<{ permissions: PermissionInfo[]; roles: RoleInfo[]; history: RoleChange[] }>('/admin-settings/roles');
 
@@ -30,7 +36,7 @@ export const getPendingRegistrations = () =>
   apiFetch<{ pending: number }>('/admin-settings/registrations/pending-count');
 
 export const listRegistrations = (status: string) =>
-  apiFetch<{ status: string; items: RegistrationRequest[] }>('/admin-settings/registrations', { query: { status } });
+  apiFetch<{ status: string; items: RegistrationRequest[]; zones?: RegistrationZone[] }>('/admin-settings/registrations', { query: { status } });
 
 export const decideRegistration = (
   id: string, action: 'approve' | 'reject',

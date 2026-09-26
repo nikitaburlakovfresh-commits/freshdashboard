@@ -175,7 +175,26 @@ export async function listRegistrationRequests(user: AuthedUser, status: string)
         ORDER BY r.created_at DESC LIMIT 200`,
       [wanted],
     )).rows;
-    return { status: wanted, items: rows };
+    // Зоны РМ и дивизионы с действующими филиалами: РМ и дивизиональный руководитель
+    // закрепляются за зоной целиком, а не за одним филиалом (решение владельца 26.09.2026).
+    const zones = (await c.query(
+      `WITH RECURSIVE tree AS (
+         SELECT a.parent_id AS top_id, a.org_unit_id FROM org_directory_affiliation_history a
+          WHERE a.effective_to IS NULL
+         UNION ALL
+         SELECT t.top_id, a.org_unit_id FROM tree t JOIN org_directory_affiliation_history a
+           ON a.parent_id = t.org_unit_id AND a.effective_to IS NULL)
+       SELECT z.id, z.kind, zn.display_name,
+              json_agg(json_build_object('id', b.id, 'display_name', bn.display_name) ORDER BY bn.display_name) AS branches
+         FROM org_directory_units z
+         JOIN org_directory_name_history zn ON zn.org_unit_id = z.id AND zn.effective_to IS NULL
+         JOIN tree t ON t.top_id = z.id
+         JOIN org_directory_units b ON b.id = t.org_unit_id AND b.kind = 'ORG_UNIT' AND NOT b.is_demo
+         JOIN org_directory_name_history bn ON bn.org_unit_id = b.id AND bn.effective_to IS NULL
+        WHERE z.kind IN ('CLUSTER','DIVISION')
+        GROUP BY z.id, z.kind, zn.display_name ORDER BY z.kind, zn.display_name`,
+    )).rows;
+    return { status: wanted, items: rows, zones };
   });
 }
 
@@ -230,6 +249,28 @@ export async function decideRegistration(
     if (approveScope === 'NETWORK' && orgUnitId) {
       throw new ApiError('VALIDATION_ERROR', 'Должность уровня управляющей компании не закрепляется за филиалом.');
     }
+    // РМ и дивизиональный руководитель: выбранная зона разворачивается в список
+    // её действующих филиалов, по каждому — отдельное назначение.
+    const unitKind = orgUnitId ? (await c.query(`SELECT kind FROM org_directory_units WHERE id=$1`, [orgUnitId])).rows[0]?.kind : null;
+    let grantUnits: (string | null)[] = [approveScope === 'NETWORK' ? null : orgUnitId];
+    if (unitKind === 'CLUSTER' || unitKind === 'DIVISION') {
+      if (!['REGIONAL_MANAGER', 'DIVISION_MANAGER'].includes(roleCode)) {
+        throw new ApiError('VALIDATION_ERROR', 'Зону целиком можно закрепить только за региональным менеджером или дивизиональным руководителем.');
+      }
+      grantUnits = (await c.query(
+        `WITH RECURSIVE tree AS (
+           SELECT org_unit_id FROM org_directory_affiliation_history WHERE parent_id=$1 AND effective_to IS NULL
+           UNION ALL
+           SELECT a.org_unit_id FROM tree t JOIN org_directory_affiliation_history a
+             ON a.parent_id=t.org_unit_id AND a.effective_to IS NULL)
+         SELECT u.id FROM tree t JOIN org_directory_units u ON u.id=t.org_unit_id
+          WHERE u.kind='ORG_UNIT' AND NOT u.is_demo AND org_lifecycle_at(u.id,(now() AT TIME ZONE 'UTC')::date)='ACTIVE'`,
+        [orgUnitId],
+      )).rows.map(r => r.id);
+      if (!grantUnits.length) throw new ApiError('VALIDATION_ERROR', 'В выбранной зоне нет действующих филиалов.');
+    } else if (unitKind && unitKind !== 'ORG_UNIT') {
+      throw new ApiError('VALIDATION_ERROR', 'Выберите филиал или зону из списка.');
+    }
     if ((await c.query(`SELECT 1 FROM app_users WHERE lower(login) = $1`, [req.login])).rowCount) {
       throw new ApiError('SUBMISSION_CONFLICT', 'Логин уже занят действующей учётной записью. Заявку нужно отклонить.');
     }
@@ -244,11 +285,13 @@ export async function decideRegistration(
       [req.login, req.full_name, req.primary_email, req.password_hash],
     )).rows[0];
 
-    await c.query(
-      `INSERT INTO role_grants (user_id, role_code, scope_kind, org_unit_id, valid_from)
-       VALUES ($1,$2,$3,$4,now())`,
-      [created.id, roleCode, approveScope, approveScope === 'NETWORK' ? null : orgUnitId],
-    );
+    for (const unit of grantUnits) {
+      await c.query(
+        `INSERT INTO role_grants (user_id, role_code, scope_kind, org_unit_id, valid_from)
+         VALUES ($1,$2,$3,$4,now())`,
+        [created.id, roleCode, approveScope, unit],
+      );
+    }
 
     await c.query(
       `UPDATE registration_requests

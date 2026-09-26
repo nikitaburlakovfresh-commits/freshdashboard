@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { listRegistrations, decideRegistration, type RegistrationRequest } from '../api/adminSettings';
+import { listRegistrations, decideRegistration, type RegistrationRequest, type RegistrationZone } from '../api/adminSettings';
 import { getRegistrationDirectory } from '../api/adminSettings';
 
 /**
@@ -16,6 +16,7 @@ export default function RegistrationRequestsPage() {
   const [items, setItems] = useState<RegistrationRequest[]>([]);
   const [roles, setRoles] = useState<{ code: string; display_name: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; display_name: string }[]>([]);
+  const [zones, setZones] = useState<RegistrationZone[]>([]);
   const [edits, setEdits] = useState<Record<string, { role_code: string; org_unit_id: string; reason: string }>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +24,7 @@ export default function RegistrationRequestsPage() {
 
   const load = useCallback(async (s: string) => {
     setError(null);
-    try { const res = await listRegistrations(s); setItems(res.items); }
+    try { const res = await listRegistrations(s); setItems(res.items); setZones(res.zones ?? []); }
     catch (err) { setError(err instanceof Error ? err.message : 'Не удалось прочитать заявки.'); }
   }, []);
 
@@ -32,9 +33,13 @@ export default function RegistrationRequestsPage() {
     getRegistrationDirectory().then(r => { setRoles(r.roles); setBranches(r.branches); }).catch(() => {});
   }, []);
 
+  // РМ и дивизиональный руководитель закрепляются за зоной целиком.
+  const zoneKind = (role: string) => role === 'REGIONAL_MANAGER' ? 'CLUSTER' : role === 'DIVISION_MANAGER' ? 'DIVISION' : null;
+  const zoneOf = (role: string, branchId: string | null) =>
+    zones.find(z => z.kind === zoneKind(role) && z.branches.some(b => b.id === branchId))?.id;
   const edit = (r: RegistrationRequest) => edits[r.id] ?? {
     role_code: r.requested_role_code,
-    org_unit_id: r.requested_org_unit_id ?? '',
+    org_unit_id: zoneOf(r.requested_role_code, r.requested_org_unit_id) ?? r.requested_org_unit_id ?? '',
     reason: '',
   };
   const patch = (id: string, k: 'role_code' | 'org_unit_id' | 'reason', v: string) =>
@@ -49,7 +54,8 @@ export default function RegistrationRequestsPage() {
           ? { role_code: e.role_code, org_unit_id: e.org_unit_id, reason: e.reason || undefined }
           : { reason: e.reason });
       setDone(action === 'approve'
-        ? `Учётная запись ${r.login} создана и закреплена за филиалом.`
+        ? `Учётная запись ${r.login} создана${zones.some(z => z.id === e.org_unit_id)
+          ? ` и закреплена за филиалами зоны «${zones.find(z => z.id === e.org_unit_id)!.display_name}»` : ' и закреплена за филиалом'}.`
         : `Заявка ${r.login} отклонена.`);
       await load(status);
     } catch (err) {
@@ -100,11 +106,25 @@ export default function RegistrationRequestsPage() {
           <select value={edit(r).role_code} onChange={e => patch(r.id, 'role_code', e.target.value)}>
             {roles.map(x => <option key={x.code} value={x.code}>{x.display_name}</option>)}
           </select></label>
-        <label className="role-view-field"><span>Филиал при подтверждении</span>
-          <select value={edit(r).org_unit_id} onChange={e => patch(r.id, 'org_unit_id', e.target.value)}>
-            <option value="">— выберите филиал —</option>
-            {branches.map(b => <option key={b.id} value={b.id}>{b.display_name}</option>)}
-          </select></label>
+        {(() => {
+          const kind = zoneKind(edit(r).role_code);
+          const list = zones.filter(z => z.kind === kind);
+          const picked = zones.find(z => z.id === edit(r).org_unit_id);
+          return <>
+            <label className="role-view-field"><span>{kind === 'DIVISION' ? 'Дивизион или филиал при подтверждении'
+              : kind ? 'Зона РМ или филиал при подтверждении' : 'Филиал при подтверждении'}</span>
+              <select value={edit(r).org_unit_id} onChange={e => patch(r.id, 'org_unit_id', e.target.value)}>
+                <option value="">— выберите —</option>
+                {list.length > 0 && <optgroup label={kind === 'DIVISION' ? 'Дивизион целиком' : 'Зона РМ целиком'}>
+                  {list.map(z => <option key={z.id} value={z.id}>{z.display_name} · {z.branches.length} фил.</option>)}
+                </optgroup>}
+                <optgroup label="Один филиал">
+                  {branches.map(b => <option key={b.id} value={b.id}>{b.display_name}</option>)}
+                </optgroup>
+              </select></label>
+            {picked && <p className="org-small">Доступ будет выдан на филиалы: {picked.branches.map(b => b.display_name).join(', ')}.</p>}
+          </>;
+        })()}
         <label className="role-view-field"><span>Основание решения (обязательно для отказа)</span>
           <input type="text" maxLength={500} value={edit(r).reason}
             onChange={e => patch(r.id, 'reason', e.target.value)} /></label>
