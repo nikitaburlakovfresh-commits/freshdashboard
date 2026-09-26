@@ -28,8 +28,15 @@ export async function liveFence(c:PoolClient,ctx:ActorContext) {
     AND NOT u.password_last_shared_indicator AND s.revoked_at IS NULL
     AND s.captured_auth_epoch=u.auth_epoch AND u.password_hash_updated_at<=s.created_at
     AND s.expires_at>now() AND s.created_at>now()-interval '8 hours'
-    AND s.last_seen_at>now()-interval '30 minutes'`,[ctx.authUser.sessionId,ctx.authUser.userId]);
+    AND s.last_seen_at>now()-interval '30 minutes'`,
+    // В режиме «глазами роли» сессия принадлежит владельцу платформы, а userId —
+    // просматриваемому сотруднику: сессию сверяем с владельцем (26.09.2026).
+    [ctx.authUser.sessionId,ctx.authUser.viewAs?.adminUserId??ctx.authUser.userId]);
   if(!live.rowCount) throw new ApiError('SESSION_REVOKED','Сессия отозвана.');
+  if(ctx.authUser.viewAs) {
+    const viewed=await c.query(`SELECT 1 FROM app_users WHERE id=$1 AND is_active AND user_kind='INDIVIDUAL'`,[ctx.authUser.userId]);
+    if(!viewed.rowCount) throw new ApiError('SESSION_REVOKED','Сессия отозвана.');
+  }
 }
 async function authorize(c:PoolClient,ctx:ActorContext,org:string,role:string,manager=false) {
   const grants=await getEffectiveGrants(c,ctx.authUser.userId);
