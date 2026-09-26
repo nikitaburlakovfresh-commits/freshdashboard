@@ -107,8 +107,10 @@ export default function TaskDetailPage() {
   // permitted them). The server remains authoritative on the exact
   // required role per action; this only decides whether to render the
   // executor controls at all.
+  // Задачу УК исполняет назначенный сотрудник УК; право проверяет сервер.
   const isOwnExecutor = item
-    ? grants.some((g) => g.role === item.owner_role && g.org_unit_id === item.org_unit_id)
+    ? (item.owner_role === 'UK_STAFF'
+        || grants.some((g) => g.role === item.owner_role && g.org_unit_id === item.org_unit_id))
       && item.assignee_user_id === me?.user.id
     : false;
   const dirty = hasUnsavedFields(drafts);
@@ -285,6 +287,7 @@ export default function TaskDetailPage() {
           <div style={{ fontSize: 13, color: 'var(--fresh-text-muted)', marginTop: 6 }}>
             Срок: {new Date(item.due_at).toLocaleString('ru-RU', {timeZone: 'Europe/Moscow', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})} МСК
             {item.rework_count > 0 && ` · Доработок: ${item.rework_count}`}
+            {(item.source_ref as any)?.kind === 'UK_TASK' && ` · Задача УК · ${(item.source_ref as any).scope_name ?? 'Вся сеть'}`}
           </div></>}
         </div>
         <StatusBadge status={item.status} />

@@ -3,6 +3,7 @@ import { ApiError } from '../util/errors';
 import type { ActorContext } from './workItemService';
 import { liveFence } from './dailyLogs';
 import { writeAuditAndOutbox } from './auditOutbox';
+import { holdsUkRole } from './workItemService';
 
 /**
  * Постановка задач сверху вниз и «Запрос в УК» (решение владельца 26.09.2026).
@@ -54,15 +55,39 @@ export async function assignOptions(ctx: ActorContext) {
     // Кто сам региональный менеджер филиала, тому «Запрос в УК» по нему не нужен.
     const rmOrgs = new Set(setters.filter((x: any) => x.role_code === 'REGIONAL_MANAGER').map((x: any) => x.org_unit_id));
     for (const sc of scopes) if (rmOrgs.has(sc.org_unit_id)) sc.uk_request = false;
-    return { scopes };
+    return { scopes, uk: await ukOptions(c, ctx.authUser.userId) };
   });
+}
+
+/**
+ * Задачи внутри УК («всем всем в УК», 26.09.2026): кому — любой сотрудник УК,
+ * к чему — вся сеть или конкретный филиал. Роли УК — правила 'UK_ANY'.
+ */
+async function ukOptions(c: any, userId: string) {
+  if (!(await holdsUkRole(c, userId))) return null;
+  const people = (await c.query(
+    `SELECT DISTINCT ON (u.id) u.id user_id, u.full_name, ro.code role_code, ro.display_name role_name
+       FROM role_grants g JOIN app_users u ON u.id=g.user_id AND u.is_active AND u.user_kind='INDIVIDUAL'
+       JOIN task_assign_rules r ON r.setter_role=g.role_code AND r.target='UK_ANY' AND r.revoked_at IS NULL
+       JOIN roles ro ON ro.code=g.role_code
+      WHERE g.user_id<>$1 AND g.revoked_at IS NULL AND g.valid_from<=now()
+        AND (g.valid_until IS NULL OR g.valid_until>now()) AND g.role_code<>'SUPER_ADMIN'
+      ORDER BY u.id, (g.role_code='REGIONAL_MANAGER') DESC, ro.display_name`, [userId])).rows
+    .sort((a: any, b: any) => a.role_name.localeCompare(b.role_name, 'ru') || a.full_name.localeCompare(b.full_name, 'ru'));
+  const network = (await c.query(`SELECT id FROM org_directory_units WHERE kind='NETWORK' AND code='FRESH' AND effective_to IS NULL`)).rows[0];
+  const branches = (await c.query(
+    `SELECT d.id org_unit_id, n.display_name org_name FROM org_directory_units d
+       JOIN org_directory_name_history n ON n.org_unit_id=d.id AND n.effective_to IS NULL
+      WHERE d.kind='ORG_UNIT' AND NOT d.is_demo AND org_accepts_new_work(d.id)
+      ORDER BY n.display_name`)).rows;
+  return { people, network_id: network?.id ?? null, branches };
 }
 
 export async function createDirectTask(ctx: ActorContext, raw: any) {
   const b = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const allowed = ['kind', 'org_unit_id', 'assignee_user_id', 'role_code', 'due_date', 'title', 'brief'];
   if (Object.keys(b).some(k => !allowed.includes(k))) throw invalid('Неизвестные поля задачи.');
-  if (b.kind !== 'TASK' && b.kind !== 'UK_REQUEST') throw invalid('Выберите тип: задача сотруднику или запрос в УК.');
+  if (!['TASK', 'UK_REQUEST', 'UK_TASK'].includes(b.kind)) throw invalid('Выберите тип задачи.');
   if (typeof b.org_unit_id !== 'string' || !uuid.test(b.org_unit_id)) throw invalid('Выберите филиал.');
   if (typeof b.assignee_user_id !== 'string' || !uuid.test(b.assignee_user_id)) throw invalid('Выберите исполнителя.');
   if (typeof b.due_date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.due_date)) throw invalid('Укажите срок.');
@@ -70,6 +95,7 @@ export async function createDirectTask(ctx: ActorContext, raw: any) {
   if (title.length < 3 || title.length > 200) throw invalid('Название: от 3 до 200 символов.');
   const brief = typeof b.brief === 'string' && b.brief.trim() ? b.brief.trim() : null;
   if (brief && brief.length > 4000) throw invalid('Суть: не длиннее 4000 символов.');
+  if (b.kind === 'UK_TASK') return createUkTask(ctx, b, title, brief);
   return withTransaction(async c => {
     await liveFence(c, ctx);
     const today = (await c.query("SELECT to_char(now() AT TIME ZONE 'Europe/Moscow','YYYY-MM-DD') d")).rows[0].d;
@@ -100,6 +126,50 @@ export async function createDirectTask(ctx: ActorContext, raw: any) {
     const template = (await c.query(`SELECT id, field_schema FROM templates WHERE code=$1 ORDER BY version DESC LIMIT 1`, [code])).rows[0];
     if (!template) throw invalid('Для этой роли задачи пока не предусмотрены.');
     const sourceRef = { kind: b.kind, setter_role: setter.role_code };
+    const item = (await c.query(
+      `INSERT INTO work_items (org_unit_id, template_version_id, title, due_at, created_by, status, assignee_user_id, brief, source_ref)
+       VALUES ($1,$2,$3,($4::date + time '23:59') AT TIME ZONE 'Europe/Moscow',$5,'ASSIGNED',$6,$7,$8)
+       RETURNING id, entity_version`,
+      [b.org_unit_id, template.id, title, b.due_date, ctx.authUser.userId, b.assignee_user_id, brief, JSON.stringify(sourceRef)])).rows[0];
+    await c.query(
+      `INSERT INTO work_item_fields (work_item_id, org_unit_id, field_path, updated_by)
+       SELECT $1,$2,f->>'field_path',$3 FROM jsonb_array_elements($4::jsonb) f`,
+      [item.id, b.org_unit_id, ctx.authUser.userId, JSON.stringify(template.field_schema)]);
+    await writeAuditAndOutbox(c, {
+      actorUserId: ctx.authUser.userId, actorRole: setter.role_code, orgUnitId: b.org_unit_id, workItemId: item.id,
+      action: 'CREATE', aggregateType: 'work_item', aggregateId: item.id, aggregateVersion: item.entity_version,
+      requestId: ctx.requestId, beforeState: null,
+      afterState: { status: 'ASSIGNED', assignee_user_id: b.assignee_user_id, due_date: b.due_date, source: sourceRef },
+      resolution: 'APPLIED', retentionClass: 'WORK_ITEM_STANDARD', ip: ctx.ip, userAgent: ctx.userAgent,
+      eventType: 'work_item.assigned', payload: { work_item_id: item.id },
+    });
+    return { id: item.id, due_date: b.due_date };
+  });
+}
+
+async function createUkTask(ctx: ActorContext, b: any, title: string, brief: string | null) {
+  return withTransaction(async c => {
+    await liveFence(c, ctx);
+    const today = (await c.query("SELECT to_char(now() AT TIME ZONE 'Europe/Moscow','YYYY-MM-DD') d")).rows[0].d;
+    if (b.due_date < today) throw invalid('Срок не может быть в прошлом.');
+    if (!(await holdsUkRole(c, ctx.authUser.userId)))
+      throw new ApiError('FORBIDDEN', 'Задачи внутри УК ставят только сотрудники УК.');
+    if (b.assignee_user_id === ctx.authUser.userId) throw invalid('Себе задачу поставить нельзя.');
+    const opts = await ukOptions(c, ctx.authUser.userId);
+    if (!opts!.people.some((p: any) => p.user_id === b.assignee_user_id))
+      throw new ApiError('ASSIGNEE_INELIGIBLE', 'Этот сотрудник не работает в УК.');
+    const isNetwork = b.org_unit_id === opts!.network_id;
+    const branch = opts!.branches.find((x: any) => x.org_unit_id === b.org_unit_id);
+    if (!isNetwork && !branch) throw invalid('Выберите «Вся сеть» или действующий филиал.');
+    const setter = (await c.query(`SELECT g.role_code FROM role_grants g JOIN task_assign_rules r
+        ON r.setter_role=g.role_code AND r.target='UK_ANY' AND r.revoked_at IS NULL
+       WHERE g.user_id=$1 AND g.revoked_at IS NULL AND g.valid_from<=now()
+         AND (g.valid_until IS NULL OR g.valid_until>now())
+       ORDER BY (g.role_code='SUPER_ADMIN'), g.role_code LIMIT 1`, [ctx.authUser.userId])).rows[0];
+    const template = (await c.query(`SELECT id, field_schema FROM templates WHERE code='uk_task_v1' ORDER BY version DESC LIMIT 1`)).rows[0];
+    if (!template) throw invalid('Шаблон задачи УК не установлен.');
+    const sourceRef = { kind: 'UK_TASK', setter_role: setter.role_code,
+      scope: isNetwork ? 'NETWORK' : 'BRANCH', scope_name: isNetwork ? 'Вся сеть' : branch.org_name };
     const item = (await c.query(
       `INSERT INTO work_items (org_unit_id, template_version_id, title, due_at, created_by, status, assignee_user_id, brief, source_ref)
        VALUES ($1,$2,$3,($4::date + time '23:59') AT TIME ZONE 'Europe/Moscow',$5,'ASSIGNED',$6,$7,$8)

@@ -2,6 +2,7 @@ import { PoolClient } from 'pg';
 import { ApiError } from '../util/errors';
 
 export interface WorkItemRow {
+  source_ref?: any;
   id: string;
   org_unit_id: string;
   template_version_id: string;

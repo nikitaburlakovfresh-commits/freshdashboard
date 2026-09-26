@@ -75,6 +75,15 @@ async function resolveRecipients(
       // wedge retrying it forever, so treat as no resolvable recipient.
       return [];
     }
+    // Задача УК: исполнитель — сотрудник УК с любой ролью УК (26.09.2026).
+    if (ownerRole === 'UK_STAFF') {
+      const uk = await client.query(
+        `SELECT 1 FROM app_users u JOIN role_grants rg ON rg.user_id=u.id
+           JOIN task_assign_rules r ON r.setter_role=rg.role_code AND r.target='UK_ANY' AND r.revoked_at IS NULL
+          WHERE u.id=$1 AND u.is_active AND rg.revoked_at IS NULL AND rg.valid_from<=now()
+            AND (rg.valid_until IS NULL OR rg.valid_until>now()) LIMIT 1`, [assignee_user_id]);
+      return (uk.rowCount ?? 0) > 0 ? [assignee_user_id] : [];
+    }
     const active = await client.query(
       `SELECT 1 FROM app_users u JOIN role_grants rg ON rg.user_id = u.id
        WHERE u.id = $1 AND u.is_active AND rg.role_code = $2 AND rg.org_unit_id = $3
@@ -92,7 +101,11 @@ async function resolveRecipients(
          AND u.is_active AND u.id <> ALL($2::uuid[])`,
       [org_unit_id, [actorId, assignee_user_id].filter(Boolean)],
     );
-    return rms.rows.map((r) => r.user_id);
+    // Сданная задача приходит и её постановщику: он принимает (21.09.2026).
+    const out = new Set<string>(rms.rows.map((r) => r.user_id));
+    const creator = wi.rows[0].created_by as string | null;
+    if (creator && creator !== actorId && creator !== assignee_user_id) out.add(creator);
+    return [...out];
   }
   return [];
 }

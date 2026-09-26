@@ -61,11 +61,24 @@ async function currentRmOrgIds(client: PoolClient, userId: string): Promise<Set<
 //    is gated to the exact role a template names as its field owner.
 /** Роли, в которых актор может исполнять задачу филиала: операционные и РМ
  * (РМ отвечает на «Запрос в УК», 26.09.2026). */
-async function executorRoles(client: PoolClient, userId: string, orgUnitId: string): Promise<Set<string>> {
+async function executorRoles(client: PoolClient, userId: string, orgUnitId: string,
+  workItem?: { source_ref?: any; assignee_user_id?: string | null }): Promise<Set<string>> {
   const set = new Set((await currentOperationalRolesByOrg(client, userId)).get(orgUnitId) ?? []);
   if ((await currentRmOrgIds(client, userId)).has(orgUnitId)) set.add('REGIONAL_MANAGER');
+  // Задача УК (26.09.2026): исполняет назначенный сотрудник УК, пока у него
+  // действует любая роль УК. Филиал задачи здесь не важен — это может быть сеть.
+  if (workItem?.source_ref?.kind === 'UK_TASK' && workItem.assignee_user_id === userId
+    && await holdsUkRole(client, userId)) set.add('UK_STAFF');
   return set;
 }
+export async function holdsUkRole(client: PoolClient, userId: string): Promise<boolean> {
+  return !!(await client.query(`SELECT 1 FROM role_grants g JOIN task_assign_rules r
+      ON r.setter_role=g.role_code AND r.target='UK_ANY' AND r.revoked_at IS NULL
+     WHERE g.user_id=$1 AND g.revoked_at IS NULL AND g.valid_from<=now()
+       AND (g.valid_until IS NULL OR g.valid_until>now()) LIMIT 1`, [userId])).rowCount;
+}
+/** Задачи УК видят постановщик и исполнитель, где бы ни стоял узел задачи. */
+const UK_TASK_MINE = (p: string) => `(wi.source_ref->>'kind'='UK_TASK' AND (wi.assignee_user_id=${p} OR wi.created_by=${p}))`;
 
 async function currentOperationalRolesByOrg(client: PoolClient, userId: string): Promise<Map<string, Set<string>>> {
   const grants = await getEffectiveGrants(client, userId);
@@ -378,14 +391,15 @@ export async function listWorkItems(
       conditions.push(`wi.org_unit_id = $${idx++}`);
       values.push(params.orgFilter);
     } else {
-      conditions.push(`wi.org_unit_id = ANY($${idx++}::uuid[])`);
-      values.push(Array.from(allGrantedOrgs));
+      conditions.push(`(wi.org_unit_id = ANY($${idx++}::uuid[]) OR ${UK_TASK_MINE(`$${idx++}`)})`);
+      values.push(Array.from(allGrantedOrgs), ctx.authUser.userId);
     }
 
     // RF-own restriction unless also RM in that org.
     conditions.push(
       `(wi.org_unit_id = ANY($${idx}::uuid[]) OR wi.assignee_user_id = $${idx + 1} OR wi.created_by = $${idx + 1}
-        OR (wi.org_unit_id = ANY($${idx + 2}::uuid[]) AND EXISTS (SELECT 1 FROM daily_log_records d WHERE d.work_item_id=wi.id)))`,
+        OR (wi.org_unit_id = ANY($${idx + 2}::uuid[]) AND EXISTS (SELECT 1 FROM daily_log_records d WHERE d.work_item_id=wi.id))
+        OR ${UK_TASK_MINE(`$${idx + 1}`)})`,
     );
     const diaryOrgs = Array.from(await diaryReadOrgIds(client, ctx.authUser.userId));
     values.push(Array.from(rmOrgs));
@@ -466,7 +480,8 @@ export async function listWorkItems(
           deviation: d ? { metric: d.metric, rag: d.rag } : null,
           mbo: mbo.has(row.id),
           uk_request: row.source_ref?.kind === 'UK_REQUEST',
-          delegated: !!row.source_ref && row.source_ref?.kind !== 'UK_REQUEST',
+          uk_task: row.source_ref?.kind === 'UK_TASK' ? { scope: row.source_ref?.scope_name ?? null } : null,
+          delegated: !!row.source_ref && !['UK_REQUEST', 'UK_TASK'].includes(row.source_ref?.kind),
           created_by_me: row.created_by === ctx.authUser.userId && row.assignee_user_id !== ctx.authUser.userId,
         };
       }
@@ -561,7 +576,9 @@ export async function getWorkItem(ctx: ActorContext, workItemId: string) {
     // принять, а приёмка автором введена 21.09.2026.
     const diaryOrgs = await diaryReadOrgIds(client, ctx.authUser.userId);
     const isDiary = !!(await dailyMetadata(client,row.id));
-    const visible =
+    const ukMine = row.source_ref?.kind === 'UK_TASK' &&
+      (row.assignee_user_id === ctx.authUser.userId || row.created_by === ctx.authUser.userId);
+    const visible = ukMine ||
       rmOrgs.has(row.org_unit_id) ||
       (isDiary && diaryOrgs.has(row.org_unit_id)) ||
       (operationalRoles.has(row.org_unit_id) && row.assignee_user_id === ctx.authUser.userId) ||
@@ -807,7 +824,7 @@ export async function startWorkItem(ctx: ActorContext, workItemId: string, idemK
       const startTemplate = await getTemplateById(client, workItem.template_version_id);
       if (!startTemplate) throw new ApiError('NOT_FOUND', 'Объект не найден.');
       const startOwnerRole = deriveTemplateOwnerRole(startTemplate);
-      const startRolesHeld = await executorRoles(client, ctx.authUser.userId, workItem.org_unit_id);
+      const startRolesHeld = await executorRoles(client, ctx.authUser.userId, workItem.org_unit_id, workItem);
       const isOwnExecutor = startRolesHeld.has(startOwnerRole) && workItem.assignee_user_id === ctx.authUser.userId;
       if (!isOwnExecutor) throw new ApiError('FORBIDDEN', 'Действие не разрешено.');
       await assertDailyWindow(client,workItemId);
@@ -887,7 +904,7 @@ export async function patchWorkItemFields(
       // is the assignee) -- same "still an active branch employee" freshness
       // check the RF-only code used to do; the field-specific role match
       // happens below once the field's declared owner role is known.
-      const rolesHeld = await executorRoles(client, ctx.authUser.userId, workItem.org_unit_id);
+      const rolesHeld = await executorRoles(client, ctx.authUser.userId, workItem.org_unit_id, workItem);
       const isOwnExecutor = rolesHeld.size > 0 && workItem.assignee_user_id === ctx.authUser.userId;
       if (!isOwnExecutor) throw new ApiError('FORBIDDEN_FIELD', 'Действие с полем не разрешено.');
 
@@ -1012,7 +1029,7 @@ export async function submitWorkItem(ctx: ActorContext, workItemId: string, idem
       const submitTemplate = await getTemplateById(client, workItem.template_version_id);
       if (!submitTemplate) throw new ApiError('NOT_FOUND', 'Объект не найден.');
       const submitOwnerRole = deriveTemplateOwnerRole(submitTemplate);
-      const submitRolesHeld = await executorRoles(client, ctx.authUser.userId, workItem.org_unit_id);
+      const submitRolesHeld = await executorRoles(client, ctx.authUser.userId, workItem.org_unit_id, workItem);
       const isOwnExecutorSubmit = submitRolesHeld.has(submitOwnerRole) && workItem.assignee_user_id === ctx.authUser.userId;
       if (!isOwnExecutorSubmit) throw new ApiError('FORBIDDEN', 'Действие не разрешено.');
       await liveFence(client,ctx);
@@ -1467,6 +1484,8 @@ export async function getWorkItemHistory(ctx: ActorContext, workItemId: string, 
     const daily=await dailyMetadata(client,row.id);
     const diaryOrgs = await diaryReadOrgIds(client, ctx.authUser.userId);
     const visible =
+      (row.source_ref?.kind === 'UK_TASK' &&
+        (row.assignee_user_id === ctx.authUser.userId || row.created_by === ctx.authUser.userId)) ||
       rmOrgs.has(row.org_unit_id) ||
       (!!daily && diaryOrgs.has(row.org_unit_id)) ||
       (operationalRoles.has(row.org_unit_id) && row.assignee_user_id === ctx.authUser.userId);

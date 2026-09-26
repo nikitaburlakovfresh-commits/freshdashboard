@@ -8,7 +8,7 @@ import CreateTaskModal from './CreateTaskModal';
 import { displayTitle } from '../domain/taskTitle';
 import { useOrgNames } from '../state/orgNames';
 import DirectTaskDialog from '../components/DirectTaskDialog';
-import { getAssignOptions, type AssignScope } from '../api/directTasks';
+import { getAssignOptions, type AssignScope, type UkOptions } from '../api/directTasks';
 import '../styles/task-fields.css';
 
 const METRIC_RU: Record<string,string> = { sales:'продажи', margin:'маржа', kso:'КСО', revenue:'выручка',
@@ -41,8 +41,10 @@ export default function TaskListPage() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [scopes, setScopes] = useState<AssignScope[]>([]);
   const [showDirect, setShowDirect] = useState(false);
-  useEffect(() => { getAssignOptions().then(r => setScopes(r.scopes)).catch(() => setScopes([])); }, []);
-  const canDirect = scopes.some(s => s.people.length > 0 || s.uk_request);
+  const [uk, setUk] = useState<UkOptions | null>(null);
+  useEffect(() => { getAssignOptions().then(r => { setScopes(r.scopes); setUk(r.uk ?? null); })
+    .catch(() => { setScopes([]); setUk(null); }); }, []);
+  const canDirect = scopes.some(s => s.people.length > 0 || s.uk_request) || !!uk;
 
   const grants = me?.grants ?? [];
   const orgOptions = Array.from(new Set(grants.map((g) => g.org_unit_id).filter((id):id is string=>id!==null)));
@@ -141,6 +143,7 @@ export default function TaskListPage() {
                       Отклонение · {METRIC_RU[l.deviation.metric]??l.deviation.metric}{RAG_RU[l.deviation.rag]?`, ${RAG_RU[l.deviation.rag]}`:''}</span>,
                     l.mbo&&<span key="m" className="task-label" data-kind="mbo">МБО</span>,
                     l.uk_request&&<span key="u" className="task-label" data-kind="uk">Запрос в УК</span>,
+                    l.uk_task&&<span key="ut" className="task-label" data-kind="uk">Задача УК · {l.uk_task.scope ?? 'Вся сеть'}</span>,
                     l.created_by_me&&<span key="c" className="task-label" data-kind="mine">Поставлена мной</span>,
                   ].filter(Boolean);
                   return chips.length?<div className="task-labels">{chips}</div>:null;})()}
@@ -157,7 +160,7 @@ export default function TaskListPage() {
         </button>
       )}
 
-      {showDirect && <DirectTaskDialog scopes={scopes} onClose={() => setShowDirect(false)}
+      {showDirect && <DirectTaskDialog scopes={scopes} uk={uk} onClose={() => setShowDirect(false)}
         onCreated={(id) => { setShowDirect(false); navigate(`/tasks/${id}`); }}/>}
       {showCreate && (
         <CreateTaskModal grants={grants} onClose={() => setShowCreate(false)} onCreated={() => load()} />
