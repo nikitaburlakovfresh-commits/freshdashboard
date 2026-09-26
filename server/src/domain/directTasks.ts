@@ -51,6 +51,9 @@ export async function assignOptions(ctx: ActorContext) {
       } else scopes.push({ org_unit_id: s.org_unit_id, org_name: s.org_name, setter_role: s.role_code,
         people, uk_request: rules.includes('UK_REQUEST'), uk_managers: uk });
     }
+    // Кто сам региональный менеджер филиала, тому «Запрос в УК» по нему не нужен.
+    const rmOrgs = new Set(setters.filter((x: any) => x.role_code === 'REGIONAL_MANAGER').map((x: any) => x.org_unit_id));
+    for (const sc of scopes) if (rmOrgs.has(sc.org_unit_id)) sc.uk_request = false;
     return { scopes };
   });
 }

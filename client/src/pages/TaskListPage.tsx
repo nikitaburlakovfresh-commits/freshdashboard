@@ -45,7 +45,6 @@ export default function TaskListPage() {
   const canDirect = scopes.some(s => s.people.length > 0 || s.uk_request);
 
   const grants = me?.grants ?? [];
-  const canCreate = grants.some((g) => g.role === 'REGIONAL_MANAGER');
   const orgOptions = Array.from(new Set(grants.map((g) => g.org_unit_id).filter((id):id is string=>id!==null)));
 
   const load = useCallback(
@@ -80,11 +79,7 @@ export default function TaskListPage() {
         <h1 style={{ fontSize: 22, margin: 0, color: 'var(--fresh-dark)' }}>Задачи</h1>
         <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
         {canDirect && <button onClick={() => setShowDirect(true)} style={createBtn}>+ Поставить задачу</button>}
-        {canCreate && (
-          <button onClick={() => setShowCreate(true)} style={createBtn}>
-            + Новая задача
-          </button>
-        )}
+        {/* «Новая задача» РМ убрана (26.09.2026): одна кнопка «Поставить задачу» для всех ролей. */}
         </div>
       </div>
 

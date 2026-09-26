@@ -11,9 +11,12 @@ const tomorrow = () => {
   return d.toISOString().slice(0, 10);
 };
 
-export default function DirectTaskDialog({ scopes, onClose, onCreated }: {
+export default function DirectTaskDialog({ scopes: allScopes, onClose, onCreated }: {
   scopes: AssignScope[]; onClose: () => void; onCreated: (id: string) => void;
 }) {
+  // Только филиалы, где есть кому поставить задачу: у РМ их десятки, а
+  // сотрудники заведены не везде.
+  const scopes = allScopes.filter(s => s.people.length > 0 || s.uk_request);
   const [org, setOrg] = useState(scopes[0]?.org_unit_id ?? '');
   const scope = scopes.find(s => s.org_unit_id === org);
   const [kind, setKind] = useState<'TASK' | 'UK_REQUEST'>(scope && !scope.people.length && scope.uk_request ? 'UK_REQUEST' : 'TASK');
