@@ -54,7 +54,7 @@
 .card-back{display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:var(--fresh-text-muted);
   font-size:.72rem;font-weight:600;min-width:64px}
 .card-back-arrow{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;
-  background:var(--fresh-warning,#ffd12d);color:#1b1b1b;transition:transform .15s ease}
+  background:#FFD12D;color:#1b1b1b;box-shadow:0 1px 4px rgba(0,0,0,.18);transition:transform .15s ease}
 .card-back:hover .card-back-arrow,.card-back:focus-visible .card-back-arrow{transform:translateX(-3px)}
 .card-back-text{white-space:nowrap}
 .card-head-side{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
