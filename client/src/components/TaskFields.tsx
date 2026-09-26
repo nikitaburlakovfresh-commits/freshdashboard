@@ -152,7 +152,24 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
         </summary>
         {section.hints.length > 0 && <ul className="task-section-hints">
           {section.hints.map((hint, i) => <li key={i}>{hint}</li>)}</ul>}
-        {section.fields.filter(f => !isDone(f.field_path)).map(renderField)}
+        {(() => {
+          // Поля после вопроса «Да/Нет» в том же разделе нужны только при «Да»
+          // (решение владельца 26.09.2026: блок встречи с КЦ свёрнут при «Нет»
+          // и раскрывается к заполнению при «Да»). Уже сохранённые значения при
+          // «Нет» не стираются — поля только скрываются.
+          const hidden = new Set<string>();
+          let gate: string | null = null;
+          for (const f of section.fields) {
+            if (f.type === 'select') {
+              gate = f.options?.includes('Да') && f.options?.includes('Нет') ? f.field_path : null;
+              continue;
+            }
+            if (!gate) continue;
+            const answer = editable ? drafts[gate]?.value ?? '' : item.fields.find(x => x.field_path === gate)?.value ?? '';
+            if (answer !== 'Да') hidden.add(f.field_path);
+          }
+          return section.fields.filter(f => !isDone(f.field_path) && !hidden.has(f.field_path)).map(renderField);
+        })()}
         {onDelegate && section.num !== null && !closing && <div className="task-section-delegate">
           <button type="button" className="task-field-secondary"
             onClick={() => onDelegate({ section_num: section.num, section_title: section.title,
