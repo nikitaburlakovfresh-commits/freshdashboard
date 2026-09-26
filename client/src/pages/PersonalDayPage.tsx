@@ -7,6 +7,7 @@ import { getOrganizationTree,type DirectoryUnit } from '../api/organization';
 import { listWorkItems } from '../api/endpoints';
 import type { WorkItem } from '../api/types';
 import StatusBadge from '../components/StatusBadge';
+import { ROLE_RU } from '../domain/taskTitle';
 import '../styles/beta-workspace.css';
 export default function PersonalDayPage() {
   const {me}=useAuth(),navigate=useNavigate();
@@ -45,25 +46,22 @@ export default function PersonalDayPage() {
       navigate(`/tasks/${r.id}`);}catch(e:any){setError(e.message);}finally{setOpening(false);}
   }
   return <div className="portal-dashboard beta-workspace">
-    <header className="portal-heading"><div><span className="portal-eyebrow">ЛИЧНАЯ РАБОТА · BETA</span><h1>Мой ежедневник</h1>
-      <p>Отдельная запись сотрудника, роли, филиала и даты. Сохранение в PostgreSQL портала, без зависимости от Диска.</p></div></header>
+    <header className="portal-heading"><div><h1>AI-Трекер задач</h1></div></header>
     {!scopes.length?<section className="portal-panel"><h2>Нет назначения на филиал</h2><p>Руководитель проверяет записи в <Link to="/">обзоре сети</Link> или в карточке доступного филиала. Общего логина для заполнения нет.</p></section>:<>
       <section className="portal-panel beta-filters">
         <label>Филиал и моя роль<select aria-label="Филиал и моя роль" value={scope} onChange={e=>setScope(e.target.value)}>
           {scopes.map(s=><option key={s.id} value={`${s.org_unit_id}:${s.role}`}>{units.find(u=>u.id===s.org_unit_id)?.display_name??s.org_unit_id} · {LINE_ROLE_NAMES[s.role]??s.role}</option>)}</select></label>
-        <label>Дата ежедневника<input aria-label="Дата ежедневника" type="date" value={date} onChange={e=>{if(e.target.value)setDate(e.target.value);}}/></label>
+        <label>Дата<input aria-label="Дата" type="date" value={date} onChange={e=>{if(e.target.value)setDate(e.target.value);}}/></label>
         <button className="btn" disabled={busy} onClick={()=>reload(n=>n+1)}>Обновить</button>
       </section>
       {changed&&<p role="status" className="beta-notice">В Москве наступил новый день. Текущая запись не переключена. <button className="btn" onClick={()=>setDate(moscowToday())}>Перейти на сегодня</button></p>}
-      {error&&<p role="alert" className="portal-panel">{error}</p>}{busy&&<p role="status">Читаю ежедневник и задачи…</p>}
+      {error&&<p role="alert" className="portal-panel">{error}</p>}{busy&&<p role="status">Загружаю…</p>}
       {note&&<section className="portal-panel"><div className="portal-section-head">
-        <div><h2>Личная запись дня · {date}</h2>
-          <p className="portal-muted">{LINE_ROLE_NAMES[role]??role} · {note.record?'Сохранена на сервере':'Ещё не создана'}</p></div>
+        <div><h2>AI-Трекер задач · {LINE_ROLE_NAMES[role]??role}</h2>
+          <p className="portal-muted">{date.slice(8,10)}.{date.slice(5,7)}.{date.slice(0,4)}</p></div>
         <button className="portal-primary" disabled={opening} onClick={open}>
-          {opening?'Открываю…':note.record?'Открыть запись':'Создать запись за дату'}</button></div>
+          {opening?'Открываю…':note.record?'Открыть':'Начать день'}</button></div>
         {note.record&&<p>Состояние: <StatusBadge status={note.record.status as any}/></p>}
-        <p className="portal-muted">Это не ежедневник. Окна заполнения нет, опоздать нельзя, на балл филиала
-          запись не влияет и источником показателей не является. Прошлые дни открыты, будущая дата — нет.</p>
       </section>}
       {note&&<section className="portal-panel"><h2>Задачи от руководителя</h2>
         <p className="portal-muted">Поставлены вам на этот день и ранее. Просроченные остаются в списке.</p>
@@ -75,16 +73,13 @@ export default function PersonalDayPage() {
             <StatusBadge status={t.status as any}/></Link>;})}</div>
           :<p>Задач от руководителя на этот день нет.</p>}
       </section>}
-      {day&&<section className="portal-panel"><div className="portal-section-head"><div><h2>Дневная запись · {date}</h2><p className="portal-muted">Роль {role} · Москва · {day.record?'Сохранена на сервере':'Ещё не создана'}</p></div>
-        <button className="portal-primary" disabled={opening||(!day.record&&!day.policy)} onClick={open}>{opening?'Открываю…':day.record?'Открыть ежедневник':'Создать ежедневник за дату'}</button></div>
-        {day.record?<><p>Состояние: <StatusBadge status={day.record.status as any}/></p><p>Окно: {new Date(day.record.window_open).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} — {new Date(day.record.window_close).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК.</p>
-          {!day.record.can_fill&&<p>Окно закрыто. Сохранённую запись можно читать, редактирование заблокировано сервером.</p>}</>:
-          <p>{day.policy?'Окно настроено руководителем. Создание разрешено только внутри него; повторное открытие не создаёт дубль.'
+      {day&&<section className="portal-panel"><div className="portal-section-head"><div><h2>AI-Трекер задач · {ROLE_RU[role]??role}</h2><p className="portal-muted">{date.slice(8,10)}.{date.slice(5,7)}.{date.slice(0,4)}</p></div>
+        <button className="portal-primary" disabled={opening||(!day.record&&!day.policy)} onClick={open}>{opening?'Открываю…':day.record?'Открыть':'Начать день'}</button></div>
+        {day.record?<><p>Состояние: <StatusBadge status={day.record.status as any}/></p>
+          {!day.record.can_fill&&<p className="portal-muted">День закрыт для изменений.</p>}</>:
+          <p>{day.policy?''
             :<>Окно заполнения для этой роли не настроено, и создать ежедневник нельзя.{' '}
               <Link to={`/branches/${org}`}>Настроить окно на странице филиала →</Link></>}</p>}
-        <p className="portal-muted">28 задач дня по вашей роли, разделами. Поля сохраняются сами; отметка
-          «Не выполнено» — это ответ, а не пропуск.</p>
-        <Link to={`/branches/${org}`}>Карточка филиала →</Link>
       </section>}
       {day&&<section className="portal-panel"><h2>Задачи от руководителя</h2>
         <p className="portal-muted">Со сроком на этот день и просроченные — обязательны к выполнению. С более
@@ -101,13 +96,13 @@ export default function PersonalDayPage() {
                   :t.due_at_local?<> · необязательна · станет обязательной {t.due_at_local.slice(8,10)}.{t.due_at_local.slice(5,7)}, срок сдачи {t.due_at_local.slice(11)} МСК</>
                   :<> · необязательна · срок не задан</>}
                 {overdue&&<> · просрочена</>}
-                {t.in_daily_log&&<> · уже в ежедневнике</>}</small></div>
+                {t.in_daily_log&&<> · уже в трекере</>}</small></div>
             <StatusBadge status={t.status as any}/></Link>;})}</div>
           :<p>Задач от руководителя на этот день нет.</p>}
       </section>}
-      {day&&<section className="portal-panel"><h2>Результаты задач за выбранный день</h2><p className="portal-muted">Снимки отправленных версий. Отправлено на проверку не означает принято.</p>
-        {day.links.length?day.links.map(l=><article className="beta-result" key={l.submission_id}><Link to={`/tasks/${l.work_item_id}`}>{l.title} · версия сдачи {l.revision}</Link><p>{l.completion_summary}</p><small>Текущий статус задачи: {l.current_task_status}. Снимок текста не перезаписывается.</small></article>):<p>Связанных результатов нет. При сдаче задачи выберите «Добавить в мой ежедневник» и дату.</p>}</section>}
-      <section className="portal-panel"><h2>Незавершённые задачи моей роли</h2><p className="portal-muted">Актуальный список на сейчас, не исторический срез выбранной даты. Задачи сохраняют ID, исходный срок и историю между днями.</p>
+      {day&&<section className="portal-panel"><h2>Результаты задач за выбранный день</h2>
+        {day.links.length?day.links.map(l=><article className="beta-result" key={l.submission_id}><Link to={`/tasks/${l.work_item_id}`}>{l.title}</Link><p>{l.completion_summary}</p></article>):<p className="portal-muted">Пока нет.</p>}</section>}
+      <section className="portal-panel"><h2>Незавершённые задачи моей роли</h2>
         {items.map(t=><Link className="portal-task-row" to={`/tasks/${t.id}`} key={t.id}><div><strong>{t.title}</strong><span>Срок: {new Date(t.due_at).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК</span></div><StatusBadge status={t.status}/></Link>)}
         {!busy&&!error&&!items.length&&<p>Открытых задач нет. Это не означает, что дневной отчёт принят.</p>}
         {cursor&&<Link to="/tasks">Есть ещё записи. Открыть полный список задач →</Link>}

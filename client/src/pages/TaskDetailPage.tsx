@@ -23,6 +23,7 @@ import { diaryDelegations, diaryReference, delegationTargets, createDelegation, 
 import { hasUnsavedFields, mergeSavedFields, requiredFieldsPresent } from '../domain/taskForm';
 import { saveLocalDraft, restoreLocalDraft, clearLocalDraft } from '../domain/draftStorage';
 import type { FieldDrafts } from '../domain/taskForm';
+import { displayTitle, trackerDate, ruDate, ROLE_RU, TRACKER } from '../domain/taskTitle';
 
 const EVENT_LABELS: Record<string, string> = {
   'work_item.created': 'Задача создана',
@@ -273,11 +274,18 @@ export default function TaskDetailPage() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16, marginTop: 12 }}>
         <div style={{ minWidth: 0 }}>
-          <h1 style={{ fontSize: 20, margin: 0, color: 'var(--fresh-dark)' }}>{item.title}</h1>
+          {/* Трекер: название роли и дата один раз, без служебных сведений. */}
+          {trackerDate(item.title) ? <>
+            <h1 style={{ fontSize: 20, margin: 0, color: 'var(--fresh-dark)' }}>{TRACKER}
+              {(item.daily_log?.role_code ?? item.owner_role) && ` · ${ROLE_RU[(item.daily_log?.role_code ?? item.owner_role)!] ?? ''}`}</h1>
+            <div style={{ fontSize: 13, color: 'var(--fresh-text-muted)', marginTop: 6 }}>{ruDate(trackerDate(item.title)!)}
+              {item.daily_log && !item.daily_log.can_fill && ' · день закрыт для изменений'}</div>
+          </> : <>
+          <h1 style={{ fontSize: 20, margin: 0, color: 'var(--fresh-dark)' }}>{displayTitle(item.title, item.owner_role)}</h1>
           <div style={{ fontSize: 13, color: 'var(--fresh-text-muted)', marginTop: 6 }}>
-            Срок: {new Date(item.due_at).toLocaleString('ru-RU', {timeZone: 'Europe/Moscow'})} МСК · Версия: {item.entity_version}
+            Срок: {new Date(item.due_at).toLocaleString('ru-RU', {timeZone: 'Europe/Moscow', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})} МСК
             {item.rework_count > 0 && ` · Доработок: ${item.rework_count}`}
-          </div>
+          </div></>}
         </div>
         <StatusBadge status={item.status} />
       </div>
@@ -304,13 +312,31 @@ export default function TaskDetailPage() {
       {delegateFrom&&item.daily_log&&<DelegateDialog diaryId={item.id} source={delegateFrom} batch={delegateBatch}
         onClose={()=>setDelegateFrom(null)} onCreated={()=>{setDelegateFrom(null);loadDelegations();}}/>}
 
-      {item.daily_log&&<section style={card}><h2 style={cardTitle}>Личная дневная запись · {item.daily_log.business_date}</h2>
-        <p>Роль {item.daily_log.role_code}. Основное хранилище: PostgreSQL. Синхронизация с Диском не требуется.</p>
-        <p>Окно заполнения: {new Date(item.daily_log.window_open).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} — {new Date(item.daily_log.window_close).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК.</p>
-        {!item.daily_log.can_fill&&<p>Окно закрыто: запись доступна для чтения, отправка и сохранение запрещены.</p>}
-        <Link to="/diary">Вернуться к ежедневникам →</Link>
-        {item.daily_links?.map(l=><article key={l.submission_id}><h3><Link to={`/tasks/${l.work_item_id}`}>{l.title}</Link> · сдача v{l.revision}</h3><p style={{whiteSpace:'pre-wrap'}}>{l.completion_summary}</p><small>Текущий статус задачи: {l.current_task_status}. Текст снимка неизменен.</small></article>)}
-      </section>}
+      {item.daily_log&&(()=>{
+        // Прогресс дня вместо служебной «личной дневной записи» (решение
+        // владельца 26.09.2026): сколько задач сделано и сколько обязательных осталось.
+        const marks=item.field_schema.filter(f=>/_done$/.test(f.field_path));
+        const val=(p:string)=>drafts[p]?.value??item.fields.find(f=>f.field_path===p)?.value??'';
+        const must=marks.filter(f=>!(f as any).optional), opt=marks.filter(f=>(f as any).optional);
+        const mustDone=must.filter(f=>val(f.field_path)==='Выполнено').length;
+        const optDone=opt.filter(f=>val(f.field_path)==='Выполнено').length;
+        const bossLeft=mandatoryOpen.length;
+        const pct=must.length?Math.round(mustDone/must.length*100):0;
+        return <section style={card} aria-label="Прогресс дня">
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:12,flexWrap:'wrap'}}>
+            <h2 style={{...cardTitle,margin:0}}>Прогресс дня</h2>
+            <strong style={{fontSize:22}}>{pct}%</strong>
+          </div>
+          <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}
+            style={{height:10,borderRadius:5,background:'var(--fresh-border)',margin:'12px 0',overflow:'hidden'}}>
+            <div style={{width:`${pct}%`,height:'100%',background:pct===100?'var(--fresh-success, #1c8f4b)':'var(--fresh-primary, #1d4ed8)'}}/>
+          </div>
+          <p style={{margin:0,fontSize:14}}>Обязательные: {mustDone} из {must.length}
+            {must.length-mustDone>0?<> · <b>осталось {must.length-mustDone}</b></>:' · все выполнены'}
+            {opt.length>0&&<> · необязательные: {optDone} из {opt.length}</>}
+            {bossLeft>0&&<> · <b style={{color:'var(--fresh-danger, #c0392b)'}}>от руководителя не сдано: {bossLeft}</b></>}</p>
+        </section>;
+      })()}
 
       {(offline||restoredPaths.length>0)&&<section style={card} role="status">
         <h2 style={cardTitle}>{offline?'Нет связи с сервером':'Восстановлен черновик этого браузера'}</h2>
@@ -367,7 +393,7 @@ export default function TaskDetailPage() {
       })()}
 
       <section style={card}>
-        <h2 style={cardTitle}>Результат выполнения</h2>
+        <h2 style={cardTitle}>{item.daily_log?'Задачи дня':'Результат выполнения'}</h2>
         {meetingMsg&&<p role="status" style={{margin:'0 0 12px',fontSize:13,fontWeight:600}}>{meetingMsg}</p>}
         <TaskFields item={item} drafts={drafts} editable={isOwnExecutor && ['ASSIGNED','IN_PROGRESS'].includes(item.status) && item.daily_log?.can_fill!==false}
           busy={actionBusy}
@@ -381,7 +407,7 @@ export default function TaskDetailPage() {
             runAction(() => patchWorkItemFields(item.id, {changes:[{field_path:path,expected_version:draft.version,new_value:draft.value}]}), path);
           }}/>
         {dirty && <p role="status" style={{color:'var(--fresh-warning)',fontSize:13}}>Есть несохранённые поля. Сдача и смена статуса доступны после сохранения.</p>}
-        {item.daily_log&&<p style={{fontSize:13,color:'var(--fresh-text-muted)'}}>Непустые поля автоматически сохраняются через 0,7 секунды после ввода. При ошибке текст остаётся в форме: повторите сохранение или загрузите актуальную версию.</p>}
+
       </section>
 
       <section style={card}>

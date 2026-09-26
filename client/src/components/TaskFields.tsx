@@ -224,19 +224,18 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
             })()}
           </div>;
         })}
-        {def.type === 'number' && <p className="task-fields-note">Десятичный разделитель: точка.
+        {def.type === 'number' && !autosaves && <p className="task-fields-note">Десятичный разделитель: точка.
           {def.min_value !== undefined && ` Минимум: ${def.min_value}.`}{def.max_value !== undefined && ` Максимум: ${def.max_value}.`} Отсутствие данных не равно нулю.</p>}
         {editable && <div className="task-field-footer">
           {!autosaves && <button type="button" disabled={busy || !dirty || rows === null && def.type === 'repeatable_group'} onClick={() => onSave(def.field_path)}>Сохранить: {def.label}</button>}
-          <span aria-live="polite">{dirty ? busy ? 'Сохраняю…' : 'Не сохранено' : saved?.value != null ? 'Сохранено на сервере' : 'Не заполнено'}</span>
+          <span aria-live="polite">{dirty ? busy ? 'Сохраняю…' : 'Не сохранено' : autosaves ? '' : saved?.value != null ? 'Сохранено на сервере' : 'Не заполнено'}</span>
         </div>}
       </section>;
   };
 
   return <div className="task-fields">
-    <p className="task-fields-note">{item.template_display_name} · Роль: {item.owner_role ?? 'не определена'}.
-      {autosaves ? ' Поля сохраняются сами; сдача фиксирует все поля одной версией результата.'
-        : ' Сохранение каждого поля отдельно; сдача фиксирует все поля одной версией результата.'}</p>
+    {autosaves ? <p className="task-fields-note">Поля сохраняются сами.</p>
+      : <p className="task-fields-note">{item.template_display_name}. Сохранение каждого поля отдельно; сдача фиксирует все поля одной версией результата.</p>}
     {item.template_code.startsWith('rf_') && <p className="task-fields-notice">Предварительная форма РФ. Введённые значения не публикуются как KPI; формулы и бизнес-приёмка форм ещё не завершены.</p>}
     {!grouped ? item.field_schema.map(renderField) : sections.map((section, index) => {
       // Состояние раздела берётся из его же отметки выполнения, а не

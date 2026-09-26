@@ -26,7 +26,7 @@ const workGroups: NavGroup[] = [
   { label: 'Моя работа', links: [
     { path: '/tasks', label: 'Задачи', icon: 'check', work: true },
     { path: '/my-deviations', label: 'Мои задачи по отклонениям', icon: 'target', work: true },
-    { path: '/diary', label: 'Ежедневник', icon: 'calendar', work: true, future: true },
+    { path: '/diary', label: 'AI-Трекер задач', icon: 'calendar', work: true, future: true },
     { path: '/notifications', label: 'Уведомления', icon: 'bell', work: true },
   ] },
 ];

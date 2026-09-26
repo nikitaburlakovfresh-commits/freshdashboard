@@ -5,6 +5,7 @@ import type { WorkItem, WorkItemStatus } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import StatusBadge from '../components/StatusBadge';
 import CreateTaskModal from './CreateTaskModal';
+import { displayTitle } from '../domain/taskTitle';
 import { useOrgNames } from '../state/orgNames';
 
 const STATUS_OPTIONS: { value: WorkItemStatus | ''; label: string }[] = [
@@ -120,7 +121,7 @@ export default function TaskListPage() {
               }}
             >
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 500, fontSize: 14, color: 'var(--fresh-dark)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</div>
+                <div style={{ fontWeight: 500, fontSize: 14, color: 'var(--fresh-dark)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayTitle(item.title, item.owner_role)}</div>
                 <div style={{ fontSize: 12, color: 'var(--fresh-text-muted)', marginTop: 4 }}>
                   Срок: {new Date(item.due_at).toLocaleString('ru-RU', {timeZone:'Europe/Moscow'})} МСК
                   {item.rework_count > 0 && ` · доработок: ${item.rework_count}`}
