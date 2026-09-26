@@ -14,7 +14,7 @@ import { getRegistrationDirectory } from '../api/adminSettings';
 export default function RegistrationRequestsPage() {
   const [status, setStatus] = useState('PENDING');
   const [items, setItems] = useState<RegistrationRequest[]>([]);
-  const [roles, setRoles] = useState<{ code: string; display_name: string }[]>([]);
+  const [roles, setRoles] = useState<{ code: string; display_name: string; scope_kind: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; display_name: string }[]>([]);
   const [zones, setZones] = useState<RegistrationZone[]>([]);
   const [edits, setEdits] = useState<Record<string, { role_code: string; org_unit_id: string; reason: string }>>({});
@@ -61,10 +61,14 @@ export default function RegistrationRequestsPage() {
     try {
       await decideRegistration(r.id, action,
         action === 'approve'
-          ? { role_code: e.role_code, org_unit_id: e.org_unit_id, reason: e.reason || undefined }
+          ? { role_code: e.role_code,
+              org_unit_id: !zoneKind(e.role_code) && roles.find(x => x.code === e.role_code)?.scope_kind === 'NETWORK'
+                ? 'FRESH_UC' : e.org_unit_id,
+              reason: e.reason || undefined }
           : { reason: e.reason });
       setDone(action === 'approve'
-        ? `Учётная запись ${r.login} создана${zones.some(z => z.id === e.org_unit_id)
+        ? `Учётная запись ${r.login} создана${roles.find(x => x.code === e.role_code)?.scope_kind === 'NETWORK' && !zoneKind(e.role_code)
+          ? ' в управляющей компании, доступ по всей сети' : zones.some(z => z.id === e.org_unit_id)
           ? ` и закреплена за филиалами зоны «${zones.find(z => z.id === e.org_unit_id)!.display_name}»` : ' и закреплена за филиалом'}.`
         : `Заявка ${r.login} отклонена.`);
       await load(status);
@@ -118,6 +122,10 @@ export default function RegistrationRequestsPage() {
           </select></label>
         {(() => {
           const kind = zoneKind(edit(r).role_code);
+          // Должность УК уровня всей сети: филиал не выбирается, сотрудник работает по всей группе.
+          if (!kind && roles.find(x => x.code === edit(r).role_code)?.scope_kind === 'NETWORK')
+            return <p className="role-view-hint">Подразделение: ГК Fresh · управляющая компания. Филиал выбирать не нужно —
+              сотрудник работает по всей сети, задачи ему ставят через «Сотруднику УК».</p>;
           const list = zones.filter(z => z.kind === kind);
           const picked = zones.find(z => z.id === edit(r).org_unit_id);
           return <>
