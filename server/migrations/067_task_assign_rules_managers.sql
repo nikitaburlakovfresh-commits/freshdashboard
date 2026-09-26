@@ -24,12 +24,18 @@ CROSS JOIN (VALUES ('RF'),('ROP'),('ROO'),('RKSO'),('STOCK'),('MARKETING'),
 WHERE EXISTS (SELECT 1 FROM roles r WHERE r.code=sv.s)
 ON CONFLICT DO NOTHING;
 
+-- Операционный маркетинг УК (решение владельца 26.09.2026): функциональный
+-- сотрудник УК, отдельно от маркетолога филиала.
+INSERT INTO roles (code, display_name, scope_kind, is_system)
+VALUES ('MARKETING_UC', 'Операционный маркетинг УК', 'NETWORK', true)
+ON CONFLICT (code) DO NOTHING;
+
 -- Роли управляющей компании: ставят задачи друг другу («всем всем в УК»).
 INSERT INTO task_assign_rules(setter_role,target,note)
 SELECT s, 'UK_ANY', 'Решение владельца 26.09.2026: задачи внутри УК' FROM (VALUES
   ('SUPER_ADMIN'),('REGIONAL_MANAGER'),('DIVISION_MANAGER'),('COMMERCIAL_DIRECTOR'),('FINANCE_HEAD'),
   ('FRESH_ACADEMY'),('HR_UC'),('KSO_HEAD'),('LEGAL_UC'),('QUALITY_CONTROL'),('ACCOUNTANT'),
-  ('TECHNICAL_COORDINATOR')) v(s)
+  ('TECHNICAL_COORDINATOR'),('MARKETING_UC')) v(s)
 WHERE EXISTS (SELECT 1 FROM roles r WHERE r.code=v.s)
 ON CONFLICT DO NOTHING;
 

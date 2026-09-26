@@ -1589,7 +1589,10 @@ export async function listNotifications(ctx: ActorContext, params: { unreadOnly:
       cursorId = decoded.id;
     }
 
-    const conditions = [`n.recipient_user_id = $1`, `n.org_unit_id = ANY($2::uuid[])`];
+    // Уведомления по задачам УК приходят и по сетевому узлу (26.09.2026).
+    const conditions = [`n.recipient_user_id = $1`, `(n.org_unit_id = ANY($2::uuid[]) OR EXISTS (
+      SELECT 1 FROM work_items w WHERE w.id=n.work_item_id AND w.source_ref->>'kind'='UK_TASK'
+        AND (w.assignee_user_id=$1 OR w.created_by=$1)))`];
     const values: unknown[] = [ctx.authUser.userId, Array.from(grantedOrgs)];
     let idx = 3;
     if (params.unreadOnly) {

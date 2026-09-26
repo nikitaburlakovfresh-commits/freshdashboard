@@ -67,7 +67,7 @@ function MultiPick({ value, groups, onChange, disabled, label }: {
 
 // Роли управляющей компании FRESH — остальные роли справочника считаются ролями филиала.
 const UC_ROLES = new Set(['REGIONAL_MANAGER', 'DIVISION_MANAGER', 'COMMERCIAL_DIRECTOR', 'FINANCE_HEAD', 'HR_UC', 'LEGAL_UC',
-  'FRESH_ACADEMY', 'QUALITY_CONTROL', 'KSO_HEAD']);
+  'FRESH_ACADEMY', 'QUALITY_CONTROL', 'KSO_HEAD', 'MARKETING_UC', 'ACCOUNTANT', 'TECHNICAL_COORDINATOR']);
 
 function Scalar({ def, value, onChange, disabled, label }: {
   def: FieldDef; value: string; onChange: (v: string) => void; disabled: boolean; label: string;
