@@ -29,14 +29,16 @@ export async function operationalOverview(ctx:ActorContext,dateRaw:unknown,org?:
       FROM work_items w JOIN templates t ON t.id=w.template_version_id
       LEFT JOIN daily_log_records d ON d.work_item_id=w.id
       WHERE w.org_unit_id=ANY($1::uuid[]) AND (
-        w.org_unit_id=ANY($2::uuid[]) OR (w.assignee_user_id=$3 AND EXISTS (
+        w.org_unit_id=ANY($2::uuid[]) OR (d.work_item_id IS NOT NULL AND w.org_unit_id=ANY($5::uuid[])) OR (w.assignee_user_id=$3 AND EXISTS (
           SELECT 1 FROM role_grants g WHERE g.user_id=$3 AND g.org_unit_id=w.org_unit_id
             AND g.revoked_at IS NULL AND g.valid_from<=now() AND (g.valid_until IS NULL OR g.valid_until>now())
             AND EXISTS(SELECT 1 FROM jsonb_each_text(t.field_ownership_rules))
             AND NOT EXISTS(SELECT 1 FROM jsonb_each_text(t.field_ownership_rules) o WHERE o.value<>g.role_code)
         )))
     )`;
-    const values=[branches.map(b=>b.id),managers,ctx.authUser.userId,date];
+    // РФ и дивизиональный читают ежедневники филиала без проверки (26.09.2026).
+    const diaryReaders=grants.filter(g=>g.role==='RF'||g.role==='DIVISION_MANAGER').map(g=>g.orgUnitId!);
+    const values=[branches.map(b=>b.id),managers,ctx.authUser.userId,date,diaryReaders];
     const stats=(await c.query(`${visible}
       SELECT org_unit_id,
       count(*) FILTER(WHERE business_date IS NULL AND status NOT IN('COMPLETED','CANCELLED'))::int open_tasks,
@@ -79,8 +81,8 @@ export async function operationalOverview(ctx:ActorContext,dateRaw:unknown,org?:
           AND effective_from<=$2::date GROUP BY org_unit_id`,
       [branches.map(b=>b.id),date])).rows;
     const attention=(await c.query(`${visible} SELECT id,org_unit_id,title,status,due_at FROM visible
-      WHERE business_date IS NULL AND status IN('ASSIGNED','IN_PROGRESS','SUBMITTED')
-      ORDER BY due_at,id LIMIT 10`,values.slice(0,3))).rows;
+      WHERE business_date IS NULL AND status IN('ASSIGNED','IN_PROGRESS','SUBMITTED') AND $4::date IS NOT NULL
+      ORDER BY due_at,id LIMIT 10`,values)).rows;
     const policies=org?(await c.query(`SELECT DISTINCT ON(role_code) *,to_char(effective_from,'YYYY-MM-DD') effective_from
       FROM daily_log_policies WHERE org_unit_id=$1 ORDER BY role_code,version DESC`,[org])).rows:[];
     const clock=(await c.query("SELECT now() AS server_time,to_char(now() AT TIME ZONE 'Europe/Moscow','YYYY-MM-DD') AS day")).rows[0];

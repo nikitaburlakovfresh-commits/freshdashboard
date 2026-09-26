@@ -31,6 +31,14 @@ function withTransaction<T>(fn:(client:PoolClient)=>Promise<T>):Promise<T> {
   });
 }
 
+// Чтение ежедневников подчинённых без проверки (решение владельца 26.09.2026):
+// РФ видит ежедневники РОП и РОО своего филиала, дивизиональный — своих
+// филиалов. Принимает и возвращает по-прежнему региональный менеджер.
+const DIARY_READER_ROLES = ['RF', 'DIVISION_MANAGER'];
+async function diaryReadOrgIds(client: PoolClient, userId: string): Promise<Set<string>> {
+  const grants = await getEffectiveGrants(client, userId);
+  return new Set(grants.filter((g) => DIARY_READER_ROLES.includes(g.role)).map((g) => g.orgUnitId).filter((id):id is string=>id!==null));
+}
 async function currentRmOrgIds(client: PoolClient, userId: string): Promise<Set<string>> {
   const grants = await getEffectiveGrants(client, userId);
   return new Set(grants.filter((g) => g.role === 'REGIONAL_MANAGER').map((g) => g.orgUnitId).filter((id):id is string=>id!==null));
@@ -376,19 +384,22 @@ export async function listWorkItems(
 
     // RF-own restriction unless also RM in that org.
     conditions.push(
-      `(wi.org_unit_id = ANY($${idx}::uuid[]) OR wi.assignee_user_id = $${idx + 1} OR wi.created_by = $${idx + 1})`,
+      `(wi.org_unit_id = ANY($${idx}::uuid[]) OR wi.assignee_user_id = $${idx + 1} OR wi.created_by = $${idx + 1}
+        OR (wi.org_unit_id = ANY($${idx + 2}::uuid[]) AND EXISTS (SELECT 1 FROM daily_log_records d WHERE d.work_item_id=wi.id)))`,
     );
+    const diaryOrgs = Array.from(await diaryReadOrgIds(client, ctx.authUser.userId));
     values.push(Array.from(rmOrgs));
     values.push(ctx.authUser.userId);
-    idx += 2;
+    values.push(diaryOrgs);
+    idx += 3;
     // A revoked diary role must not be readable via another surviving role.
     conditions.push(`(NOT EXISTS (SELECT 1 FROM daily_log_records d WHERE d.work_item_id=wi.id)
-      OR wi.org_unit_id=ANY($${idx++}::uuid[]) OR EXISTS (
+      OR wi.org_unit_id=ANY($${idx++}::uuid[]) OR wi.org_unit_id=ANY($${idx++}::uuid[]) OR EXISTS (
         SELECT 1 FROM daily_log_records d JOIN role_grants g ON g.user_id=d.user_id
           AND g.org_unit_id=d.org_unit_id AND g.role_code=d.role_code
         WHERE d.work_item_id=wi.id AND g.user_id=$${idx++} AND g.revoked_at IS NULL
           AND g.valid_from<=now() AND (g.valid_until IS NULL OR g.valid_until>now())))`);
-    values.push(Array.from(rmOrgs),ctx.authUser.userId);
+    values.push(Array.from(rmOrgs),diaryOrgs,ctx.authUser.userId);
 
     if (params.mine) {
       conditions.push(`wi.assignee_user_id = $${idx++}`);
@@ -548,13 +559,16 @@ export async function getWorkItem(ctx: ActorContext, workItemId: string) {
     const operationalRoles = await currentOperationalRolesByOrg(client, ctx.authUser.userId);
     // Автор поручения обязан видеть поставленную задачу: иначе он не может её
     // принять, а приёмка автором введена 21.09.2026.
+    const diaryOrgs = await diaryReadOrgIds(client, ctx.authUser.userId);
+    const isDiary = !!(await dailyMetadata(client,row.id));
     const visible =
       rmOrgs.has(row.org_unit_id) ||
+      (isDiary && diaryOrgs.has(row.org_unit_id)) ||
       (operationalRoles.has(row.org_unit_id) && row.assignee_user_id === ctx.authUser.userId) ||
       (operationalRoles.has(row.org_unit_id) && row.created_by === ctx.authUser.userId);
     if (!visible) throw new ApiError('NOT_FOUND', 'Объект не найден.');
     const daily=await dailyMetadata(client,row.id);
-    if(daily&&!rmOrgs.has(row.org_unit_id)&&!operationalRoles.get(row.org_unit_id)?.has(daily.role_code))
+    if(daily&&!rmOrgs.has(row.org_unit_id)&&!diaryOrgs.has(row.org_unit_id)&&!operationalRoles.get(row.org_unit_id)?.has(daily.role_code))
       throw new ApiError('NOT_FOUND','Объект не найден.');
     return loadCard(client, row);
   });
