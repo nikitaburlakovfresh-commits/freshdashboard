@@ -51,11 +51,14 @@ export async function publisher(c:PoolClient,auth:AuthedUser) {
  * вызывающие функции.
  */
 export async function peerAccess(c:PoolClient,auth:AuthedUser) {
-  const own=(await c.query(`SELECT DISTINCT g.org_unit_id FROM role_grants g
+  // Сотрудники УК получают право на сеть без филиала (NETWORK, org_unit_id NULL):
+  // видят всю сеть на чтение, «моего филиала» у них нет (решение владельца 26.09.2026).
+  const rows=(await c.query(`SELECT DISTINCT g.org_unit_id FROM role_grants g
     JOIN role_permissions rp ON rp.role_code=g.role_code AND rp.permission_code='metric.network.peer_view'
-    WHERE g.user_id=$1 AND g.org_unit_id IS NOT NULL AND g.revoked_at IS NULL AND g.valid_from<=now()
-      AND (g.valid_until IS NULL OR g.valid_until>now())`,[auth.userId])).rows.map((r:any)=>r.org_unit_id as string);
-  if(!own.length) return null;
+    WHERE g.user_id=$1 AND (g.org_unit_id IS NOT NULL OR g.scope_kind='NETWORK') AND g.revoked_at IS NULL AND g.valid_from<=now()
+      AND (g.valid_until IS NULL OR g.valid_until>now())`,[auth.userId])).rows as {org_unit_id:string|null}[];
+  const own=rows.flatMap(r=>r.org_unit_id?[r.org_unit_id]:[]);
+  if(!rows.length) return null;
   // Режим РФ — только для тех, чей обычный допуск не шире своего филиала.
   // Руководитель с допуском к другим филиалам (РМ, дивизиональный, администратор)
   // остаётся в полном режиме, даже если у него есть и роль РФ — например, для
