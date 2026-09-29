@@ -140,6 +140,8 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
   // У ежедневника поля сохраняются сами через 0,7 секунды после ввода, поэтому
   // 95 кнопок «Сохранить» здесь только мешают: остаётся признак состояния.
   const autosaves = !!item.daily_log;
+  // Автосохранение не должно выбивать курсор из поля: блокируем только ручное сохранение.
+  const lock = busy && !autosaves;
   const cur = (p: string) => (editable ? drafts[p]?.value : undefined) ?? item.fields.find(f => f.field_path === p)?.value ?? '';
   const renderField = (def: FieldDef) => {
       const saved = item.fields.find(f => f.field_path === def.field_path);
@@ -157,14 +159,14 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
           {rag && <span className="task-rag" data-rag={rag}>{RAG_WORD[rag]}{colorRule?.basis === 'PORTAL' && portalHint?.rag_label ? ` · ${portalHint.rag_label}` : ''}</span>}</h3>
         {def.type === 'repeatable_group' ? <div>
           {rows === null ? <p role="alert">Сохранённый список имеет неподдерживаемый формат. Автоматическая замена отключена.</p> : <>
-            {rows.map((row, index) => <fieldset key={index} disabled={busy} className="task-group-row">
+            {rows.map((row, index) => <fieldset key={index} disabled={lock} className="task-group-row">
               <legend>Запись {index + 1}</legend>
               {(def.child_fields ?? []).map(child => <label key={child.field_path}>
                 <span>{child.label}{child.required ? ' · обязательно' : ''}</span>
-                {editable && pickFor(child.field_path) ? <MultiPick value={row[child.field_path] ?? ''} disabled={busy}
+                {editable && pickFor(child.field_path) ? <MultiPick value={row[child.field_path] ?? ''} disabled={lock}
                   groups={pickFor(child.field_path)!} label={`${def.label} · ${index + 1} · ${child.label}`}
                   onChange={v => onChange(def.field_path, JSON.stringify(rows.map((r, i) => i === index ? { ...r, [child.field_path]: v } : r)))}/>
-                : editable ? <Scalar def={child} value={row[child.field_path] ?? ''} disabled={busy}
+                : editable ? <Scalar def={child} value={row[child.field_path] ?? ''} disabled={lock}
                   label={`${def.label} · ${index + 1} · ${child.label}`}
                   onChange={v => onChange(def.field_path, JSON.stringify(rows.map((r, i) => i === index ? { ...r, [child.field_path]: v } : r)))}/>
                   : <p className="task-field-value">{row[child.field_path] || 'Не заполнено'}</p>}
@@ -188,9 +190,9 @@ export default function TaskFields({ item, drafts, editable, busy, onChange, onS
               onClick={() => onChange(def.field_path, '[]')}>Подтвердить отсутствие записей</button>}
             <p className="task-fields-note">Записей: {rows.length}. Минимум: {def.min_items ?? 0}, максимум: {def.max_items ?? 100}.</p>
           </>}
-        </div> : editable && pickFor(def.field_path) ? <MultiPick value={value} groups={pickFor(def.field_path)!} disabled={busy}
+        </div> : editable && pickFor(def.field_path) ? <MultiPick value={value} groups={pickFor(def.field_path)!} disabled={lock}
             label={def.label} onChange={v => onChange(def.field_path, v)}/>
-          : editable ? <Scalar def={def} value={value} onChange={v => onChange(def.field_path, v)} disabled={busy} label={def.label}/>
+          : editable ? <Scalar def={def} value={value} onChange={v => onChange(def.field_path, v)} disabled={lock} label={def.label}/>
           : <p className="task-field-value">{value || 'Не заполнено'}</p>}
         {def.field_path === 't9_mnext' && meetingButton({ section_num: def.section_num ?? 9, section_title: def.section_title || 'Встреча с КЦ',
           field_path: 't9_mowner', row_index: null, owners: cur('t9_mowner'), goal: cur('t9_mgoal'), summary: cur('t9_msummary'),

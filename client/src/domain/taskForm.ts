@@ -8,6 +8,12 @@ export function mergeSavedFields(drafts: FieldDrafts, fields: SavedField[], save
     const old = drafts[field.field_path];
     const keep = old && old.value !== old.baseValue && field.field_path !== savedPath;
     const value = field.value ?? '';
+    // Сохранённое поле: пока шёл запрос, сотрудник мог продолжать печатать —
+    // введённое не затираем, а конечный пробел не считаем изменением (29.09.2026).
+    if (old && field.field_path === savedPath) {
+      const same = old.value.trim() === value.trim();
+      return [field.field_path, { value: old.value, baseValue: same ? old.value : value, version: field.field_version }];
+    }
     return [field.field_path, keep ? old : { value, baseValue: value, version: field.field_version }];
   }));
 }

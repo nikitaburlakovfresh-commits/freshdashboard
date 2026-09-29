@@ -135,13 +135,13 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
           check: 'MATCH', tolerance: 0.5 });
     }
     const old = (await c.query(
-      `WITH l AS (SELECT max(observed_on) d FROM vehicle_stock_rows WHERE org_unit_id=$1 AND observed_on<=$2::date)
+      `WITH l AS (SELECT max(observed_on) d FROM vehicle_stock_current WHERE org_unit_id=$1 AND observed_on<=$2::date)
        SELECT l.d::text d, count(*) FILTER (WHERE r.days_on_stock>30) n,
               avg(r.days_on_stock) FILTER (WHERE r.days_on_stock>30)::float8 age,
               count(*) FILTER (WHERE r.days_on_stock>30 AND r.sale_price_rub>0 AND r.market_price_rub>0) nm,
               avg(r.sale_price_rub/r.market_price_rub*100)
                 FILTER (WHERE r.days_on_stock>30 AND r.sale_price_rub>0 AND r.market_price_rub>0)::float8 mkt
-         FROM l JOIN vehicle_stock_rows r ON r.org_unit_id=$1 AND r.observed_on=l.d GROUP BY l.d`,
+         FROM l JOIN vehicle_stock_current r ON r.org_unit_id=$1 AND r.observed_on=l.d GROUP BY l.d`,
       [d.org_unit_id, d.business_date])).rows[0];
     if (old && Number(old.n) > 0) {
       hints.push({ field_path: 't5_age', value: r1(old.age), unit: 'дн', as_of: old.d, period: `срез ${ru(old.d)}`,
@@ -153,7 +153,7 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
     }
     // Задача 7 — структура склада по реестру VIN.
     const st = (await c.query(
-      `WITH l AS (SELECT max(observed_on) d FROM vehicle_stock_rows WHERE org_unit_id=$1 AND observed_on<=$2::date)
+      `WITH l AS (SELECT max(observed_on) d FROM vehicle_stock_current WHERE org_unit_id=$1 AND observed_on<=$2::date)
        SELECT l.d::text d, count(*) n,
               count(*) FILTER (WHERE r.supply_type='Выкуп') nb,
               count(*) FILTER (WHERE r.supply_type IS NOT NULL AND r.supply_type<>'Выкуп') nc,
@@ -161,7 +161,7 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
               count(*) FILTER (WHERE r.advertising_status IS NOT NULL AND r.advertising_status<>'Выгружено') noads,
               avg(r.profitability)::float8 roi, avg(r.profitability) FILTER (WHERE r.supply_type='Выкуп')::float8 roi_b,
               avg(r.profitability) FILTER (WHERE r.supply_type IS NOT NULL AND r.supply_type<>'Выкуп')::float8 roi_c
-         FROM l JOIN vehicle_stock_rows r ON r.org_unit_id=$1 AND r.observed_on=l.d GROUP BY l.d`,
+         FROM l JOIN vehicle_stock_current r ON r.org_unit_id=$1 AND r.observed_on=l.d GROUP BY l.d`,
       [d.org_unit_id, d.business_date])).rows[0];
     if (st && Number(st.n) > 0) {
       const per = `срез ${ru(st.d)}`, n = Number(st.n);
@@ -201,11 +201,11 @@ export async function diaryReference(ctx: ActorContext, diaryId: string) {
     // владельца 26.09.2026). Основание — колонка выгрузки «Изменения Цены
     // продажи, дн.»: сколько дней цена не менялась.
     const stale = (await c.query(
-      `WITH l AS (SELECT max(observed_on) d FROM vehicle_stock_rows WHERE org_unit_id=$1 AND observed_on<=$2::date)
+      `WITH l AS (SELECT max(observed_on) d FROM vehicle_stock_current WHERE org_unit_id=$1 AND observed_on<=$2::date)
        SELECT l.d::text observed_on, i.vehicle_key vin, r.make, r.model, r.production_year,
               r.days_on_stock, r.price_changes_days::float8 days_without_reprice, r.price_changes_count,
               r.supply_type, r.sale_price_rub::float8 sale_price_rub, r.market_price_rub::float8 market_price_rub
-         FROM l JOIN vehicle_stock_rows r ON r.org_unit_id=$1 AND r.observed_on=l.d
+         FROM l JOIN vehicle_stock_current r ON r.org_unit_id=$1 AND r.observed_on=l.d
          JOIN vehicle_identity i ON i.id=r.vehicle_id
         WHERE r.price_changes_days > $3
         ORDER BY r.price_changes_days DESC, r.days_on_stock DESC`,

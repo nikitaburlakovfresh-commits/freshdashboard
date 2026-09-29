@@ -142,7 +142,7 @@ export async function aged45(
   if (!orgUnitIds.length) return out;
   const rows = (await c.query(
     `WITH latest AS (
-       SELECT org_unit_id, max(observed_on) AS observed_on FROM vehicle_stock_rows
+       SELECT org_unit_id, max(observed_on) AS observed_on FROM vehicle_stock_current
        WHERE org_unit_id = ANY($1::uuid[]) AND observed_on <= $2::date
        GROUP BY org_unit_id)
      SELECT r.org_unit_id, l.observed_on,
@@ -150,7 +150,7 @@ export async function aged45(
        count(*) FILTER (WHERE r.days_on_stock >= $3) AS aged,
        sum(r.cost_rub) FILTER (WHERE r.days_on_stock IS NOT NULL) AS total_cost,
        sum(r.cost_rub) FILTER (WHERE r.days_on_stock >= $3) AS aged_cost
-     FROM vehicle_stock_rows r
+     FROM vehicle_stock_current r
      JOIN latest l ON l.org_unit_id = r.org_unit_id AND l.observed_on = r.observed_on
      WHERE ${scopeCondition(scope)}
      GROUP BY r.org_unit_id, l.observed_on`,
@@ -197,18 +197,18 @@ export async function upwardRepricing(
     // относятся к текущему управлению ценой. Поэтому считаем только те
     // автомобили, которые есть в последнем срезе реестра на дату.
     `WITH latest AS (
-       SELECT org_unit_id, max(observed_on) AS observed_on FROM vehicle_stock_rows
+       SELECT org_unit_id, max(observed_on) AS observed_on FROM vehicle_stock_current
        WHERE org_unit_id = ANY($1::uuid[]) AND observed_on <= $2::date
        GROUP BY org_unit_id
      ),
      in_stock AS (
-       SELECT r.org_unit_id, r.vehicle_id FROM vehicle_stock_rows r
+       SELECT r.org_unit_id, r.vehicle_id FROM vehicle_stock_current r
        JOIN latest l ON l.org_unit_id = r.org_unit_id AND l.observed_on = r.observed_on
      ),
      history AS (
        SELECT r.org_unit_id, r.vehicle_id, r.observed_on, r.sale_price_rub,
          lag(r.sale_price_rub) OVER (PARTITION BY r.org_unit_id, r.vehicle_id ORDER BY r.observed_on) AS previous
-       FROM vehicle_stock_rows r
+       FROM vehicle_stock_current r
        JOIN in_stock s ON s.org_unit_id = r.org_unit_id AND s.vehicle_id = r.vehicle_id
        WHERE r.org_unit_id = ANY($1::uuid[])
          AND r.observed_on <= $2::date
@@ -236,17 +236,17 @@ export async function upwardRepricingEvents(
 ) {
   return (await c.query(
     `WITH latest AS (
-       SELECT max(observed_on) AS observed_on FROM vehicle_stock_rows
+       SELECT max(observed_on) AS observed_on FROM vehicle_stock_current
        WHERE org_unit_id = $1 AND observed_on <= $2::date
      ),
      in_stock AS (
        SELECT r.vehicle_id, r.days_on_stock, r.sale_price_rub AS current_price, r.supply_type
-       FROM vehicle_stock_rows r JOIN latest l ON l.observed_on = r.observed_on WHERE r.org_unit_id = $1
+       FROM vehicle_stock_current r JOIN latest l ON l.observed_on = r.observed_on WHERE r.org_unit_id = $1
      ),
      history AS (
        SELECT r.vehicle_id, r.observed_on, r.sale_price_rub,
          lag(r.sale_price_rub) OVER (PARTITION BY r.vehicle_id ORDER BY r.observed_on) AS previous
-       FROM vehicle_stock_rows r JOIN in_stock s ON s.vehicle_id = r.vehicle_id
+       FROM vehicle_stock_current r JOIN in_stock s ON s.vehicle_id = r.vehicle_id
        WHERE r.org_unit_id = $1 AND r.observed_on <= $2::date AND r.sale_price_rub IS NOT NULL
      )
      SELECT i.vehicle_key, i.key_kind, cl.crm_url, v.make, v.model, v.production_year,
@@ -257,7 +257,7 @@ export async function upwardRepricingEvents(
      JOIN in_stock s ON s.vehicle_id = h.vehicle_id
      JOIN vehicle_identity i ON i.id = h.vehicle_id
      LEFT JOIN vehicle_crm_links cl ON cl.vehicle_id = h.vehicle_id
-     JOIN LATERAL (SELECT make, model, production_year FROM vehicle_stock_rows x
+     JOIN LATERAL (SELECT make, model, production_year FROM vehicle_stock_current x
         WHERE x.vehicle_id = h.vehicle_id AND x.org_unit_id = $1 ORDER BY x.observed_on DESC LIMIT 1) v ON true
      -- Нулевая прежняя цена — машина только поступила и получила первую цену,
      -- это не переоценка.

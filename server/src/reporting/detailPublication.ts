@@ -276,7 +276,7 @@ export async function readDetailStock(auth:AuthedUser,query:any) {
       r.price_changes_count,r.price_changes_sum_rub,r.price_changes_days,
       to_char(r.arrival_date,'YYYY-MM-DD') arrival_date,to_char(r.advertised_date,'YYYY-MM-DD') advertised_date,
       l.crm_url
-      FROM vehicle_stock_rows r JOIN vehicle_identity i ON i.id=r.vehicle_id
+      FROM vehicle_stock_current r JOIN vehicle_identity i ON i.id=r.vehicle_id
       LEFT JOIN vehicle_crm_links l ON l.vehicle_id=r.vehicle_id
       WHERE r.observed_on=$1 AND r.org_unit_id=ANY($2::uuid[])
       ORDER BY r.org_unit_id,i.vehicle_key LIMIT 2001`,[q.observed_on,orgs])).rows;

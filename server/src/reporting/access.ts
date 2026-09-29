@@ -30,7 +30,7 @@ export async function stagingAccess(client:PoolClient,auth:AuthedUser) {
     WHERE u.id=$1 AND s.id=$2 AND u.is_active AND u.user_kind='INDIVIDUAL'
       AND NOT u.password_last_shared_indicator AND s.revoked_at IS NULL
       AND s.captured_auth_epoch=u.auth_epoch AND u.password_hash_updated_at<=s.created_at
-      AND s.expires_at>clock_timestamp() AND s.created_at>clock_timestamp()-interval '8 hours'
+      AND s.expires_at>clock_timestamp() AND s.created_at>clock_timestamp()-interval '24 hours'
       AND s.last_seen_at>clock_timestamp()-interval '30 minutes'
       AND g.role_code='SUPER_ADMIN' AND g.scope_kind='NETWORK' AND g.org_unit_id IS NULL
       AND g.revoked_at IS NULL AND g.valid_from<=clock_timestamp()

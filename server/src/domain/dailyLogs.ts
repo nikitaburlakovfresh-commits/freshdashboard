@@ -27,7 +27,7 @@ export async function liveFence(c:PoolClient,ctx:ActorContext) {
     WHERE s.id=$1 AND u.id=$2 AND u.is_active AND u.user_kind='INDIVIDUAL'
     AND NOT u.password_last_shared_indicator AND s.revoked_at IS NULL
     AND s.captured_auth_epoch=u.auth_epoch AND u.password_hash_updated_at<=s.created_at
-    AND s.expires_at>now() AND s.created_at>now()-interval '8 hours'
+    AND s.expires_at>now() AND s.created_at>now()-interval '24 hours'
     AND s.last_seen_at>now()-interval '30 minutes'`,
     // В режиме «глазами роли» сессия принадлежит владельцу платформы, а userId —
     // просматриваемому сотруднику: сессию сверяем с владельцем (26.09.2026).

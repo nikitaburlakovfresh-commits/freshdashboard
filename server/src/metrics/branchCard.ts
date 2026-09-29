@@ -127,8 +127,8 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
     // каждым пакетом, а сводный срез склада — реже. Берём последний срез реестра
     // не позже выбранной даты; сводный остаётся, только если реестра нет.
     const vin=(await c.query(`SELECT to_char(r.observed_on,'YYYY-MM-DD') observed_on,count(*)::int n,
-        sum(r.cost_rub)::float8 cost FROM vehicle_stock_rows r
-      WHERE r.org_unit_id=$1 AND r.observed_on=(SELECT max(observed_on) FROM vehicle_stock_rows
+        sum(r.cost_rub)::float8 cost FROM vehicle_stock_current r
+      WHERE r.org_unit_id=$1 AND r.observed_on=(SELECT max(observed_on) FROM vehicle_stock_current
         WHERE org_unit_id=$1 AND observed_on<=$2::date)
       GROUP BY r.observed_on`,[orgUnitId,on])).rows[0];
     let stockSource:'VIN'|'SUMMARY'|null=stockSnapshot?'SUMMARY':null;
@@ -153,7 +153,7 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
     // Сколько срезов реестра накоплено: по одному срезу переоценку определить
     // нельзя, и выдавать её отсутствие за ноль нельзя тоже.
     const snapshots=Number((await c.query(
-      `SELECT count(DISTINCT observed_on)::int n FROM vehicle_stock_rows
+      `SELECT count(DISTINCT observed_on)::int n FROM vehicle_stock_current
        WHERE org_unit_id=$1 AND observed_on<=$2::date
          AND observed_on>$2::date-($3::int||' days')::interval`,
       [orgUnitId,on,REPRICING_WINDOW_DAYS])).rows[0].n);
