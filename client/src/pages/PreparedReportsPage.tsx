@@ -107,7 +107,7 @@ export default function PreparedReportsPage() {
       <p>Ручная загрузка — тестовый и резервный канал. Облачная доставка QLIK по расписанию будет подключена отдельно.</p></div></section>
     <ReportIntakeNotice/>
     <div className="reports-feedback" aria-live="polite">{error && <p className="org-error" role="alert">{error}</p>}{notice && <p>{notice}</p>}
-      {busy && <p role="status">Выполняется запрос к серверу…</p>}</div>
+      {busy && <p role="status">Загружаем и публикуем пакет — обычно до минуты. Не закрывайте страницу.</p>}</div>
     <div className="org-editor-actions"><button className="btn" onClick={refresh} disabled={busy}>Обновить доступ и список</button></div>
     {!cap && !busy && <section className="portal-panel"><h2>Закрытый этап администратора</h2><p>Требуется отдельно выданное право data_source.probe.
       Оно не выдаётся при входе и не открывает финансовые задачи. Проверьте доступ кнопкой выше.</p></section>}

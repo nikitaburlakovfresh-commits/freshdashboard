@@ -18,7 +18,8 @@ export async function readUpload(req:Request):Promise<{metadata:unknown;files:Up
     catch {reject(new ApiError('VALIDATION_ERROR','Некорректный multipart.'));return;}
     let settled=false,total=0,metadata:unknown,fieldSeen=false;
     const files:UploadFile[]=[];
-    const timer=setTimeout(()=>fail('Загрузка превысила 20 секунд.'),20000);
+    // 9 файлов QLIK по медленному каналу не успевали за 20 секунд (28.09.2026): 3 минуты.
+    const timer=setTimeout(()=>fail('Загрузка превысила 3 минуты. Проверьте интернет и повторите.'),180000);
     const cleanup=()=>{clearTimeout(timer);req.off('data',count);req.off('aborted',aborted);req.off('error',aborted);};
     const fail=(message:string)=>{
       if(settled)return;settled=true;cleanup();req.unpipe(parser);

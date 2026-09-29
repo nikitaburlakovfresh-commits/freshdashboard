@@ -127,6 +127,9 @@ export async function submitRegistration(raw: unknown) {
        UNION ALL SELECT 1 FROM registration_requests WHERE login = $1 AND status = 'PENDING'`,
       [login],
     );
+    if (email && (await c.query(`SELECT 1 FROM app_users WHERE lower(primary_email) = $1`, [email])).rowCount) {
+      throw new ApiError('SUBMISSION_CONFLICT', 'На эту почту уже есть учётная запись. Войдите с прежним логином или восстановите пароль через «Забыли пароль?».');
+    }
     if (taken.rowCount) {
       throw new ApiError('SUBMISSION_CONFLICT', 'Этот логин занят или заявка на него уже рассматривается. Выберите другой логин или обратитесь к администратору портала.');
     }
@@ -282,6 +285,12 @@ export async function decideRegistration(
       if (!grantUnits.length) throw new ApiError('VALIDATION_ERROR', 'В выбранной зоне нет действующих филиалов.');
     } else if (unitKind && unitKind !== 'ORG_UNIT') {
       throw new ApiError('VALIDATION_ERROR', 'Выберите филиал или зону из списка.');
+    }
+    // Одна почта — одна учётная запись: сотрудник мог забыть логин и подать заявку заново.
+    const sameEmail = req.primary_email ? (await c.query(
+      `SELECT login FROM app_users WHERE lower(primary_email) = lower($1)`, [req.primary_email])).rows[0] : null;
+    if (sameEmail) {
+      throw new ApiError('SUBMISSION_CONFLICT', `На почту ${req.primary_email} уже есть учётная запись с логином ${sameEmail.login}. Отклоните заявку и сообщите сотруднику прежний логин.`);
     }
     if ((await c.query(`SELECT 1 FROM app_users WHERE lower(login) = $1`, [req.login])).rowCount) {
       throw new ApiError('SUBMISSION_CONFLICT', 'Логин уже занят действующей учётной записью. Заявку нужно отклонить.');
