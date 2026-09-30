@@ -282,3 +282,6 @@ button.score-tile:hover{border-color:currentColor}
 /* На телефоне названия переносятся на вторую строку вместо многоточия. */
 @media(max-width:420px){.runrate-tile span,.focus-tile-label{white-space:normal;overflow:visible;font-size:12px;line-height:1.25}
   .runrate-icon,.focus-tile-icon,.score-tile .tile-icon{align-self:flex-start}}
+/* Название плитки читается полностью на любой ширине: перенос вместо многоточия (30.09.2026). */
+.runrate-tile span,.focus-tile-label,.score-tile>div>span{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.25}
+.runrate-tile,.focus-tile,.score-tile{align-items:center}

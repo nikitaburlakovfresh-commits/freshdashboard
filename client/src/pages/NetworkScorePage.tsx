@@ -186,7 +186,8 @@ export default function NetworkScorePage() {
         {!data.focus.configured&&<p role="status" className="portal-muted">Фокусы на этот месяц не настроены
           в портале.</p>}
         {data.focus.configured&&<div className="focus-row">{data.focus.slots.map(s=>
-          <article className="focus-tile" key={s.slot} data-missing={s.fact===null?'1':undefined}>
+          <article className="focus-tile" key={s.slot} data-missing={s.fact===null?'1':undefined}
+            title={s.fact_note?`${s.label} · ${s.fact_note}`:s.label}>
             <span className="focus-tile-icon" aria-hidden="true"><Icon name="target"/></span>
             <div>
               <p className="focus-tile-value">
@@ -197,8 +198,9 @@ export default function NetworkScorePage() {
                     s.format==='PCT'?'%':` ${FOCUS_FORMATS[s.format]??''}`}`}</span>
               </p>
               <span className="focus-tile-label" title={s.label}>{s.label}</span>
-              <small className="focus-tile-note">{s.fact_note
-                ??(s.fact_basis==='NOT_MAPPED_TO_PUBLISHED_METRIC'?'формула показателя не задана':basisLabel(s.fact_basis))}</small>
+              {/* Источник и формула — во всплывающей подсказке; на плитке читается название (30.09.2026). */}
+              {s.fact===null&&<small className="focus-tile-note">{s.fact_note
+                ??(s.fact_basis==='NOT_MAPPED_TO_PUBLISHED_METRIC'?'формула показателя не задана':basisLabel(s.fact_basis))}</small>}
             </div>
           </article>)}</div>}
       </section>
