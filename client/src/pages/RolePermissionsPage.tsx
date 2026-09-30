@@ -3,6 +3,7 @@ import {
   getRoleMatrix, saveRolePermissions,
   type PermissionInfo, type RoleInfo, type RoleChange,
 } from '../api/adminSettings';
+import { permissionTitle, permissionHint } from '../domain/permissionLabels';
 
 /**
  * Настройка наборов прав галочками.
@@ -148,8 +149,8 @@ export default function RolePermissionsPage() {
             return <label key={p.code} className={`role-perm-item${changed ? ' role-perm-changed' : ''}`}>
               <input type="checkbox" checked={on} onChange={() => toggle(p.code)} />
               <span>
-                <strong>{p.code}</strong>
-                {p.description && <em>{p.description}</em>}
+                <strong>{permissionTitle(p.code, p.description)}</strong>
+                {permissionHint(p.code) && <em>{permissionHint(p.code)}</em>}
               </span>
             </label>;
           })}
@@ -182,7 +183,7 @@ export default function RolePermissionsPage() {
         <table className="portal-table">
           <thead><tr><th>Когда</th><th>Право</th><th>Действие</th><th>Кто</th><th>Основание</th></tr></thead>
           <tbody>{roleHistory.map((h, i) => <tr key={i}>
-            <td>{h.created_at}</td><td>{h.permission_code}</td>
+            <td>{h.created_at}</td><td>{permissionTitle(h.permission_code)}</td>
             <td>{h.action === 'GRANTED' ? 'добавлено' : 'снято'}</td>
             <td>{h.actor_login}</td><td>{h.reason ?? '—'}</td>
           </tr>)}</tbody>

@@ -8,6 +8,7 @@ import { accessPermissions,canApplyAccess } from '../components/accessChangeMode
 import '../styles/organization.css';
 import '../styles/access.css';
 import '../styles/enrollment.css';
+import { permissionTitle } from '../domain/permissionLabels';
 import UserEnrollment from '../components/UserEnrollment';
 
 const date=(s:string|null)=>s?new Date(s).toLocaleString('ru-RU'):'Без окончания';
@@ -136,7 +137,7 @@ export default function AccessPage() {
                   <p>{p.preview_summary.role?.display_name} · {p.preview_summary.branch?.code}</p>
                   <ul>{p.preview_summary.issues.map(issue=><li className="org-error" key={issue}>{issue}</li>)}</ul>
                   <p>Незавершённых задач: {p.preview_summary.affected.active_tasks}. Изменяемых задач: 0. Изменяемых финансовых записей: 0.</p>
-                  <h3>Права роли</h3><ul className="access-permissions">{p.preview_summary.role?.permissions.map(v=><li key={v}><code>{v}</code></li>)}</ul>
+                  <h3>Права роли</h3><ul className="access-permissions">{p.preview_summary.role?.permissions.map(v=><li key={v}>{permissionTitle(v)}</li>)}</ul>
                   <p>{p.preview_summary.warning}</p>
                   {p.status==='PREVIEW'&&<p>{Date.parse(p.preview_expires_at??'')>now?`Проверка действительна до ${date(p.preview_expires_at)}`:'Срок проверки истёк. Проверьте заново.'}</p>}
                   {p.preview_summary.after_grant&&<p>Записано: {p.preview_summary.after_grant.revoked_at?`отзыв ${date(p.preview_summary.after_grant.revoked_at)}`:`начало ${date(p.preview_summary.after_grant.valid_from)}`}</p>}
