@@ -41,7 +41,7 @@ const RU_DATE=(iso:string)=>iso.split('-').reverse().join('.');
  */
 function basisLabel(basis:string|null):string {
   if(!basis) return 'нет опубликованных данных за срез';
-  const [code,metric]=basis.split(':');
+  const [code]=basis.split(':');
   const MAP:Record<string,string>={
     FACT_NOT_PUBLISHED:'факт ещё не опубликован',
     PLAN_NOT_PUBLISHED:'план ещё не опубликован',
@@ -52,7 +52,8 @@ function basisLabel(basis:string|null):string {
   };
   const human=MAP[code];
   if(!human) return basis;
-  return metric?`${human} (${metric})`:human;
+  // Служебный код показателя в подписи не выводится: интерфейс без кодов.
+  return human;
 }
 /**
  * Подпись под значением run-rate. Боевой портал показывает «2 220 / 2 703 шт» —
