@@ -10,6 +10,7 @@ import { funnelConversions, buyback45Shares, stockTurnover } from './derived';
 import { resolveRmRatingModel, computeRmRating } from './rmRating';
 import { resolveEffectivePeriod } from './effectivePeriod';
 import { resolveFocusConfiguration } from './focus';
+import { focusFacts } from './focusFacts';
 import { branchAffiliations } from './orgHierarchy';
 
 const invalid=(s:string)=>new ApiError('VALIDATION_ERROR',s);
@@ -183,6 +184,8 @@ export async function branchOverview(auth:AuthedUser,query:any) {
     // Рейтинг регионального менеджера считается по зоне целиком: величины его
     // филиалов складываются, и выполнение считается от сложенного. Средним
     // баллом филиалов его заменять нельзя — это другая величина.
+    const facts=focus?await focusFacts(c,focus.slots.map(s=>s.metric_code),totals,
+      [...new Set(branches.map(b=>b.org_unit_id))],on):new Map();
     const rmModel=await resolveRmRatingModel(c,on);
     const zoneSums=new Map<string,Map<string,number>>();
     // Решение владельца: филиал не в состоянии «действующий» в рейтинг не идёт.
@@ -232,10 +235,10 @@ export async function branchOverview(auth:AuthedUser,query:any) {
         note:rmModel?.note??null,managers:managerRatings},
       focus:{month:`${on.slice(0,7)}-01`,configured:!!focus,
         configuration_id:focus?.id??null,
-        // Факт фокуса не выводится из агрегатов до объявления соответствия
-        // кода фокуса опубликованному показателю: подмена источника недопустима.
-        slots:(focus?.slots??[]).map(s=>({...s,fact:null,
-          fact_basis:'NOT_MAPPED_TO_PUBLISHED_METRIC' as const}))},
+        // Факт фокуса считается по объявленным формулам (focusFacts.ts); код без
+        // формулы остаётся пустым с основанием, а не нулём.
+        slots:(focus?.slots??[]).map(s=>({...s,...(facts.get(s.metric_code)
+          ??{fact:null,fact_basis:'NOT_MAPPED_TO_PUBLISHED_METRIC' as const,fact_note:null})}))},
       peer_view:peer?{own_org_unit_ids:peer.own_org_unit_ids}:null,
       aggregation:'NONE',freshness:'NOT_EVALUATED'};
   });
@@ -260,7 +263,9 @@ export async function publishedPeriods(auth:AuthedUser) {
     const rows=(await c.query(`SELECT to_char(period_start,'YYYY-MM-DD') period_start,
         to_char(period_end,'YYYY-MM-DD') period_end,count(DISTINCT org_unit_id)::int branches
       FROM report_fact_current WHERE org_unit_id=ANY($1::uuid[])
-      GROUP BY period_start,period_end ORDER BY period_end DESC,period_start DESC LIMIT 60`,[orgs])).rows;
+      GROUP BY period_start,period_end
+      -- Периоды только с планами месяца не предлагаются как срез: фактов в них нет.
+      HAVING bool_or(metric !~* 'plan') ORDER BY period_end DESC,period_start DESC LIMIT 60`,[orgs])).rows;
     return {periods:rows.map((r:any)=>({period_start:r.period_start,
       period_end:r.period_end,branches:r.branches}))};
   });

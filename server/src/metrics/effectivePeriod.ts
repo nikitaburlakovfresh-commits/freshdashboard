@@ -49,6 +49,9 @@ export async function resolveEffectivePeriod(
         -- Точечные срезы склада (период из одного дня) не задают период экрана:
         -- склад приходит отдельным замером и читается своим запросом.
         AND s.period_start<>s.period_end
+        -- Период, в котором опубликованы только планы месяца (например, 01–30.09),
+        -- срезом экрана не считается: фактов в нём нет, и экран был бы пустым (30.09.2026).
+        AND s.metric !~* 'plan'
       ORDER BY s.period_end DESC, s.period_start ASC
       LIMIT 1`, [allowedOrgUnits, start, end])).rows[0];
   if (!row) return null;

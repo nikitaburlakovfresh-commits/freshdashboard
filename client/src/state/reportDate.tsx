@@ -8,7 +8,12 @@ import { readPublishedPeriods,type PublishedPeriod } from '../api/metrics';
  * поэтому за выбранное число показатели могут отсутствовать, и это не ноль.
  */
 const KEY='fresh-report-date';
-const today=()=>new Date().toISOString().slice(0,10);
+/** Местная дата пользователя: toISOString давал вчерашний день до 03:00 МСК. */
+const localDay=(offset=0)=>{const d=new Date(Date.now()+offset*86400000);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
+const today=()=>localDay();
+/** Вчерашний день — дата данных для загрузки отчётов QLIK по умолчанию. */
+export const yesterday=()=>localDay(-1);
 /** Первое число месяца выбранной даты: период факта считается от начала месяца. */
 export const monthStart=(date:string)=>`${date.slice(0,7)}-01`;
 
@@ -19,8 +24,11 @@ const Ctx=createContext<ReportDateValue|null>(null);
 export function ReportDateProvider({children}:{children:React.ReactNode}) {
   const [reportDate,setDate]=useState(()=>{
     try{
-      const saved=localStorage.getItem(KEY);
-      return saved&&/^\d{4}-\d{2}-\d{2}$/.test(saved)?saved:today();
+      // По умолчанию — сегодня (решение владельца 30.09.2026). Экран сам покажет
+      // последние загруженные данные не позже этой даты. Выбор другой даты
+      // сохраняется только до конца дня.
+      const saved=JSON.parse(localStorage.getItem(KEY)??'null');
+      return saved?.on===today()&&/^\d{4}-\d{2}-\d{2}$/.test(saved?.date??'')?saved.date:today();
     }catch{return today();}
   });
   const [periods,setPeriods]=useState<PublishedPeriod[]>([]);
@@ -31,22 +39,12 @@ export function ReportDateProvider({children}:{children:React.ReactNode}) {
     readPublishedPeriods().then((r:{periods:PublishedPeriod[]})=>{
       if(!alive)return;
       setPeriods(r.periods);
-      // Если выбранная дата не совпадает ни с одним опубликованным срезом,
-      // экран был бы пустым: подставляем последнюю публикацию и сообщаем это
-      // подписью среза. Данные при этом не досчитываются.
-      // Будущий срез не подставляется: поле выбора даты ограничено
-      // сегодняшним днём и показало бы пустоту, а руководитель решил бы,
-      // что данных нет. Берём самую свежую публикацию, которая уже наступила.
-      const now=today();
-      const past=r.periods.filter(p=>p.period_end<=now);
-      const pick=(past.length?past:r.periods)[0];
-      if(pick&&!r.periods.some(p=>p.period_end===reportDate))
-        setDate(pick.period_end);
+      // Дата не подменяется: сервер сам берёт последний срез с фактами не позже неё.
     }).catch(()=>{/* Отсутствие перечня не меняет выбранный срез. */});
     return()=>{alive=false;};
   },[]);
   useEffect(()=>{
-    try{localStorage.setItem(KEY,reportDate);}catch{/* Сохранение выбора необязательно. */}
+    try{localStorage.setItem(KEY,JSON.stringify({date:reportDate,on:today()}));}catch{/* Сохранение выбора необязательно. */}
   },[reportDate]);
   const setReportDate=useCallback((d:string)=>{
     // Пустое или некорректное значение из поля даты не сбрасывает срез на «сегодня»

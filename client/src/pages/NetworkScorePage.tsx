@@ -7,6 +7,10 @@ import { readOverview,readDivisionSummary,COMPONENT_MISSING_LABELS,EVALUATION_LA
 import RagBadge,{ RagDot } from '../components/RagBadge';
 import Icon from '../components/Icon';
 import '../styles/branch-grid.css';
+/** Отчёты QLIK приходят за прошлый день: срез «вчера» при выбранном «сегодня» —
+ * норма, предупреждение нужно, только если данные старше (решение 30.09.2026). */
+const lateSlice=(d:{data_is_stale?:boolean;requested_end?:string;period_end:string})=>!!d.data_is_stale&&!!d.requested_end
+  &&(Date.parse(d.requested_end)-Date.parse(d.period_end))>86400000;
 import '../styles/network-score.css';
 
 /**
@@ -128,7 +132,7 @@ export default function NetworkScorePage() {
         <p className="overview-subline">Срез на {RU_DATE(data?data.period_end:end)} ·
           {' '}{data?data.branches.length:'…'} филиалов
           {net&&net.without_score>0&&<> · без балла {net.without_score}</>}</p>
-        {data?.data_is_stale&&<p className="overview-stale" role="status">
+        {data&&lateSlice(data)&&<p className="overview-stale" role="status">
           Выбрано {RU_DATE(data.requested_end)}, но отчёты за эту дату ещё не загружены.
           Показаны последние опубликованные данные — на {RU_DATE(data.period_end)}.</p>}
       </div>
@@ -192,12 +196,8 @@ export default function NetworkScorePage() {
                     s.format==='PCT'?'%':` ${FOCUS_FORMATS[s.format]??''}`}`}</span>
               </p>
               <span className="focus-tile-label" title={s.label}>{s.label}</span>
-              {s.fact===null&&<small className="focus-tile-note">{
-                s.requires_vin_level?'появится после накопления базы по VIN'
-                :s.requires_daily_logs?'появится после ведения ежедневников'
-                :s.fact_basis==='NOT_MAPPED_TO_PUBLISHED_METRIC'
-                  ?'соответствие показателю не объявлено'
-                  :basisLabel(s.fact_basis)}</small>}
+              <small className="focus-tile-note">{s.fact_note
+                ??(s.fact_basis==='NOT_MAPPED_TO_PUBLISHED_METRIC'?'формула показателя не задана':basisLabel(s.fact_basis))}</small>
             </div>
           </article>)}</div>}
       </section>
@@ -303,7 +303,7 @@ function PeerNetwork({data}:{data:Overview}) {
       <h1>Сеть FRESH</h1>
       <p className="overview-subline">Срез на {RU_DATE(data.period_end)} · {data.branches.length} филиалов
         {net.average_score!==null&&<> · средний балл сети {Math.round(net.average_score)}%</>}</p>
-      {data.data_is_stale&&<p className="overview-stale" role="status">
+      {lateSlice(data)&&<p className="overview-stale" role="status">
         Отчёты за {RU_DATE(data.requested_end)} ещё не загружены — показаны данные на {RU_DATE(data.period_end)}.</p>}
     </div></header>
     {mine.map(b=>{

@@ -61,7 +61,7 @@ export interface Overview {
     slots:{slot:number;metric_code:string;label:string;
       direction:'HIGHER_IS_BETTER'|'LOWER_IS_BETTER';format:'COUNT'|'PCT'|'RUB'|'RUB_MLN';
       plan:number|null;requires_vin_level:boolean;requires_daily_logs:boolean;
-      fact:number|null;fact_basis:string}[]};
+      fact:number|null;fact_basis:string;fact_note?:string|null}[]};
 }
 export interface ThresholdRow {
   id:string; metric:string; scope_kind:'NETWORK'|'ORG_UNIT'; org_unit_id:string|null; display_name:string|null;

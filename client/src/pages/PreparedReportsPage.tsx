@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { useReportDate } from '../state/reportDate';
+import { yesterday } from '../state/reportDate';
 import { ApiError } from '../api/client';
 import { getStagingCapabilities,listStagingBatches,getStagingBatch,uploadStagingBatch,probeStagingBatch,
   autoPublishStagingBatch,type StagingCapabilities,type StagingBatch,
@@ -24,8 +24,8 @@ export default function PreparedReportsPage() {
   // Вместо четырёх дат и письменного обоснования — одна дата данных. Период
   // всегда накопительный: с 1-го числа её месяца по неё саму. Так считает сеть,
   // так устроены сами отчёты QLIK, и вводить это каждый раз руками незачем.
-  const {reportDate}=useReportDate();
-  const [asOf,setAsOf]=useState(reportDate);
+  // Отчёты QLIK выгружаются утром за прошлый день: дата по умолчанию — вчера.
+  const [asOf,setAsOf]=useState(yesterday);
   const [busy,setBusy]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [auto,setAuto]=useState<AutoPublishResult|null>(null);
   const input=useRef<HTMLInputElement>(null),request=useRef(0),alive=useRef(true);
