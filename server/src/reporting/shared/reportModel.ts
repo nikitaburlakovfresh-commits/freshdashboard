@@ -265,8 +265,13 @@ export function parseReport(rows: unknown[][], kind: ReportKind, file: string, s
       const metric = key as MetricKey;
       values[metric] = numeric(raw[columnIndex(column!)], isCountMetric(metric), `${sheet}!${column}${row}`);
     }
-    if (values.stock != null && values.aged != null && values.aged > values.stock)
-      throw new Error(`${sheet}, строка ${row}: склад 45+ превышает весь склад.`);
+    // Склад 45+ больше всего склада — противоречие источника в одной строке
+    // (Чита 29.09: 57 из 53). Раньше из-за него отклонялся весь «Сводный отчёт»,
+    // и оборачиваемость комиссии и выкупа не обновлялась с 20.09 (30.09.2026).
+    // Теперь не публикуются только показатели 45+ этой строки.
+    if (values.stock != null && values.aged != null && values.aged > values.stock) {
+      values.aged = null; values.agedCost = null; values.agedShare = null;
+    }
     return { name, key: normalize(name), row, values };
   };
   // Официальный итог сети объявляется отдельной строкой сразу после заголовка;

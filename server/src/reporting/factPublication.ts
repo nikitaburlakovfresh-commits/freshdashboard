@@ -156,9 +156,12 @@ async function proposal(c:PoolClient,auth:AuthedUser,id:string,b:Command) {
       blockers.push(`${METRIC_NAMES[choice.metric]}: источник не содержит строки итога, поэтому аддитивная сверка не подтверждена.`);
     const sourceFile=sourceFiles.find(f=>f.display_name===report.file);
     if(!sourceFile){blockers.push('Не установлена связь отчёта с оригиналом.');continue;}
-    const start=STOCK_SNAPSHOT_METRICS.includes(choice.metric)?report.stockDate
+    // QLIK подписывает склад концом месяца («на 30.09»), хотя выгрузка на отчётный
+    // день: срез склада не может быть позже даты данных пакета (30.09.2026).
+    const stockOn=report.stockDate&&period?.end&&report.stockDate>period.end?period.end:report.stockDate;
+    const start=STOCK_SNAPSHOT_METRICS.includes(choice.metric)?stockOn
       :PLAN_PERIOD_METRICS.includes(choice.metric)?period?.planStart:period?.start;
-    const end=STOCK_SNAPSHOT_METRICS.includes(choice.metric)?report.stockDate
+    const end=STOCK_SNAPSHOT_METRICS.includes(choice.metric)?stockOn
       :PLAN_PERIOD_METRICS.includes(choice.metric)?period?.planEnd:period?.end;
     if(!start||!end||!validDate(start)||!validDate(end)||start>end){blockers.push(`${METRIC_NAMES[choice.metric]}: не подтверждён период/дата среза.`);continue;}
     for(const row of report.branches) {

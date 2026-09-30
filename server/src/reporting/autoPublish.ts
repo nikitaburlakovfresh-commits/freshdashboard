@@ -12,7 +12,7 @@ import { uploadBatch, probeBatch } from './service';
 import { getReview, saveReview } from './review';
 import { scanBatch, previewPublication, commitPublication, publicationState } from './factPublication';
 import { previewDetail, commitDetail } from './detailPublication';
-import { REPORT_SPECS, FUNNEL_CHANNELS, type ReportKind, type FunnelChannel } from './shared/reportModel';
+import { REPORT_SPECS, REPORT_NAMES, FUNNEL_CHANNELS, type ReportKind, type FunnelChannel } from './shared/reportModel';
 import { METRIC_NAMES } from './shared/metricCatalog';
 import type { UploadFile } from './storage';
 
@@ -53,18 +53,6 @@ export async function autoPublishPackage(auth: AuthedUser, metadata: any,
   const period = { start: metadata?.period?.start, end: metadata?.period?.end };
   const out = empty(period);
 
-  // Проверка до загрузки: день с опубликованными фактами не перезаписывается,
-  // и об ошибке в дате человек узнаёт сразу, а не после разбора 9 файлов.
-  const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
-  if (isDay(period.start) && isDay(period.end)) {
-    const exists = await withTransaction(async c => (await c.query(
-      `SELECT 1 FROM report_fact_current WHERE period_start=$1::date AND period_end=$2::date
-         AND metric !~* 'plan' LIMIT 1`, [period.start, period.end])).rowCount);
-    if (exists) {
-      out.message = `Данные за ${period.end.split('-').reverse().join('.')} уже опубликованы. Перезаписать опубликованный день нельзя — проверьте дату «Данные по состоянию на».`;
-      return out;
-    }
-  }
   const uploaded: any = await uploadBatch(auth, metadata, files, requestId);
   out.batch_id = uploaded.id;
   const probed: any = await probeBatch(auth, uploaded.id, { expected_version: Number(uploaded.version) }, randomUUID());
@@ -75,6 +63,29 @@ export async function autoPublishPackage(auth: AuthedUser, metadata: any,
     return out;
   }
   out.recognized = (probed.preview.reports ?? []).map((r: any) => ({ kind: r.kind, rows: r.branches.length }));
+
+  // Отчёт, уже опубликованный за этот период, повторно не принимается (решение
+  // владельца 30.09.2026): ошибочная дата не должна затирать загруженный день.
+  // Отчёт, которого за день ещё нет (например, «Сводный»), догружается.
+  const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  if (isDay(period.start) && isDay(period.end)) {
+    const kinds = out.recognized.map(r => r.kind);
+    // Воронка приходит двумя каналами одного вида: канал различается показателями.
+    const funnelMetrics = Object.values(FUNNEL_CHANNELS[(channels.funnel ?? 'APPEALS') as FunnelChannel].metrics);
+    const done: string[] = await withTransaction(async c => (await c.query(
+      `SELECT DISTINCT s.provenance->>'report_kind' k FROM report_fact_current p
+         JOIN report_fact_snapshots s ON s.id=p.snapshot_id
+        WHERE p.period_start=$1::date AND p.period_end=$2::date AND p.metric !~* 'plan'
+          AND s.provenance->>'report_kind'=ANY($3::text[])
+          AND (s.provenance->>'report_kind'<>'funnel' OR p.metric=ANY($4::text[]))`,
+      [period.start, period.end, kinds, funnelMetrics])).rows.map((r: any) => r.k));
+    if (done.length) {
+      out.stage = 'PROBE';
+      out.message = `Данные за ${period.end.split('-').reverse().join('.')} уже опубликованы (${done.map(k => REPORT_NAMES[k as ReportKind] ?? k).join(', ')}). `
+        + 'Перезаписать опубликованный день нельзя — проверьте дату «Данные по состоянию на». Чтобы догрузить недостающий отчёт, загрузите только его.';
+      return out;
+    }
+  }
 
   // Привязка строк к действующим филиалам: точное совпадение названия либо
   // объявленный в портале алиас. Неоднозначные строки не публикуются.
