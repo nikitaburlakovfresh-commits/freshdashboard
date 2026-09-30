@@ -6,7 +6,7 @@ import { ApiError } from '../util/errors';
 import { uuid } from '../reporting/storage';
 import { evaluateRag, resolveThresholds, thresholdFor, type Rag } from './thresholds';
 import { computeBranchScore, monthProgress, resolveScoringModel } from './scoring';
-import { funnelConversions, buyback45Shares, stockTurnover } from './derived';
+import { funnelConversions, buyback45Shares, stockTurnover, stockLevels } from './derived';
 import { resolveRmRatingModel, computeRmRating } from './rmRating';
 import { resolveEffectivePeriod } from './effectivePeriod';
 import { resolveFocusConfiguration } from './focus';
@@ -50,17 +50,16 @@ function runRateTiles(totals:Map<string,number>,on:string):RunRateTile[] {
   // Оборачиваемость склада по сети считается от сложенных величин, а не как
   // среднее оборачиваемостей филиалов: среднее из отношений не равно отношению
   // сумм и завышает вклад маленьких складов.
-  const forecastTotal=get('forecast'),stockStartTotal=get('stockStart');
-  const turnover=forecastTotal!==null&&stockStartTotal!==null&&stockStartTotal>0
-    ?forecastTotal/stockStartTotal:null;
-  const turnoverBasis=forecastTotal===null?'FACT_NOT_PUBLISHED:forecast'
-    :stockStartTotal===null?'FACT_NOT_PUBLISHED:stockStart'
-      :stockStartTotal>0?null:'STOCK_START_NOT_POSITIVE';
+  const forecastTotal=get('turnoverForecast'),stockStartTotal=get('turnoverStart'),stockNowTotal=get('turnoverNow');
+  const avgStock=stockStartTotal!==null&&stockNowTotal!==null?(stockStartTotal+stockNowTotal)/2:null;
+  const turnover=forecastTotal!==null&&avgStock!==null&&avgStock>0?forecastTotal/avgStock:null;
+  const turnoverBasis=get('forecast')===null?'FACT_NOT_PUBLISHED:forecast'
+    :forecastTotal===null?'STOCK_START_NOT_PUBLISHED':avgStock!==null&&avgStock>0?null:'STOCK_START_NOT_POSITIVE';
   return [
     {code:'sales_runrate',label:'Run-rate продажи',hint:'факт / план шт',format:'PCT',
       value:sales.value,fact:salesFact,plan:get('plan'),basis:sales.basis},
-    {code:'stock_turnover',label:'Оборачиваемость склада',hint:'прогноз продаж / склад на 1 число',format:'RATIO',
-      value:turnover,fact:get('forecast'),plan:get('stockStart'),basis:turnoverBasis},
+    {code:'stock_turnover',label:'Оборачиваемость склада',hint:'прогноз продаж / средний склад',format:'RATIO',
+      value:turnover,fact:forecastTotal,plan:avgStock,basis:turnoverBasis},
     {code:'margin_runrate',label:'Run-rate маржа',hint:'к плану маржи',format:'PCT',
       value:margin.value,fact:get('margin'),plan:get('planMargin'),basis:margin.basis},
     {code:'supplies_runrate',label:'Run-rate поставки',hint:'к плану поставок',format:'PCT',
@@ -156,12 +155,16 @@ export async function branchOverview(auth:AuthedUser,query:any) {
     // Производные показатели: у них нет ячейки источника, поэтому они не
     // публикуются как факты, а считаются из опубликованного и из реестра VIN.
     const buyback45=await buyback45Shares(c,[...byOrg.keys()],on);
+    const levels=await stockLevels(c,[...byOrg.keys()],on);
     const branches=[...byOrg.values()].map(b=>{
       const worst:Rag=b.metrics.some(m=>m.rag==='RED')?'RED'
         :b.metrics.some(m=>m.rag==='AMBER')?'AMBER'
           :b.metrics.some(m=>m.rag==='GREEN')?'GREEN':'NONE';
       const values=new Map<string,number>(b.metrics.map(m=>[m.metric,m.value]));
       for(const [k,v] of funnelConversions(values))values.set(k,v);
+      const lv=levels.get(b.org_unit_id);
+      if(lv?.start!=null&&!values.has('stockStart'))values.set('stockStart',lv.start);
+      if(lv?.now!=null)values.set('stockNow',lv.now);
       const turnover=stockTurnover(values);
       if(turnover!==null)values.set('stockTurnover',turnover);
       const bb=buyback45.get(b.org_unit_id);
@@ -181,6 +184,15 @@ export async function branchOverview(auth:AuthedUser,query:any) {
     const totals=new Map<string,number>();
     for(const b of branches)for(const m of b.metrics)
       totals.set(m.metric,(totals.get(m.metric)??0)+m.value);
+    // Оборачиваемость сети — от сложенных частей по филиалам, где известны все три:
+    // прогноз, склад на 1 число и склад на последний срез.
+    for(const b of branches){
+      const lv=levels.get(b.org_unit_id);const f=b.metrics.find(m=>m.metric==='forecast')?.value;
+      if(f===undefined||lv?.start==null||lv?.now==null)continue;
+      totals.set('turnoverForecast',(totals.get('turnoverForecast')??0)+f);
+      totals.set('turnoverStart',(totals.get('turnoverStart')??0)+lv.start);
+      totals.set('turnoverNow',(totals.get('turnoverNow')??0)+lv.now);
+    }
     // Рейтинг регионального менеджера считается по зоне целиком: величины его
     // филиалов складываются, и выполнение считается от сложенного. Средним
     // баллом филиалов его заменять нельзя — это другая величина.

@@ -23,8 +23,8 @@ export const DERIVED_METRICS: Record<string, DerivedBasis> = {
     components: ['funnelDeals', 'funnelTraffic'],
   },
   stockTurnover: {
-    metric: 'stockTurnover', formula: 'прогноз продаж за месяц / склад на 1 число месяца',
-    components: ['forecast', 'stockStart'],
+    metric: 'stockTurnover', formula: 'прогноз продаж за месяц / ((склад на 1 число + склад на последний отчётный день) / 2)',
+    components: ['forecast', 'stockStart', 'stockNow'],
   },
   funnelTrafficToVisit: {
     metric: 'funnelTrafficToVisit', formula: 'визиты / трафик',
@@ -56,16 +56,41 @@ function share(numerator: number | null | undefined, denominator: number | null 
  * Значения возвращаются долей (0..1), как и остальные показатели-доли портала.
  */
 /**
- * Оборачиваемость склада: прогноз продаж за месяц, делённый на склад на 1 число
- * этого месяца. Обе части — опубликованные показатели. Если склад на 1 число не
- * опубликован или равен нулю, показателя нет: делить не на что, и нулём это не
- * подменяется.
+ * Оборачиваемость склада (решение владельца 30.09.2026): прогноз продаж за месяц
+ * (run-rate), делённый на средний склад — (склад на 1 число + склад на последний
+ * отчётный день) / 2. Склад на 1 число — показатель QLIK «Склад на начало» этого
+ * месяца, склад на день — реестр VIN последнего среза не позже даты. Если одной из
+ * частей нет, показателя нет: нулём это не подменяется.
  */
 export function stockTurnover(values: Map<string, number>): number | null {
   const forecast = values.get('forecast');
   const stockStart = values.get('stockStart');
-  if (forecast === undefined || stockStart === undefined || stockStart <= 0) return null;
-  return forecast / stockStart;
+  const stockNow = values.get('stockNow');
+  if (forecast === undefined || stockStart === undefined || stockNow === undefined) return null;
+  const avg = (stockStart + stockNow) / 2;
+  return avg > 0 ? forecast / avg : null;
+}
+
+/** Склад на 1 число месяца (QLIK) и на последний срез реестра VIN не позже даты. */
+export async function stockLevels(c: PoolClient, orgs: string[], on: string):
+  Promise<Map<string, { start: number | null; now: number | null; now_on: string | null }>> {
+  const out = new Map<string, { start: number | null; now: number | null; now_on: string | null }>();
+  if (!orgs.length) return out;
+  const starts = (await c.query(`SELECT DISTINCT ON (s.org_unit_id) s.org_unit_id, s.value::float8 v
+      FROM report_fact_snapshots s JOIN report_fact_current p ON p.snapshot_id=s.id
+      WHERE s.org_unit_id=ANY($1::uuid[]) AND s.metric='stockStart'
+        AND s.period_start=date_trunc('month',$2::date)::date AND s.period_end<=$2::date
+      ORDER BY s.org_unit_id, s.period_end DESC`, [orgs, on])).rows;
+  const nows = (await c.query(`WITH l AS (SELECT org_unit_id, max(observed_on) d FROM vehicle_stock_current
+        WHERE org_unit_id=ANY($1::uuid[]) AND observed_on<=$2::date
+          AND observed_on>=date_trunc('month',$2::date)::date GROUP BY org_unit_id)
+      SELECT r.org_unit_id, to_char(l.d,'YYYY-MM-DD') d, count(*)::int n
+      FROM l JOIN vehicle_stock_current r ON r.org_unit_id=l.org_unit_id AND r.observed_on=l.d
+      GROUP BY r.org_unit_id, l.d`, [orgs, on])).rows;
+  for (const o of orgs) out.set(o, { start: null, now: null, now_on: null });
+  for (const r of starts) out.get(r.org_unit_id)!.start = Number(r.v);
+  for (const r of nows) Object.assign(out.get(r.org_unit_id)!, { now: Number(r.n), now_on: r.d });
+  return out;
 }
 
 export function funnelConversions(values: Map<string, number>): Map<string, number> {

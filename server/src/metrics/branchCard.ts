@@ -6,7 +6,7 @@ import { uuid } from '../reporting/storage';
 import { ApiError } from '../util/errors';
 import { evaluateRag, resolveThresholds, thresholdFor, type Rag } from './thresholds';
 import { resolveEffectivePeriod } from './effectivePeriod';
-import { funnelConversions, buyback45Shares, upwardRepricing, upwardRepricingEvents, stockTurnover,
+import { funnelConversions, buyback45Shares, upwardRepricing, upwardRepricingEvents, stockTurnover, stockLevels,
   DERIVED_METRICS } from './derived';
 import { settingNumber } from '../settings/portalSettings';
 import { resolveScoringModel, computeBranchScore } from './scoring';
@@ -144,6 +144,11 @@ export async function branchCard(auth:AuthedUser,orgUnitId:string,query:any) {
     const values=new Map<string,number>(metrics.map(m=>[m.metric,m.value]));
     const conversions=funnelConversions(values);
     for(const [k,v] of conversions)values.set(k,v);
+    if(vin)values.set('stockNow',vin.n);
+    if(!values.has('stockStart')){
+      const st=(await stockLevels(c,[orgUnitId],on)).get(orgUnitId)?.start;
+      if(st!=null)values.set('stockStart',st);
+    }
     const turnover=stockTurnover(values);
     if(turnover!==null)values.set('stockTurnover',turnover);
     const buyback=(await buyback45Shares(c,[orgUnitId],on)).get(orgUnitId)??null;
