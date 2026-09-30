@@ -244,6 +244,18 @@ export async function commitPublication(auth:AuthedUser,id:string,raw:any,key:st
     const p=await proposal(c,auth,ctx.b.id,command(v.command));
     if(p.data.blockers.length||digest(p.data)!==v.proposal_hash)throw conflict();
     if((await c.query('SELECT 1 FROM report_fact_publications WHERE preview_id=$1',[v.id])).rowCount)throw conflict();
+    // Опубликованный факт за день не перезаписывается (решение владельца 30.09.2026):
+    // ошибочно выбранная дата не должна затирать уже загруженный срез. Планы месяца
+    // повторяются в каждом ежедневном пакете и могут уточняться — их это не касается.
+    const isPlan=(m:string)=>/plan/i.test(m);
+    const factRows=p.data.rows.filter((r:any)=>!isPlan(r.metric));
+    const repeated=factRows.filter((r:any)=>r.previous_id);
+    if(factRows.length&&repeated.length===factRows.length){
+      const r0:any=factRows[0];
+      throw new ApiError('SUBMISSION_CONFLICT',`Данные за период ${r0.period_start} — ${r0.period_end} уже опубликованы. `
+        +'Перезаписать опубликованный день нельзя: проверьте дату «Данные по состоянию на».');
+    }
+    const rows=p.data.rows.filter((r:any)=>isPlan(r.metric)||!r.previous_id);
     const publicationId=randomUUID();
     const audit=await writeAuditAndOutbox(c,{actorUserId:auth.userId,actorRole:'SUPER_ADMIN',orgUnitId:null,workItemId:null,
       action:'REPORT_FACTS_PUBLISHED',aggregateType:'report_stage',aggregateId:publicationId,aggregateVersion:1,requestId,
@@ -252,7 +264,7 @@ export async function commitPublication(auth:AuthedUser,id:string,raw:any,key:st
       eventType:'report.facts.published',payload:{publication_id:publicationId,count:p.data.rows.length}});
     await c.query('INSERT INTO report_fact_publications(id,preview_id,actor_user_id,grant_id,audit_id) VALUES($1,$2,$3,$4,$5)',
       [publicationId,v.id,auth.userId,access.grant_id,audit]);
-    for(const row of p.data.rows) {
+    for(const row of rows) {
       const snapshotId=randomUUID();
       await c.query(`INSERT INTO report_fact_snapshots(id,publication_id,org_unit_id,metric,period_start,period_end,value,unit,revision,replaces,provenance)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[snapshotId,publicationId,row.org_unit_id,row.metric,row.period_start,row.period_end,
@@ -261,7 +273,7 @@ export async function commitPublication(auth:AuthedUser,id:string,raw:any,key:st
         VALUES($1,$2,$3,$4,$5) ON CONFLICT(org_unit_id,metric,period_start,period_end) DO UPDATE SET snapshot_id=EXCLUDED.snapshot_id`,
       [row.org_unit_id,row.metric,row.period_start,row.period_end,snapshotId]);
     }
-    const result={publication_id:publicationId,count:p.data.rows.length,status:'PUBLISHED_SOURCE_AGGREGATES'};
+    const result={publication_id:publicationId,count:rows.length,kept_existing:p.data.rows.length-rows.length,status:'PUBLISHED_SOURCE_AGGREGATES'};
     await completeIdempotent(c,auth.userId,'reportFactPublish',key,200,result);
     return result;
   });

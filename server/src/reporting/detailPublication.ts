@@ -203,6 +203,10 @@ export async function commitDetail(auth:AuthedUser,id:string,raw:any,key:string|
     const p=await proposal(c,auth,ctx.b.id,command(v.command));
     if(p.data.blockers.length||digest(p.data)!==v.proposal_hash)throw conflict();
     if((await c.query('SELECT 1 FROM report_detail_publications WHERE preview_id=$1',[v.id])).rowCount)throw conflict();
+    // Реестр VIN за дату публикуется один раз (решение владельца 30.09.2026).
+    if((await c.query('SELECT 1 FROM report_detail_publications WHERE kind=$1 AND observed_on=$2::date',
+      [v.kind,p.data.observed_on])).rowCount)
+      throw new ApiError('SUBMISSION_CONFLICT',`Реестр на ${p.data.observed_on} уже опубликован. Перезаписать опубликованный день нельзя.`);
     const publicationId=randomUUID();
     const audit=await writeAuditAndOutbox(c,{actorUserId:auth.userId,actorRole:'SUPER_ADMIN',orgUnitId:null,workItemId:null,
       action:'REPORT_DETAIL_PUBLISHED',aggregateType:'report_stage',aggregateId:publicationId,aggregateVersion:1,requestId,

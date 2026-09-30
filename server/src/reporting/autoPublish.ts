@@ -53,6 +53,18 @@ export async function autoPublishPackage(auth: AuthedUser, metadata: any,
   const period = { start: metadata?.period?.start, end: metadata?.period?.end };
   const out = empty(period);
 
+  // Проверка до загрузки: день с опубликованными фактами не перезаписывается,
+  // и об ошибке в дате человек узнаёт сразу, а не после разбора 9 файлов.
+  const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  if (isDay(period.start) && isDay(period.end)) {
+    const exists = await withTransaction(async c => (await c.query(
+      `SELECT 1 FROM report_fact_current WHERE period_start=$1::date AND period_end=$2::date
+         AND metric !~* 'plan' LIMIT 1`, [period.start, period.end])).rowCount);
+    if (exists) {
+      out.message = `Данные за ${period.end.split('-').reverse().join('.')} уже опубликованы. Перезаписать опубликованный день нельзя — проверьте дату «Данные по состоянию на».`;
+      return out;
+    }
+  }
   const uploaded: any = await uploadBatch(auth, metadata, files, requestId);
   out.batch_id = uploaded.id;
   const probed: any = await probeBatch(auth, uploaded.id, { expected_version: Number(uploaded.version) }, randomUUID());
