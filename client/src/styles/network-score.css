@@ -272,3 +272,13 @@ button.score-tile:hover{border-color:currentColor}
 .score-tile>div{order:1}
 .focus-tile-value{flex-wrap:nowrap;white-space:nowrap;overflow:hidden}
 .focus-tile-value span{overflow:hidden;text-overflow:ellipsis}
+/* Телефон: по 2 плитки в ряд, плотнее — одна колонка только на самых узких экранах. */
+@media(max-width:420px){.score-tiles,.runrate-tiles,.focus-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .score-tile,.runrate-tile,.focus-tile{padding:10px;gap:8px}
+  .score-tile .tile-icon,.runrate-icon,.focus-tile-icon{width:28px;height:28px}
+  .runrate-tile strong,.score-tile>div>strong,.focus-tile-value strong{font-size:17px}
+  .focus-tile-value{flex-wrap:wrap;white-space:normal}}
+@media(max-width:340px){.score-tiles,.runrate-tiles,.focus-row{grid-template-columns:1fr}}
+/* На телефоне названия переносятся на вторую строку вместо многоточия. */
+@media(max-width:420px){.runrate-tile span,.focus-tile-label{white-space:normal;overflow:visible;font-size:12px;line-height:1.25}
+  .runrate-icon,.focus-tile-icon,.score-tile .tile-icon{align-self:flex-start}}
