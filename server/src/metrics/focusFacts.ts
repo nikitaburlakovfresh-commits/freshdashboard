@@ -25,7 +25,7 @@ export async function focusFacts(c: PoolClient, codes: string[], totals: Map<str
     v === null || !Number.isFinite(v) ? none(missing) : { fact: round1(v), fact_basis: 'PUBLISHED_METRICS', fact_note: note };
 
   const needVin = codes.some(c => ['not_in_ads_share', 'leads_per_car', 'reprice_discipline', 'in_market_share',
-    'hangers45_total', 'hangers45_buyback', 'hangers45_commission', 'commission_outflow_share', 'stock_units_end'].includes(c));
+    'hangers45_total', 'hangers45_buyback', 'hangers45_commission', 'stock_units_end'].includes(c));
   let vin: any = null;
   if (needVin && orgs.length) {
     vin = (await c.query(`WITH l AS (SELECT max(observed_on) d FROM vehicle_stock_current
@@ -77,12 +77,21 @@ export async function focusFacts(c: PoolClient, codes: string[], totals: Map<str
       case 'stock_units_end': out.set(code, !vin ? none('нет среза реестра VIN')
         : { fact: vin.n, fact_basis: 'VIN_REGISTRY', fact_note: `авто в реестре VIN на ${vin.d}` }); break;
       // Отток комиссионного склада (решение владельца 07.10.2026): отток за месяц из
-      // «Сводного отчёта» QLIK ÷ комиссионный склад на последний срез реестра VIN.
+      // «Сводного отчёта» QLIK ÷ средний комиссионный склад — (машины на комиссии в
+      // первом срезе реестра VIN месяца + в последнем срезе не позже даты) / 2.
       case 'commission_outflow_share': { const o = get('outflow');
+        const cs = orgs.length ? (await c.query(`WITH d AS (SELECT min(observed_on) f, max(observed_on) l
+            FROM vehicle_stock_current WHERE org_unit_id=ANY($1::uuid[]) AND observed_on<=$2::date
+              AND observed_on>=date_trunc('month',$2::date)::date)
+          SELECT to_char(d.f,'DD.MM') f, to_char(d.l,'DD.MM') l,
+            count(*) FILTER (WHERE r.observed_on=d.f)::int a, count(*) FILTER (WHERE r.observed_on=d.l)::int b
+          FROM d JOIN vehicle_stock_current r ON r.org_unit_id=ANY($1::uuid[]) AND r.observed_on IN (d.f,d.l)
+            AND r.supply_type='Комиссия' GROUP BY d.f,d.l`, [orgs, on])).rows[0] : null;
+        const avg = cs ? (cs.a + cs.b) / 2 : 0;
         out.set(code, o === null ? none('отток не опубликован — нужен «Сводный отчёт» QLIK')
-          : !vin || !vin.commission ? none('нет среза реестра VIN')
-            : { fact: round1(o / vin.commission * 100), fact_basis: 'PUBLISHED_METRICS',
-              fact_note: `отток ${o} ÷ комиссия на складе ${vin.commission} · реестр VIN на ${vin.d}` }); break; }
+          : !cs || avg <= 0 ? none('нет среза реестра VIN в этом месяце')
+            : { fact: round1(o / avg * 100), fact_basis: 'PUBLISHED_METRICS',
+              fact_note: `отток ${o} ÷ средний склад комиссии ((${cs.a} на ${cs.f} + ${cs.b} на ${cs.l}) / 2)` }); break; }
       case 'daily_usage_pct': out.set(code, await dailyUsage(c, orgs)); break;
       default: out.set(code, { fact: null, fact_basis: 'NOT_MAPPED_TO_PUBLISHED_METRIC', fact_note: null });
     }
