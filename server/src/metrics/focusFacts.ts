@@ -24,7 +24,8 @@ export async function focusFacts(c: PoolClient, codes: string[], totals: Map<str
   const metric = (v: number | null, note: string, missing: string): FocusFact =>
     v === null || !Number.isFinite(v) ? none(missing) : { fact: round1(v), fact_basis: 'PUBLISHED_METRICS', fact_note: note };
 
-  const needVin = codes.some(c => ['not_in_ads_share', 'leads_per_car', 'reprice_discipline', 'in_market_share'].includes(c));
+  const needVin = codes.some(c => ['not_in_ads_share', 'leads_per_car', 'reprice_discipline', 'in_market_share',
+    'hangers45_total', 'hangers45_buyback', 'hangers45_commission', 'commission_outflow_share', 'stock_units_end'].includes(c));
   let vin: any = null;
   if (needVin && orgs.length) {
     vin = (await c.query(`WITH l AS (SELECT max(observed_on) d FROM vehicle_stock_current
@@ -36,7 +37,14 @@ export async function focusFacts(c: PoolClient, codes: string[], totals: Map<str
         count(*) FILTER (WHERE (CASE WHEN coalesce(r.price_changes_count,0)>0 THEN r.price_changes_days ELSE r.days_on_stock END) IS NOT NULL)::int nr,
         count(*) FILTER (WHERE (CASE WHEN coalesce(r.price_changes_count,0)>0 THEN r.price_changes_days ELSE r.days_on_stock END)<=12)::int fresh,
         count(*) FILTER (WHERE r.sale_price_rub>0 AND r.market_price_rub>0)::int nm,
-        count(*) FILTER (WHERE r.sale_price_rub>0 AND r.market_price_rub>0 AND r.sale_price_rub<=r.market_price_rub)::int inm
+        count(*) FILTER (WHERE r.sale_price_rub>0 AND r.market_price_rub>0 AND r.sale_price_rub<=r.market_price_rub)::int inm,
+        count(*) FILTER (WHERE r.days_on_stock IS NOT NULL)::int nd,
+        count(*) FILTER (WHERE r.days_on_stock>=45)::int aged,
+        count(*) FILTER (WHERE r.supply_type='Выкуп' AND r.days_on_stock IS NOT NULL)::int nb,
+        count(*) FILTER (WHERE r.supply_type='Выкуп' AND r.days_on_stock>=45)::int agedb,
+        count(*) FILTER (WHERE r.supply_type='Комиссия' AND r.days_on_stock IS NOT NULL)::int nc,
+        count(*) FILTER (WHERE r.supply_type='Комиссия' AND r.days_on_stock>=45)::int agedc,
+        count(*) FILTER (WHERE r.supply_type='Комиссия')::int commission
       FROM l JOIN vehicle_stock_current r ON r.observed_on=l.d AND r.org_unit_id=ANY($1::uuid[])
       WHERE r.supply_type IN ('Выкуп','Комиссия') GROUP BY l.d`, [orgs, on])).rows[0] ?? null;
   }
@@ -62,6 +70,19 @@ export async function focusFacts(c: PoolClient, codes: string[], totals: Map<str
       case 'in_market_share': out.set(code, vinFact(vin?.inm ?? 0, vin?.nm ?? 0, 'цена продажи не выше рыночной')); break;
       case 'leads_per_car': out.set(code, !vin || !vin.nl ? none('нет среза реестра VIN')
         : { fact: round1(vin.leads / vin.nl), fact_basis: 'VIN_REGISTRY', fact_note: `лиды ÷ авто · реестр VIN на ${vin.d}` }); break;
+      // Склад 45+ (ТЗ, «висяки»): авто со сроком хранения CRM от 45 дней ÷ авто того же вида.
+      case 'hangers45_total': out.set(code, vinFact(vin?.aged ?? 0, vin?.nd ?? 0, 'склад 45+ ÷ весь склад')); break;
+      case 'hangers45_buyback': out.set(code, vinFact(vin?.agedb ?? 0, vin?.nb ?? 0, 'выкуп 45+ ÷ склад выкупа')); break;
+      case 'hangers45_commission': out.set(code, vinFact(vin?.agedc ?? 0, vin?.nc ?? 0, 'комиссия 45+ ÷ склад комиссии')); break;
+      case 'stock_units_end': out.set(code, !vin ? none('нет среза реестра VIN')
+        : { fact: vin.n, fact_basis: 'VIN_REGISTRY', fact_note: `авто в реестре VIN на ${vin.d}` }); break;
+      // Отток комиссионного склада (решение владельца 07.10.2026): отток за месяц из
+      // «Сводного отчёта» QLIK ÷ комиссионный склад на последний срез реестра VIN.
+      case 'commission_outflow_share': { const o = get('outflow');
+        out.set(code, o === null ? none('отток не опубликован — нужен «Сводный отчёт» QLIK')
+          : !vin || !vin.commission ? none('нет среза реестра VIN')
+            : { fact: round1(o / vin.commission * 100), fact_basis: 'PUBLISHED_METRICS',
+              fact_note: `отток ${o} ÷ комиссия на складе ${vin.commission} · реестр VIN на ${vin.d}` }); break; }
       case 'daily_usage_pct': out.set(code, await dailyUsage(c, orgs)); break;
       default: out.set(code, { fact: null, fact_basis: 'NOT_MAPPED_TO_PUBLISHED_METRIC', fact_note: null });
     }

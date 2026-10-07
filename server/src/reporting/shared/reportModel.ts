@@ -60,6 +60,21 @@ interface ReportSpec {
   columns: Partial<Record<MetricKey, string>>;
   channelRequired?: boolean;
 }
+/**
+ * «Сводный отчёт» с октября 2026: QLIK добавил «Розничные продажи Факт» (R) и
+ * «Доля Кредитов (CRM)» (T), столбцы после Q сдвинулись на два. Новые столбцы
+ * пока не публикуются, остальные читаются по новым адресам (07.10.2026).
+ */
+const SUMMARY_COLUMNS_2026_10: Partial<Record<MetricKey, string>> = {
+  suppliesFact: 'B', stockStart: 'C', stockStartCost: 'D', stock: 'E', stockCost: 'F', stockUnitCost: 'G',
+  sales: 'H', outflow: 'I', turnoverBuyout: 'J', turnoverCommission: 'K', revenue: 'L',
+  purchasePrice: 'M', baseMargin: 'N', unitMargin: 'O', ptzCost: 'P', ptzCount: 'Q',
+  creditsCrm: 'S', creditsGoogle: 'U', royaltyKso: 'V', kso: 'W', unitKso: 'X',
+  margin: 'Y', unitMarginKso: 'Z', mdProfitability: 'AA', saleDays: 'AB', stockDays: 'AC',
+  aged: 'AD', agedCost: 'AE', agedShare: 'AF',
+};
+const isSummary2026_10 = (h: unknown[] | undefined) => at(h, 'R', 'Розничные продажи Факт, шт.') &&
+  at(h, 'S', 'Количество Кредитов (CRM)') && at(h, 'W', 'Факт КСО, руб.') && at(h, 'Y', 'Факт Маржа+КСО, руб.');
 export const REPORT_SPECS: Record<ReportKind, ReportSpec> = {
   summary: {
     headerRow: 1, hasTotalRow: true,
@@ -198,9 +213,10 @@ export function detectReport(rows: unknown[][]): ReportKind | null {
   const h = rows[0];
   if (at(h, 'A', 'Франчайзи')) {
     if (at(h, 'H', 'Продажи Факт, шт.') && at(h, 'N', 'Факт Маржа, руб.') &&
-        at(h, 'U', 'Факт КСО, руб.') && at(h, 'W', 'Факт Маржа+КСО, руб.') &&
         DATE_HEADER(cell(h, 'E'), /^Склад на \d{2}\.\d{2}\.\d{4}, шт\.$/i) &&
-        DATE_HEADER(cell(h, 'AB'), /^Склад 45\+ на \d{2}\.\d{2}\.\d{4}, шт\.$/i))
+        ((at(h, 'U', 'Факт КСО, руб.') && at(h, 'W', 'Факт Маржа+КСО, руб.') &&
+          DATE_HEADER(cell(h, 'AB'), /^Склад 45\+ на \d{2}\.\d{2}\.\d{4}, шт\.$/i)) ||
+         (isSummary2026_10(h) && DATE_HEADER(cell(h, 'AD'), /^Склад 45\+ на \d{2}\.\d{2}\.\d{4}, шт\.$/i))))
       return 'summary';
     if (at(h, 'B', 'План Кол-во, шт.') && at(h, 'C', 'Факт Кол-во, шт.') &&
         at(h, 'H', 'Выручка, руб.') && at(h, 'J', 'Факт КСО, руб.') &&
@@ -239,15 +255,15 @@ export function parseReport(rows: unknown[][], kind: ReportKind, file: string, s
   if (rows.length < spec.headerRow + 1 || rows.length > 502 || rows.some(r => r.length > 64))
     throw new Error('Допустимо до 500 филиалов и 64 столбцов в агрегатном отчёте.');
   if (detectReport(rows) !== kind) throw new Error('Заголовки отчёта не соответствуют поддерживаемому формату.');
-  const { columns } = spec;
   const header = rows[spec.headerRow - 1];
+  const columns = kind === 'summary' && isSummary2026_10(header) ? SUMMARY_COLUMNS_2026_10 : spec.columns;
   let stockDate: string | undefined, planDate: string | undefined;
   const headerDate = (column: string) => {
     const match = cell(header, column).match(/\d{2}\.\d{2}\.\d{4}/);
     return match ? match[0].split('.').reverse().join('-') : null;
   };
   if (kind === 'summary') {
-    const dates = ['E', 'AB'].map(headerDate);
+    const dates = ['E', columns.aged!].map(headerDate);
     if (!dates[0] || !validDate(dates[0]) || dates[0] !== dates[1])
       throw new Error('Даты склада и склада 45+ отсутствуют, некорректны или различаются.');
     stockDate = dates[0];
